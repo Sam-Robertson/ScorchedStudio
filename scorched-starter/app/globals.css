@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* Brand tokens */
+:root{
+  --brand-brown:#884A20;
+  --brand-cream:#F7F6F3;
+  --brand-green:#519A70;
+
+  --brand-lavender:#CFC6E3;
+  --brand-blush:#F6E4E1;
+  --accent-orange:#E33F25;
+  --brand-charcoal:#3A3A3A;
+}
+
+html,body{ height:100%; }
+body{
+  background: var(--brand-cream);
+  color: var(--brand-charcoal);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* simple helpers that don't need @apply */
+.text-brand{ color:var(--brand-brown); }
+.bg-brand{ background:var(--brand-brown); }
+.text-accent{ color:var(--accent-orange); }
+.bg-accent{ background:var(--accent-orange); }
+.bg-cream{ background:var(--brand-cream); }
+.bg-green{ background:var(--brand-green); }
+.bg-lavender{ background:var(--brand-lavender); }
+.bg-blush{ background:var(--brand-blush); }
+.bg-charcoal{ background:var(--brand-charcoal); }
+.border-green { border-color: var(--brand-green); }
+
+/* Put custom utilities that use @apply inside a Tailwind layer */
+@layer utilities {
+  .container-px { @apply px-6 md:px-10 lg:px-16; }
+
+  /* NEW: custom utility you can use as className="font-display" */
+  .font-display {
+    font-family: var(--font-display), var(--font-sans), ui-monospace, monospace;
+  }
+
+  /* (optional) stronger sans override if you ever need it */
+  .font-sans-strong {
+    font-family: var(--font-sans), system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Headings use sizes only (no font family here) */
+  .h1 { @apply text-[32px] md:text-[48px] leading-[1.05]; } /* <— leading tweak */
+  .h2 { @apply text-[24px] md:text-[32px] leading-[1]; }
+  .h3 { @apply text-[18px] md:text-[24px] leading-[1]; }
+
+  .lead { @apply font-sans text-[16px] md:text-[18px] text-neutral-700; }
+
+  /* Keep explicit font-family (don’t @apply font-display here) */
+  .eyebrow {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    @apply text-[14px] uppercase tracking-wide;
+  }
+  .btn-display {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    @apply tracking-wide;
+  }
+
+  .link-underline { @apply underline decoration-2 underline-offset-2; }
+}
