@@ -1,6 +1,7 @@
 // app/group-events/page.tsx
 import Container from "@/components/ui/Container";
 import ContactForm from "@/components/forms/ContactForm";
+import { vulfMono } from "@/app/fonts";
 
 type PriceTier = { range: string; price: string };
 
@@ -41,13 +42,16 @@ function Intro() {
     <section className="py-12 md:py-16">
       <Container>
         <h1 className="h2 text-center font-bold">Group Events</h1>
+
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <Feature title="Youth & Church Groups">
-            Perfect for weeknight activities.
+            Great for weeknight youth nights, small groups, or church activities.
           </Feature>
+
           <Feature title="Birthdays & Celebrations">
             Bring your crew, make something personal, snap photos, and leave with keepsakes.
           </Feature>
+
           <Feature title="Teams & Offsites">
             Creative, low-pressure team time. We handle setup and cleanup so you can just build.
           </Feature>
@@ -59,53 +63,64 @@ function Intro() {
 
 function Feature({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
+    <div
+      className="rounded-2xl border border-black/10 bg-white p-6 md:p-7 shadow-sm
+                 text-center flex flex-col items-center justify-center"
+    >
       <h3 className="font-bold">{title}</h3>
-      <p className="mt-2 text-sm text-neutral-700">{children}</p>
+      <p className={`${vulfMono.className} mt-2 text-[15px] leading-[1.6] text-neutral-700`}>
+        {children}
+      </p>
     </div>
   );
 }
 
-
 /* ------------------ Pricing (stacked cards) ------------------ */
 function GroupPricing() {
-    return (
-      <section className="py-8 md:py-12">
-        <Container>
-            <h2 className="h2 text-center font-bold">Group Pricing</h2>
+  return (
+    <section className="py-8 md:py-12">
+      <Container>
+        <h2 className="h2 text-center font-bold">Group Pricing</h2>
 
-            {/* Two-line description */}
-            <p className="mt-2 text-center font-display">
-                Pricing scales with group size.
-                <br />
-                Project selection happens in-studio.
-            </p>
-            <div className="mt-8 grid grid-cols-1 gap-6">
-                <div className="mx-auto w-full max-w-2xl">
-                    <PricingCard title="Group Pricing" tiers={STANDARD_TIERS} />
-                </div>
-                <div className="mx-auto w-full max-w-2xl">
-                    <PricingCard title="Church Group Pricing" tiers={CHURCH_TIERS} />
-                </div>
-            </div>
-          {/* Notes with cleaner, shorter copy */}
-          <ul className="mt-6 space-y-2 text-sm text-neutral-700 max-w-2xl mx-auto list-disc list-inside">
-            <li>Drinks are available as an add-on for all groups.</li>
-            <li>After-hours events or private studio reservations (closed to the public) include an additional charge.</li>
-          </ul>
-        </Container>
-      </section>
-    );
-  }
-  
+        {/* Two-line description with extra spacing above/below */}
+        <p className="mt-4 mb-10 md:mt-6 md:mb-12 text-center font-display">
+          Pricing scales with group size.
+          <br />
+          Project selection happens in-studio.
+        </p>
+
+        {/* Stacked cards (centered, constrained width) */}
+        <div className="grid grid-cols-1 gap-6">
+          <div className="mx-auto w-full max-w-2xl">
+            <PricingCard title="group pricing" tiers={STANDARD_TIERS} />
+          </div>
+          <div className="mx-auto w-full max-w-2xl">
+            <PricingCard title="Church Group Pricing" tiers={CHURCH_TIERS} />
+          </div>
+        </div>
+
+        {/* Notes */}
+        <ul className="mt-8 space-y-2 text-sm text-neutral-700 max-w-2xl mx-auto list-disc list-inside">
+          <li>Drinks are available as an add-on for all groups.</li>
+          <li>
+            After-hours events or private studio reservations (closed to the public) include an
+            additional charge.
+          </li>
+        </ul>
+      </Container>
+    </section>
+  );
+}
 
 function PricingCard({ title, tiers }: { title: string; tiers: PriceTier[] }) {
   return (
     <div className="rounded-3xl border border-green p-6 md:p-8 shadow-sm bg-white">
-      <h3 className="h3 text-center font-bold">{title}</h3>
+      <h3 className="h3 text-center font-bold capitalize">{title}</h3>
+
       <div className="mt-6 grid grid-cols-[1fr_auto] gap-y-3 text-lg">
         <div className="font-sans font-bold">Group Size</div>
         <div className="font-sans text-right font-bold">Rate</div>
+
         {tiers.map((t) => (
           <Row key={`${title}-${t.range}`} left={t.range} right={t.price} />
         ))}
@@ -117,8 +132,8 @@ function PricingCard({ title, tiers }: { title: string; tiers: PriceTier[] }) {
 function Row({ left, right }: { left: string; right: string }) {
   return (
     <>
-      <div className="font-display">{left}</div>
-      <div className="font-display text-right">{right}</div>
+      <div className={`${vulfMono.className}`}>{left}</div>
+      <div className={`${vulfMono.className} text-right`}>{right}</div>
     </>
   );
 }
