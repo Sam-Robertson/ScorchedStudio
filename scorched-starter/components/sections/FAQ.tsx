@@ -16,7 +16,7 @@ export default function FAQ(){
     <section className="py-14">
       <Container className="max-w-2xl">
         <h2 className="text-4xl font-extrabold text-center">FAQ’s</h2>
-        <p className="text-center text-neutral-600 mt-1">Lets clear the smoke</p>
+        <p className="text-center text-neutral-600 mt-1 font-display">Lets clear the smoke</p>
 
         <div className="mt-8 space-y-4">
           {faqs.map(({ q, a }) => (

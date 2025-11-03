@@ -16,15 +16,19 @@ const WORDS = [
 
 // Keep arrays aligned with WORDS by index
 const desktopImages = [
-  '/images/kianaGroupBurning.jpg',
-  '/images/handsBurningProjects.jpg',
-  '/images/groupWithSign.jpg',
+  '/images/hero/kianaGroupBurning.jpg',
+  '/images/hero/handsBurningProjects.jpg',
+  '/images/hero/groupWithSign.jpg',
+  '/images/hero/ProjectHands.jpg',
+  '/images/hero/jasmineBurn.jpg',
 ];
 
 const mobileImages = [
-  '/images/kianaGroupBurning.jpg',
-  '/images/handsBurningProjects.jpg',
-  '/images/groupWithSign.jpg',
+  '/images/hero/kianaGroupBurning.jpg',
+  '/images/hero/handsBurningProjects.jpg',
+  '/images/hero/groupWithSign.jpg',
+  '/images/hero/ProjectHands.jpg',
+  '/images/hero/jasmineBurn.jpg',
 ];
 
 const INTERVAL_MS = 3500;

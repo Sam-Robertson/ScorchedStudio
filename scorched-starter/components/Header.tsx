@@ -13,12 +13,13 @@ import { vulfMono } from "@/app/fonts";
 // ===== Desktop links =====
 const coreLinks = [
   { href: "/", label: "Home" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/hours", label: "Hours + Pricing" },
+  { href: "/book", label: "Calendar" },
+  
+  { href: "/group-events", label: "Group Events" },
 ];
 
 const moreLinks = [
-  { href: "/group-events", label: "Group Events" },
+  { href: "/hours", label: "Hours + Pricing" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
 ];
@@ -26,7 +27,7 @@ const moreLinks = [
 // ===== Mobile links (full list in the drawer) =====
 const MOBILE_NAV = [
   { href: "/", label: "Home" },
-  { href: "/calendar", label: "Calendar" },
+  { href: "/book", label: "Calendar" },
   { href: "/hours", label: "Hours + Pricing" },
   { href: "/group-events", label: "Group Events" },
   { href: "/contact", label: "Contact" },
@@ -152,7 +153,7 @@ function DesktopHeader() {
           <div className="shrink-0">
             <Link
               href="/book"
-              className="inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-black text-white hover:opacity-90 transition-opacity"
+              className="inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
             >
               BOOK&nbsp;NOW
             </Link>
