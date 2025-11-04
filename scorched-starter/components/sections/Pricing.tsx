@@ -2,13 +2,16 @@ import Container from '@/components/ui/Container';
 import { Fragment } from 'react';
 
 const items = [
-  ['Wood disc', '$15'],
-  ['Key holder', '$15'],
-  ['Ring', '$15'],
-  ['Jewelry box', '$15'],
-  ['Plate', '$15'],
-  ['Cutting board', '$15'],
-  ['Bracelet', '$15'],
+  ['Wood Disc', '$5'],
+  ['Ring', '$6'],
+  ['Jewelry Box', '$8'],
+  ['Plate', '$8'],
+  ['Cutting Board', '$10'],
+  ['Bracelet', '$8'],        
+  ['Leather Book', '$12'],
+  ['Cup', '$12'],
+  ['Wallet', '$15'],
+  ['Coaster Set', '$15'],
 ];
 
 export default function Pricing() {
