@@ -11,11 +11,11 @@ export default function HomePage() {
     <>
       <Hero />
       <HowItWorks />    
-      <ScorchedIRL />
       <Pricing />
-      <PastProjects />
       <Hours />
+      <PastProjects />
       <FAQ />
+      <ScorchedIRL /> 
     </>
   );
 }

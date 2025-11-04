@@ -5,5 +5,5 @@ export const defaultMetadata: Metadata = {
     template: '%s · Scorched Studio',
   },
   description: 'Hands-on woodburning studio for date nights, team events, and private groups.',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/favicon.png' },
 };
