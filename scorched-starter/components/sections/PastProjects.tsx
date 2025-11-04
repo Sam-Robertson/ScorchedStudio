@@ -2,14 +2,14 @@ import Container from '@/components/ui/Container';
 import Image from 'next/image';
 
 const imgs = [
-  '/images/customers/customers9.JPG',
-  '/images/customers/customers1.JPG',
-  '/images/customers/customers2.JPG',
-  '/images/customers/customers3.JPG',
-  '/images/customers/customers7.JPG',
-  '/images/customers/customers4.JPG',
-  '/images/customers/customers8.JPG',
-  '/images/customers/customers6.JPG'
+  '/images/customers/customers9.jpg',
+  '/images/customers/customers2.jpg',
+  '/images/customers/customers6.jpg',
+  '/images/customers/customers3.jpg',
+  '/images/customers/customers7.jpg',
+  '/images/customers/customers4.jpg',
+  '/images/customers/customers8.jpg',
+  '/images/customers/customers1.jpg'
 ];
 
 export default function PastProjects() {
