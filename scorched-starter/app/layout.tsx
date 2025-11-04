@@ -6,7 +6,14 @@ import { defaultMetadata } from '@/lib/seo';
 import { vulfSans, vulfMono } from './fonts';
 import MobileStickyCTA from '@/components/MobileStickyCTA';
 
-export const metadata: Metadata = defaultMetadata;
+export const metadata: Metadata = {
+  ...defaultMetadata,
+  icons: {
+    icon: [{ url: '/icon.png' }],
+    apple: [{ url: '/apple-touch-icon.png' }],
+    shortcut: ['/icon.png'],
+  },
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
