@@ -7,7 +7,7 @@ export default function BookPage() {
   return (
     <section className="container-px py-20 max-w-5xl mx-auto text-center">
       <h1 className="text-4xl font-bold mb-3">Book a Session</h1>
-      <p className="text-neutral-600 mb-8">
+      <p className="text-neutral-600 mb-8 font-display">
         Share your group size and when you’d like to visit.
       </p>
 
