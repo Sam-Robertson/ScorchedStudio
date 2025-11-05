@@ -57,17 +57,13 @@ export default function ContactPage() {
 
       {/* Single-line subtitle (scrollable on very small screens) */}
       <p
-        className={`${vulfMono.className} mx-auto overflow-x-auto whitespace-nowrap text-base md:text-lg tracking-[0.18em] text-neutral-800`}
-      >
-        OR GIVE US A CALL/TEXT{" "}
-        <a
-          href="tel:+18013619066"
-          className="underline-offset-4 hover:underline whitespace-nowrap"
-          aria-label="Call or text (801) 361-9066"
-        >
-          (801)361–9066
-        </a>
-      </p>
+          className={`${vulfMono.className} mx-auto text-center text-base md:text-lg tracking-[0.12em] md:tracking-[0.18em] text-neutral-800 md:whitespace-nowrap`}>
+          OR GIVE US A CALL/TEXT{" "}
+          <a href="tel:+18013619066" className="underline-offset-4 hover:underline whitespace-nowrap" aria-label="Call or text (801) 361-9066">
+            (801)361–9066
+          </a>
+        </p>
+
 
       {sent ? (
         <p className="mt-8 font-sans bg-green-50 border border-green-200 p-4 rounded-xl">

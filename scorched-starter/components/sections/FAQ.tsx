@@ -1,9 +1,9 @@
-"use client";
-
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 
-const FAQS = [
+export type FAQItem = { q: string; a: string };
+
+export const FAQS: FAQItem[] = [
   { q: "How do I book if I have the GetOutPass?", a: "At checkout, enter the code “GetOutPass” to reserve your session online. When you arrive, our team will help you redeem your pass in the studio." },
   { q: "Do you take walk-ins?", a: "Yes! Walk-ins are welcome when seats are available, but booking ahead is the best way to secure your spot." },
   { q: "If I want to stay longer than my 90-minute appointment, can I?", a: "If there’s space available, absolutely! You’re welcome to stay and burn to your heart’s content." },
@@ -12,34 +12,41 @@ const FAQS = [
   { q: "How do I add multiple people to my reservation?", a: "On the booking page, you’ll see a box where you can enter the total number of people in your group." },
 ];
 
-export default function FAQSection() {
+type Props = {
+  title?: string;
+  subtitle?: string;
+  items?: FAQItem[]; // defaults to FAQS
+  className?: string;
+};
+
+export default function FAQ({
+  title = "FAQ’s",
+  subtitle = "Let's clear the smoke",
+  items = FAQS,
+  className = "",
+}: Props) {
   return (
-    <section className="py-12 md:py-16">
+    <section className={`py-12 md:py-16 ${className}`}>
       <Container>
-        <h2 className="h2 text-center font-bold">FAQ’s</h2>
-        <p className={`${vulfMono.className} mt-2 text-center text-[16px]`}>Lets clear the smoke</p>
+        <h2 className="h2 text-center font-bold">{title}</h2>
+        <p className={`${vulfMono.className} mt-2 text-center text-[16px]`}>
+          {subtitle}
+        </p>
 
         <div className="mx-auto mt-8 max-w-4xl space-y-4">
-          {FAQS.map((item, i) => (
+          {items.map((item, i) => (
             <details
               key={i}
-              className="group rounded-2xl border border-black/15 bg-white shadow-sm transition-all
-                         open:border-green-500"
+              className="group rounded-2xl border border-black/15 bg-white shadow-sm transition-all open:border-green-500"
             >
-              <summary
-                className="flex cursor-pointer list-none items-center justify-between gap-4
-                           px-5 py-4 md:px-6 md:py-5"
-              >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 md:px-6 md:py-5">
                 <span className="font-semibold leading-snug transition-colors group-open:text-green-800">
                   {item.q}
                 </span>
-
-                {/* Chevron */}
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 24 24"
-                  className="h-5 w-5 shrink-0 transition-transform duration-200
-                             group-open:rotate-180 group-open:text-green-700"
+                  className="h-5 w-5 shrink-0 transition-transform duration-200 group-open:rotate-180 group-open:text-green-700"
                 >
                   <path
                     d="M6 9l6 6 6-6"
@@ -52,7 +59,6 @@ export default function FAQSection() {
                 </svg>
               </summary>
 
-              {/* Answer stays neutral */}
               <div className="px-5 pb-5 pt-0 md:px-6 text-neutral-700 font-display">
                 {item.a}
               </div>
