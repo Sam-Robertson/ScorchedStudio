@@ -16,7 +16,7 @@ export default function PastProjects() {
   return (
     <section id="past-projects" className="py-14 md:py-16">
       <Container>
-        <h2 className="h2 text-center font-bold mb-8">Amazing People</h2>
+        <h2 className="h2 text-center font-bold mb-8">Scorched IRL</h2>
 
         {/* 2 rows on desktop: 4 columns -> 5 images = 3 on row 1, 2 on row 2 */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5 md:gap-6">

@@ -50,11 +50,11 @@ export default function HowItWorks() {
                 </div>
               </div>
               {/* Text */}
-              <div>
-                <h3 className="h3 font-bold">
+              <div className='text-center'>
+                <h3 className="h2 font-bold font-sans mb-6">
                   {s.n}. {s.title}
                 </h3>
-                <p className="text-sm font-sans text-neutral-700 mt-2">{s.text}</p>
+                <p className="text-sm text-neutral-700 mt-2 font-display">{s.text}</p>
               </div>
             </div>
           ))}
