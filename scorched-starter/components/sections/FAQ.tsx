@@ -10,6 +10,8 @@ export const FAQS: FAQItem[] = [
   { q: "Are there age limits?", a: "Most ages are welcome. Guests under 12 will need a guardian present, and younger kids may need a little extra help." },
   { q: "Can I bring my own wood projects?", a: "Yes! If you bring your own wood project, you’ll just pay the standard Studio Entry fee at checkout." },
   { q: "How do I add multiple people to my reservation?", a: "On the booking page, you’ll see a box where you can enter the total number of people in your group." },
+  {q: "Do you offer gift cards?", a: `Yes. We offer both digital and physical gift cards that can be loaded with any amount you'd like. Physical cards can be purchased in our studio, and digital cards can be purchased <a href="https://app.squareup.com/gift/ML3N1RN3EGATW/order" target="_blank" rel="noopener noreferrer" class="text-green-700 underline">here</a>.`}
+  
 ];
 
 type Props = {
@@ -59,9 +61,7 @@ export default function FAQ({
                 </svg>
               </summary>
 
-              <div className="px-5 pb-5 pt-0 md:px-6 text-neutral-700 font-display">
-                {item.a}
-              </div>
+              <div className="px-5 pb-5 pt-0 md:px-6 text-neutral-700 font-display" dangerouslySetInnerHTML={{ __html: item.a }}/>
             </details>
           ))}
         </div>
