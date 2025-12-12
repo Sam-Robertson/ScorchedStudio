@@ -4,7 +4,7 @@ import { vulfMono } from "@/app/fonts";
 export type FAQItem = { q: string; a: string };
 
 export const FAQS: FAQItem[] = [
-  { q: "How do I book if I have a GetOutPass or gift card?", a: "At checkout, select “Reserve Without Paying,” and we’ll take care of the rest at the studio." },
+  { q: "How do I book if I have the GetOutPass or a gift card?", a: "At checkout, select “Reserve Without Paying,” and we’ll take care of the rest at the studio." },
   { q: "Do you take walk-ins?", a: "Yes! Walk-ins are welcome when seats are available, but availability is not guaranteed without a reservation" },
   { q: "If I want to stay longer than my 90-minute appointment, can I?", a: "If there’s space available, absolutely! You’re welcome to stay and burn to your heart’s content." },
   { q: "Are there age limits?", a: "Most ages are welcome. Guests under 12 will need a guardian present, and younger kids may need a little extra help." },
