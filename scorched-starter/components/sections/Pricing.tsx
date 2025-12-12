@@ -2,7 +2,7 @@ import Container from '@/components/ui/Container';
 import { Fragment } from 'react';
 
 const items = [
-  ['Wood Disc', '$5'],
+  ['Wood Disc', '$6'],
   ['Ring', '$6'],
   ['Jewelry Box', '$8'],
   ['Plate', '$8'],
