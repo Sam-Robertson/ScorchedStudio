@@ -4,13 +4,13 @@ import { vulfMono } from "@/app/fonts";
 export type FAQItem = { q: string; a: string };
 
 export const FAQS: FAQItem[] = [
-  { q: "How do I book if I have the GetOutPass?", a: "At checkout, enter the code “GetOutPass” to reserve your session online. When you arrive, our team will help you redeem your pass in the studio." },
-  { q: "Do you take walk-ins?", a: "Yes! Walk-ins are welcome when seats are available, but booking ahead is the best way to secure your spot." },
+  { q: "How do I book if I have a GetOutPass or gift card?", a: "At checkout, select “Reserve Without Paying,” and we’ll take care of the rest at the studio." },
+  { q: "Do you take walk-ins?", a: "Yes! Walk-ins are welcome when seats are available, but availability is not guaranteed without a reservation" },
   { q: "If I want to stay longer than my 90-minute appointment, can I?", a: "If there’s space available, absolutely! You’re welcome to stay and burn to your heart’s content." },
   { q: "Are there age limits?", a: "Most ages are welcome. Guests under 12 will need a guardian present, and younger kids may need a little extra help." },
   { q: "Can I bring my own wood projects?", a: "Yes! If you bring your own wood project, you’ll just pay the standard Studio Entry fee at checkout." },
   { q: "How do I add multiple people to my reservation?", a: "On the booking page, you’ll see a box where you can enter the total number of people in your group." },
-  {q: "Do you offer gift cards?", a: `Yes. We offer both digital and physical gift cards that can be loaded with any amount you'd like. Physical cards can be purchased in our studio, and digital cards can be purchased <a href="https://app.squareup.com/gift/ML3N1RN3EGATW/order" target="_blank" rel="noopener noreferrer" class="text-green-700 underline">here</a>.`}
+  { q: "Where can I buy a gift card?", a: `We offer both digital and physical gift cards that can be loaded with any amount you'd like. Physical cards can be purchased in our studio, and digital cards can be purchased <a href="https://app.squareup.com/gift/ML3N1RN3EGATW/order" target="_blank" rel="noopener noreferrer" class="text-green-700 underline">here</a>.`}
   
 ];
 
