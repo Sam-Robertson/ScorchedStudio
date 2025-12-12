@@ -4,7 +4,7 @@ import { Fragment } from 'react';
 const items = [
   ['Wood Disc', '$6'],
   ['Ring', '$6'],
-  ['Jewelry Box', '$8'],
+  ['Jewelry Box', '$6-10'],
   ['Plate', '$8'],
   ['Bracelet', '$8'],  
   ['Cutting Board', '$10'],      
