@@ -2,16 +2,16 @@ import Container from '@/components/ui/Container';
 import { Fragment } from 'react';
 
 const items = [
+  ['Ring', '$5'],
   ['Wood Disc', '$6'],
-  ['Ring', '$6'],
-  ['Jewelry Box', '$6-10'],
-  ['Plate', '$8'],
-  ['Bracelet', '$8'],  
-  ['Cutting Board', '$10'],      
-  ['Leather Book', '$12'],
-  ['Cup', '$12'],
-  ['Wallet', '$15'],
-  ['Coaster Set', '$15'],
+  ['Bracelet', '$7'],
+  ['Jewelry Box', '$8-$12'],
+  ['Plate', '$10'],
+  ['Cutting Board', '$12'],
+  ['Leather Book', '$14'],
+  ['Cup', '$14'],
+  ['Wallet', '$16'],
+  ['Coaster Set', '$16'],
 ];
 
 export default function Pricing() {
@@ -19,15 +19,24 @@ export default function Pricing() {
     <section className="py-12">
       <Container>
         <div className="mx-auto max-w-xl md:max-w-2xl">
-          <div className="rounded-3xl border border-green p-6 md:p-10 shadow-sm bg-white">
+          <div className="rounded-3xl border border-green bg-white p-6 shadow-sm md:p-10">
             <h2 className="h2 text-center font-bold">Pricing</h2>
+
             <p className="mt-2 text-center font-display">
-              $12 studio fee + your project price
+              Entry <span className="font-bold">$15</span> + your project price
             </p>
 
-            <div className="mt-8 grid grid-cols-[1fr_auto] gap-y-3 text-lg">
+            <p className="mx-auto mt-2 max-w-lg text-center text-sm font-display leading-snug opacity-70 whitespace-nowrap">
+              Includes: Drink • Polaroid • Mineral Oil Finish
+            </p>
+
+
+            {/* change 1: tighter spacing above table */}
+            {/* change 2: tabular numerals for cleaner price alignment */}
+            <div className="mt-6 grid grid-cols-[1fr_auto] gap-y-3 text-lg tabular-nums">
               <div className="font-sans font-bold">Product</div>
               <div className="font-sans text-right font-bold">Price</div>
+
               {items.map(([name, price], i) => (
                 <Fragment key={i}>
                   <div className="font-display">{name}</div>
