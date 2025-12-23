@@ -8,12 +8,12 @@ import { vulfMono } from "@/app/fonts";
 type PriceTier = { range: string; price: string };
 
 const STANDARD_TIERS: PriceTier[] = [
-  { range: "<10 people", price: "$12 / person" },
-  { range: "11–14 people",    price: "$11 / person" },
-  { range: "15–25 people",    price: "$10 / person" },
-  { range: "26–35 people",    price: "$9 / person"  },
-  { range: "36–45 people",    price: "$8 / person"  },
-  { range: "46+ people",      price: "$7 / person"  },
+  { range: "<10 people", price: "$15 / person" },
+  { range: "11–14 people",    price: "$14 / person" },
+  { range: "15–25 people",    price: "$13 / person" },
+  { range: "26–35 people",    price: "$12 / person"  },
+  { range: "36–45 people",    price: "$11 / person"  },
+  { range: "46+ people",      price: "$10 / person"  },
 ];
 
 const CHURCH_TIERS: PriceTier[] = [
