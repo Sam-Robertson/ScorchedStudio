@@ -66,7 +66,6 @@ export default function GroupPricingSection() {
 
             {/* Notes */}
             <ul className="mt-10 space-y-3 text-[15px] text-neutral-700 max-w-2xl mx-auto list-disc list-inside">
-            <li>Drinks are available as an add-on for all groups.</li>
             <li>
                 After-hours events or private studio reservations (closed to the public) include an
                 additional charge.
