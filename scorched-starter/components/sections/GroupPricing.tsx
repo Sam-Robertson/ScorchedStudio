@@ -26,7 +26,7 @@ export default function GroupPricingSection() {
   const isChurch = activeTab === "church";
 
   const tiers = isChurch ? CHURCH_TIERS : STANDARD_TIERS;
-  const title = isChurch ? "Church Group Pricing" : "Group Pricing";
+  const title = isChurch ? "Church Group Studio Entry" : "Group Studio Entry";
 
   return (
     <section className="mt-20 md:mt-20 py-8 md:py-12">
@@ -34,9 +34,7 @@ export default function GroupPricingSection() {
             <h2 className="h2 text-center font-bold">Group Pricing</h2>
 
             <p className="mt-4 md:mt-5 text-center font-display text-[17px] leading-relaxed">
-            Pricing scales with group size.
-            <br />
-            Project selection happens in-studio.
+              Projects not included in pricing
             </p>
 
             {/* Extra spacing above tabs */}
@@ -67,8 +65,13 @@ export default function GroupPricingSection() {
             {/* Notes */}
             <ul className="mt-10 space-y-3 text-[15px] text-neutral-700 max-w-2xl mx-auto list-disc list-inside">
             <li>
-                After-hours events or private studio reservations (closed to the public) include an
-                additional charge.
+                Outside of normal business hour events cost an additional $50.
+            </li>
+            <li>
+                Offsite events events cost an additional $150.
+            </li>
+            <li>
+                Projects are not included in the pricing above.
             </li>
             </ul>
         </Container>

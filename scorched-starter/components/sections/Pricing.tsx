@@ -26,8 +26,8 @@ export default function Pricing() {
               Entry <span className="font-bold">$15</span> + your project price
             </p>
 
-            <p className="mx-auto mt-2 max-w-lg text-center text-sm font-display leading-snug opacity-70 whitespace-nowrap">
-              Includes: Drink • Polaroid • Mineral Oil Finish
+            <p className="mx-auto mt-2 max-w-lg text-center text-sm font-display leading-snug opacity-70">
+              Includes: Drink • Polaroid • Wood Wax Finish
             </p>
 
 

@@ -14,12 +14,12 @@ import { vulfMono } from "@/app/fonts";
 const coreLinks = [
   { href: "/", label: "Home" },
   { href: "/book", label: "Calendar" },
-  
+  { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
 ];
 
 const moreLinks = [
-  { href: "/hours", label: "Hours + Pricing" },
+  
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
 ];
@@ -28,7 +28,7 @@ const moreLinks = [
 const MOBILE_NAV = [
   { href: "/", label: "Home" },
   { href: "/book", label: "Calendar" },
-  { href: "/hours", label: "Hours + Pricing" },
+  { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
