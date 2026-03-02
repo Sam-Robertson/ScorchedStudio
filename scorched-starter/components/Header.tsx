@@ -9,7 +9,6 @@ import clsx from "clsx";
 
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
-import { Target } from "lucide-react";
 
 // ===== Desktop links =====
 const coreLinks = [
@@ -20,12 +19,15 @@ const coreLinks = [
 ];
 
 const moreLinks = [
-  { href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order", label: "Gift Cards"},
+  {
+    href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
+    label: "Gift Cards",
+  },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
 ];
 
-// ===== Mobile links (full list in the drawer) =====
+// ===== Mobile links =====
 const MOBILE_NAV = [
   { href: "/", label: "Home" },
   { href: "/book", label: "Calendar" },
@@ -33,23 +35,22 @@ const MOBILE_NAV = [
   { href: "/group-events", label: "Group Events" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
-  { href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order", label: "Gift Cards"},
-
+  {
+    href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
+    label: "Gift Cards",
+  },
 ];
 
 export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-cream/95 backdrop-blur supports-[backdrop-filter]:bg-cream/85 border-b border-black/10">
-      {/* Desktop / Tablet */}
       <DesktopHeader />
-
-      {/* Mobile */}
       <MobileHeader />
     </header>
   );
 }
 
-/* -------------------- DESKTOP / TABLET -------------------- */
+/* -------------------- DESKTOP -------------------- */
 function DesktopHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -83,12 +84,12 @@ function DesktopHeader() {
       <Container>
         <nav
           className={clsx(
-            "flex h-16 items-center", // single row, tight height
+            "flex h-16 items-center",
             vulfMono.className
           )}
           aria-label="Primary"
         >
-          {/* Left: Logo (keep your larger art) */}
+          {/* Logo */}
           <Link href="/" className="shrink-0" aria-label="Home">
             <Image
               src="/illustrations/Logo.svg"
@@ -99,7 +100,7 @@ function DesktopHeader() {
             />
           </Link>
 
-          {/* Center: links + More */}
+          {/* Center Nav */}
           <div className="flex-1 flex justify-center items-center gap-14">
             {coreLinks.map((l) => (
               <Link
@@ -133,17 +134,31 @@ function DesktopHeader() {
                   <ul className="flex flex-col gap-1">
                     {moreLinks.map((l) => (
                       <li key={l.href}>
-                        <Link
-                          href={l.href}
-                          className={clsx(
-                            "block px-3 py-2 rounded-md text-[14px] leading-tight hover:bg-black/5",
-                            isActive(l.href) && "underline underline-offset-4"
-                          )}
-                          role="menuitem"
-                          onClick={() => setOpen(false)}
-                        >
-                          {l.label}
-                        </Link>
+                        {l.href.startsWith("http") ? (
+                          <a
+                            href={l.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block px-3 py-2 rounded-md text-[14px] leading-tight hover:bg-black/5"
+                            role="menuitem"
+                            onClick={() => setOpen(false)}
+                          >
+                            {l.label}
+                          </a>
+                        ) : (
+                          <Link
+                            href={l.href}
+                            className={clsx(
+                              "block px-3 py-2 rounded-md text-[14px] leading-tight hover:bg-black/5",
+                              isActive(l.href) &&
+                                "underline underline-offset-4"
+                            )}
+                            role="menuitem"
+                            onClick={() => setOpen(false)}
+                          >
+                            {l.label}
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -152,7 +167,7 @@ function DesktopHeader() {
             </div>
           </div>
 
-          {/* Right: CTA */}
+          {/* CTA */}
           <div className="shrink-0">
             <Link
               href="/book"
@@ -168,19 +183,19 @@ function DesktopHeader() {
 }
 
 /* -------------------- MOBILE -------------------- */
-/* Restores your previous “good” mobile: hamburger left, logo right, dropdown panel */
 function MobileHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // close on route change / ESC / outside click
   useEffect(() => setOpen(false), [pathname]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (!open) return;
@@ -195,7 +210,6 @@ function MobileHeader() {
   return (
     <div className="md:hidden">
       <Container className="h-14 flex items-center">
-        {/* Hamburger (left) */}
         <button
           className="inline-flex items-center justify-center rounded-md p-4 hover:bg-black/5"
           aria-expanded={open}
@@ -212,18 +226,12 @@ function MobileHeader() {
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
-            aria-hidden="true"
           >
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
 
-        {/* Logo (right) */}
-        <Link
-          href="/"
-          className="ml-auto flex items-center"
-          aria-label="Home"
-        >
+        <Link href="/" className="ml-auto flex items-center" aria-label="Home">
           <Image
             src="/illustrations/Logo.svg"
             alt="SCORCHED"
@@ -234,7 +242,6 @@ function MobileHeader() {
         </Link>
       </Container>
 
-      {/* Dropdown panel (animated) */}
       <div
         id="mobile-menu"
         ref={panelRef}
@@ -244,15 +251,28 @@ function MobileHeader() {
         )}
       >
         <div className={clsx("bg-white px-4 py-3 space-y-3", vulfMono.className)}>
-          {MOBILE_NAV.map((i) => (
-            <Link
-              key={i.href}
-              href={i.href}
-              className="block text-base text-neutral-900"
-            >
-              {i.label}
-            </Link>
-          ))}
+          {MOBILE_NAV.map((i) =>
+            i.href.startsWith("http") ? (
+              <a
+                key={i.href}
+                href={i.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-base text-neutral-900"
+              >
+                {i.label}
+              </a>
+            ) : (
+              <Link
+                key={i.href}
+                href={i.href}
+                className="block text-base text-neutral-900"
+              >
+                {i.label}
+              </Link>
+            )
+          )}
+
           <Link
             href="/book"
             className="block text-center rounded-lg px-4 py-3 font-semibold tracking-[0.18em] bg-black text-white"
