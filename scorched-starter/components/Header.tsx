@@ -9,6 +9,7 @@ import clsx from "clsx";
 
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
+import { Target } from "lucide-react";
 
 // ===== Desktop links =====
 const coreLinks = [
@@ -19,7 +20,7 @@ const coreLinks = [
 ];
 
 const moreLinks = [
-  
+  { href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order", label: "Gift Cards"},
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
 ];
@@ -32,6 +33,8 @@ const MOBILE_NAV = [
   { href: "/group-events", label: "Group Events" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
+  { href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order", label: "Gift Cards"},
+
 ];
 
 export default function Header() {
