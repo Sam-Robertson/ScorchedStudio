@@ -7,7 +7,7 @@ const items = [
   ['Bracelet', '$7'],
   ['Jewelry Box', '$8-$12'],
   ['Plate', '$10'],
-  ['Cutting Board', '$12'],
+  ['Cutting Board', '$14'],
   ['Leather Book', '$14'],
   ['Cup', '$14'],
   ['Wallet', '$16'],
