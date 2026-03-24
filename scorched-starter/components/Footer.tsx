@@ -8,7 +8,7 @@ return (
 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
 <p>© {new Date().getFullYear()} Scorched Studio · 218 E University Pkwy, Orem, UT 84058</p>
 <p>
-<a href="/sitemap.xml" className="underline">Sitemap</a>
+<a href="/admin/waivers" className="underline">Admin</a>
 </p>
 </div>
 </Container>

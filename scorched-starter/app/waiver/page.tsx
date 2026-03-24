@@ -1,0 +1,268 @@
+"use client";
+
+// app/waiver/page.tsx
+import { useRef, useState, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { vulfMono } from "@/app/fonts";
+import SignatureCanvas, { SignatureCanvasRef } from "@/components/ui/SignatureCanvas";
+
+const schema = z.object({
+  firstName: z.string().min(2, "First name is required"),
+  lastName: z.string().min(2, "Last name is required"),
+  email: z.string().email("Enter a valid email"),
+  phone: z.string().optional(),
+  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  agreed: z.boolean().refine((v) => v === true, "You must agree to the waiver"),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+const inputCls =
+  "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
+const labelCls = "block text-sm font-medium mb-1";
+const errorCls = "text-sm text-red-600 mt-1";
+
+export default function WaiverPage() {
+  const sigRef = useRef<SignatureCanvasRef>(null);
+  const [sigError, setSigError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  const clearSigError = useCallback(() => setSigError(null), []);
+
+  async function onSubmit(values: FormValues) {
+    const signatureData = sigRef.current?.getData();
+    if (!signatureData) {
+      setSigError("Please sign before submitting.");
+      return;
+    }
+    setSigError(null);
+    setServerError(null);
+
+    const res = await fetch("/api/waiver", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        phone: values.phone ?? "",
+        dateOfBirth: values.dateOfBirth,
+        signatureData,
+      }),
+    });
+
+    if (!res.ok) {
+      setServerError("Something went wrong. Please try again.");
+      return;
+    }
+
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <section className="container-px py-20 max-w-2xl mx-auto text-center">
+        <div className="rounded-2xl border border-green bg-white p-10 shadow-sm">
+          <p className="eyebrow text-brand mb-3">All set!</p>
+          <h1 className="h2 font-bold mb-4">Waiver Signed</h1>
+          <p className={`${vulfMono.className} text-[15px] leading-[1.6] text-neutral-700`}>
+            Thanks, {getValues("firstName")}! Your waiver is on file. You&apos;re ready
+            to burn — we&apos;ll see you soon.
+          </p>
+          <p className={`${vulfMono.className} mt-4 text-sm text-neutral-500`}>
+            A confirmation has been sent to {getValues("email")}.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="container-px py-12 max-w-2xl mx-auto">
+      <p className="eyebrow text-brand">Required before your first visit</p>
+      <h1 className="h1 font-bold mt-1 mb-6">Studio Waiver</h1>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        {/* Name row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>First Name</label>
+            <input className={inputCls} {...register("firstName")} />
+            {errors.firstName && <p className={errorCls}>{errors.firstName.message}</p>}
+          </div>
+          <div>
+            <label className={labelCls}>Last Name</label>
+            <input className={inputCls} {...register("lastName")} />
+            {errors.lastName && <p className={errorCls}>{errors.lastName.message}</p>}
+          </div>
+        </div>
+
+        {/* Email + Phone */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Email</label>
+            <input type="email" className={inputCls} {...register("email")} />
+            {errors.email && <p className={errorCls}>{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className={labelCls}>Phone <span className="text-neutral-400 font-normal">(optional)</span></label>
+            <input type="tel" className={inputCls} {...register("phone")} />
+          </div>
+        </div>
+
+        {/* DOB */}
+        <div className="max-w-xs">
+          <label className={labelCls}>Date of Birth</label>
+          <input type="date" className={inputCls} {...register("dateOfBirth")} />
+          {errors.dateOfBirth && <p className={errorCls}>{errors.dateOfBirth.message}</p>}
+        </div>
+
+        {/* Waiver text */}
+        <div>
+          <h2 className="h3 font-bold mb-3">Waiver Agreement</h2>
+          <div
+            className={`${vulfMono.className} h-64 overflow-y-auto rounded-xl border border-black/15 bg-white p-5 text-[13px] leading-[1.7] text-neutral-700 space-y-4`}
+          >
+            <p className="font-bold text-sm uppercase tracking-wide">
+              Scorched Studio — Participant Waiver &amp; Release of Liability
+            </p>
+
+            <p>
+              <strong>1. Assumption of Risk</strong><br />
+              I understand that woodburning (pyrography) involves the use of electrically
+              heated tools that reach temperatures in excess of 900°F. I voluntarily
+              assume all risks associated with participation, including but not limited to:
+              burns from hot tools or materials, cuts or abrasions, inhalation of smoke or
+              fumes from burning wood, eye irritation, and potential property damage.
+            </p>
+
+            <p>
+              <strong>2. Studio Rules &amp; Equipment Use</strong><br />
+              I agree to follow all posted safety rules and any instructions given by
+              Scorched Studio staff. I will not use any equipment without proper
+              orientation. I will keep my workspace clean and immediately notify a staff
+              member of any safety hazard or injury.
+            </p>
+
+            <p>
+              <strong>3. Minors &amp; Supervision</strong><br />
+              Participants under the age of 18 must be accompanied and supervised by a
+              parent or legal guardian at all times. By signing this waiver I confirm that
+              I am 18 years of age or older, OR that I am the parent or legal guardian
+              signing on behalf of a minor participant.
+            </p>
+
+            <p>
+              <strong>4. Medical Conditions</strong><br />
+              I confirm that I have no medical conditions—including but not limited to
+              respiratory conditions, burns, or open wounds—that would be aggravated by
+              participation in woodburning activities. I agree to disclose any relevant
+              health conditions to staff prior to beginning.
+            </p>
+
+            <p>
+              <strong>5. Release of Liability</strong><br />
+              To the fullest extent permitted by applicable law, I hereby release, waive,
+              discharge, and covenant not to sue Scorched Studio LLC, its owners,
+              managers, employees, volunteers, and agents from any and all liability,
+              claims, demands, actions, or causes of action arising out of or relating to
+              any loss, damage, injury, or death resulting from my participation in
+              activities at Scorched Studio, whether caused by the negligence of Scorched
+              Studio or otherwise.
+            </p>
+
+            <p>
+              <strong>6. Personal Property</strong><br />
+              I understand that Scorched Studio is not responsible for loss, theft, or
+              damage to personal belongings brought onto the premises.
+            </p>
+
+            <p>
+              <strong>7. Photography &amp; Media</strong><br />
+              I grant Scorched Studio permission to photograph or record my visit for use
+              in marketing and promotional materials on social media and its website,
+              unless I provide written notice otherwise at the time of my visit.
+            </p>
+
+            <p>
+              <strong>8. Indemnification</strong><br />
+              I agree to indemnify and hold harmless Scorched Studio and its staff from
+              any claims, costs, or expenses (including reasonable attorney fees) arising
+              from my participation or the participation of any minor for whom I am
+              responsible.
+            </p>
+
+            <p className="text-xs text-neutral-500">
+              This waiver is binding upon me, my heirs, executors, administrators, and
+              assigns. I have read this document in full, understand its terms, and sign
+              it voluntarily.
+            </p>
+          </div>
+        </div>
+
+        {/* Agree checkbox */}
+        <div>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-black/20 accent-[#519A70]"
+              {...register("agreed")}
+            />
+            <span className={`${vulfMono.className} text-[14px] leading-[1.6] text-neutral-800`}>
+              I have read, understood, and agree to the waiver and release of liability above.
+            </span>
+          </label>
+          {errors.agreed && <p className={errorCls}>{errors.agreed.message}</p>}
+        </div>
+
+        {/* Signature */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className={`${labelCls} mb-0`}>Signature</label>
+            <button
+              type="button"
+              onClick={() => {
+                sigRef.current?.clear();
+                setSigError(null);
+              }}
+              className={`${vulfMono.className} text-xs text-neutral-500 underline underline-offset-2 hover:text-neutral-800`}
+            >
+              Clear
+            </button>
+          </div>
+          <div className="rounded-xl border-2 border-dashed border-black/20 bg-white overflow-hidden">
+            <SignatureCanvas
+              ref={sigRef}
+              onDraw={clearSigError}
+              className="w-full h-36 md:h-44 block"
+            />
+          </div>
+          <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
+            Draw your signature above using your mouse or finger.
+          </p>
+          {sigError && <p className={errorCls}>{sigError}</p>}
+        </div>
+
+        {serverError && <p className={errorCls}>{serverError}</p>}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-4 text-sm md:text-base tracking-[0.25em] text-white font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity`}
+        >
+          {isSubmitting ? "Submitting…" : "SIGN & SUBMIT"}
+        </button>
+      </form>
+    </section>
+  );
+}

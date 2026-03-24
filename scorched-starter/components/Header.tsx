@@ -24,6 +24,7 @@ const moreLinks = [
     label: "Gift Cards",
   },
   { href: "/scorched-vip", label: "Scorched VIP" },
+  { href: "/waiver", label: "Waiver" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
 ];
@@ -35,6 +36,7 @@ const MOBILE_NAV = [
   { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
   { href: "/scorched-vip", label: "Scorched VIP" },
+  { href: "/waiver", label: "Waiver" },
   { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
   {

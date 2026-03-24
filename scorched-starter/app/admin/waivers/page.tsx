@@ -1,0 +1,354 @@
+"use client";
+
+// app/admin/waivers/page.tsx
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { vulfMono } from "@/app/fonts";
+import type { WaiverRecord } from "@/lib/supabase";
+
+/* ------------------------------------------------------------------ */
+/* Types & helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+type SortField = "first_name" | "email" | "signed_at" | "date_of_birth";
+type SortDir = "asc" | "desc";
+
+function fmt(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function fmtFull(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+const inputCls =
+  "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40";
+
+/* ------------------------------------------------------------------ */
+/* Main page                                                            */
+/* ------------------------------------------------------------------ */
+
+export default function AdminWaiversPage() {
+  const [authed, setAuthed] = useState(false);
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const tokenRef = useRef<string | null>(null);
+
+  // Check sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("adminToken");
+    if (saved) {
+      tokenRef.current = saved;
+      setAuthed(true);
+    }
+  }, []);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError("");
+    const res = await fetch("/api/admin/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      setAuthError("Incorrect password.");
+      setAuthLoading(false);
+      return;
+    }
+    const { token } = await res.json();
+    sessionStorage.setItem("adminToken", token);
+    tokenRef.current = token;
+    setAuthed(true);
+    setAuthLoading(false);
+  }
+
+  if (!authed) {
+    return (
+      <section className="container-px py-20 max-w-sm mx-auto">
+        <p className="eyebrow text-brand mb-2">Admin</p>
+        <h1 className="h2 font-bold mb-8">Waivers</h1>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Password</label>
+            <input
+              type="password"
+              className={`${inputCls} w-full py-3`}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+            />
+            {authError && <p className="text-sm text-red-600 mt-1">{authError}</p>}
+          </div>
+          <button
+            type="submit"
+            disabled={authLoading}
+            className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.2em] text-white font-semibold hover:opacity-90 disabled:opacity-60`}
+          >
+            {authLoading ? "Checking…" : "LOG IN"}
+          </button>
+        </form>
+      </section>
+    );
+  }
+
+  return <WaiversDashboard token={tokenRef.current!} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dashboard (authenticated)                                            */
+/* ------------------------------------------------------------------ */
+
+function WaiversDashboard({ token }: { token: string }) {
+  const [waivers, setWaivers] = useState<WaiverRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortField, setSortField] = useState<SortField>("signed_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [selected, setSelected] = useState<WaiverRecord | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/waivers", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+      .then((data) => { setWaivers(data); setLoading(false); })
+      .catch((e) => { setError(String(e)); setLoading(false); });
+  }, [token]);
+
+  const handleSort = useCallback(
+    (field: SortField) => {
+      if (field === sortField) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      else { setSortField(field); setSortDir("asc"); }
+    },
+    [sortField]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return waivers
+      .filter((w) => {
+        const nameMatch = `${w.first_name} ${w.last_name}`.toLowerCase().includes(q);
+        const emailMatch = w.email.toLowerCase().includes(q);
+        if (q && !nameMatch && !emailMatch) return false;
+        if (dateFrom && new Date(w.signed_at) < new Date(dateFrom)) return false;
+        if (dateTo && new Date(w.signed_at) > new Date(dateTo + "T23:59:59")) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const av = a[sortField] ?? "";
+        const bv = b[sortField] ?? "";
+        return sortDir === "asc"
+          ? String(av).localeCompare(String(bv))
+          : String(bv).localeCompare(String(av));
+      });
+  }, [waivers, search, dateFrom, dateTo, sortField, sortDir]);
+
+  const SortBtn = ({ field, label }: { field: SortField; label: string }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center gap-1 hover:opacity-70"
+    >
+      {label}
+      <span className="text-[10px] opacity-50">
+        {sortField === field ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
+
+  return (
+    <section className="container-px py-10 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        <div>
+          <p className="eyebrow text-brand">Admin</p>
+          <h1 className="h2 font-bold">Waivers</h1>
+          {!loading && !error && (
+            <p className={`${vulfMono.className} text-sm text-neutral-500 mt-1`}>
+              {filtered.length} of {waivers.length} total
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => { sessionStorage.removeItem("adminToken"); window.location.reload(); }}
+          className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
+        >
+          Log out
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <input
+          type="search"
+          placeholder="Search by name or email…"
+          className={`${inputCls} flex-1`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex gap-2 items-center">
+          <label className="text-xs text-neutral-500 whitespace-nowrap">From</label>
+          <input type="date" className={inputCls} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div className="flex gap-2 items-center">
+          <label className="text-xs text-neutral-500 whitespace-nowrap">To</label>
+          <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        {(search || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}
+            className="text-xs text-neutral-400 underline underline-offset-2 whitespace-nowrap hover:text-neutral-700"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* States */}
+      {loading && (
+        <p className={`${vulfMono.className} text-sm text-neutral-500 py-10 text-center`}>
+          Loading…
+        </p>
+      )}
+      {error && (
+        <p className="text-sm text-red-600 py-10 text-center">Error: {error}</p>
+      )}
+
+      {/* Table */}
+      {!loading && !error && (
+        <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white shadow-sm">
+          <table className={`${vulfMono.className} w-full text-sm`}>
+            <thead>
+              <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+                <th className="px-4 py-3"><SortBtn field="first_name" label="Name" /></th>
+                <th className="px-4 py-3"><SortBtn field="email" label="Email" /></th>
+                <th className="px-4 py-3 hidden md:table-cell">Phone</th>
+                <th className="px-4 py-3 hidden lg:table-cell"><SortBtn field="date_of_birth" label="DOB" /></th>
+                <th className="px-4 py-3"><SortBtn field="signed_at" label="Signed" /></th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-neutral-400">
+                    No waivers found.
+                  </td>
+                </tr>
+              )}
+              {filtered.map((w) => (
+                <tr
+                  key={w.id}
+                  className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
+                  onClick={() => setSelected(w)}
+                >
+                  <td className="px-4 py-3 font-medium">
+                    {w.first_name} {w.last_name}
+                  </td>
+                  <td className="px-4 py-3 text-neutral-600">{w.email}</td>
+                  <td className="px-4 py-3 text-neutral-600 hidden md:table-cell">
+                    {w.phone ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 text-neutral-600 hidden lg:table-cell">
+                    {w.date_of_birth ? fmt(w.date_of_birth + "T00:00:00") : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-neutral-600">{fmt(w.signed_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="text-xs text-brand underline underline-offset-2">View</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {selected && <WaiverModal waiver={selected} onClose={() => setSelected(null)} />}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Detail modal                                                          */
+/* ------------------------------------------------------------------ */
+
+function WaiverModal({ waiver: w, onClose }: { waiver: WaiverRecord; onClose: () => void }) {
+  // Close on backdrop click
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={backdropRef}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
+      onClick={(e) => e.target === backdropRef.current && onClose()}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
+          <h2 className={`${vulfMono.className} font-bold text-base`}>
+            {w.first_name} {w.last_name}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-neutral-400 hover:text-neutral-800 text-xl leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className={`${vulfMono.className} px-6 py-5 space-y-4 text-sm`}>
+          {/* Fields */}
+          <Row label="Email" value={w.email} />
+          <Row label="Phone" value={w.phone ?? "—"} />
+          <Row label="Date of Birth" value={w.date_of_birth ? fmt(w.date_of_birth + "T00:00:00") : "—"} />
+          <Row label="Signed At" value={fmtFull(w.signed_at)} />
+          <Row label="IP Address" value={w.ip_address ?? "—"} />
+
+          {/* Signature */}
+          <div>
+            <p className="text-xs uppercase tracking-wide text-neutral-400 mb-2">Signature</p>
+            <div className="rounded-xl border border-black/10 bg-neutral-50 p-3 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={w.signature_data}
+                alt={`Signature of ${w.first_name} ${w.last_name}`}
+                className="max-w-full max-h-40 object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-3">
+      <span className="text-neutral-400 w-28 shrink-0">{label}</span>
+      <span className="text-neutral-800 break-all">{value}</span>
+    </div>
+  );
+}
