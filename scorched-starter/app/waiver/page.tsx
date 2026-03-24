@@ -31,11 +31,13 @@ export default function WaiverPage() {
   const [sigError, setSigError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedName, setSubmittedName] = useState("");
+  const [submittedEmail, setSubmittedEmail] = useState("");
 
   const {
     register,
     handleSubmit,
-    getValues,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
@@ -68,6 +70,8 @@ export default function WaiverPage() {
       return;
     }
 
+    setSubmittedName(values.firstName);
+    setSubmittedEmail(values.email);
     setSubmitted(true);
   }
 
@@ -79,12 +83,26 @@ export default function WaiverPage() {
           <p className="eyebrow text-brand mb-3">All set!</p>
           <h1 className="h2 font-bold mb-4">Waiver Signed</h1>
           <p className={`${vulfMono.className} text-[15px] leading-[1.6] text-neutral-700`}>
-            Thanks, {getValues("firstName")}! Your waiver is on file. You&apos;re ready
+            Thanks, {submittedName}! Your waiver is on file. You&apos;re ready
             to burn — we&apos;ll see you soon.
           </p>
           <p className={`${vulfMono.className} mt-3 text-sm text-neutral-500`}>
-            A confirmation has been sent to {getValues("email")}.
+            A confirmation has been sent to {submittedEmail}.
           </p>
+          <button
+            onClick={() => {
+              setSubmitted(false);
+              setSubmittedName("");
+              setSubmittedEmail("");
+              setSigError(null);
+              setServerError(null);
+              reset();
+              sigRef.current?.clear();
+            }}
+            className={`${vulfMono.className} mt-5 text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
+          >
+            Fill out another waiver
+          </button>
         </div>
 
         {/* VIP sign-up */}

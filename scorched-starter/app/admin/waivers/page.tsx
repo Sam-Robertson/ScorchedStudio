@@ -278,7 +278,17 @@ function WaiversDashboard({ token }: { token: string }) {
       )}
 
       {/* Detail modal */}
-      {selected && <WaiverModal waiver={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <WaiverModal
+          waiver={selected}
+          token={token}
+          onClose={() => setSelected(null)}
+          onDelete={(id) => {
+            setWaivers((prev) => prev.filter((w) => w.id !== id));
+            setSelected(null);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -287,15 +297,42 @@ function WaiversDashboard({ token }: { token: string }) {
 /* Detail modal                                                          */
 /* ------------------------------------------------------------------ */
 
-function WaiverModal({ waiver: w, onClose }: { waiver: WaiverRecord; onClose: () => void }) {
-  // Close on backdrop click
+function WaiverModal({
+  waiver: w,
+  token,
+  onClose,
+  onDelete,
+}: {
+  waiver: WaiverRecord;
+  token: string;
+  onClose: () => void;
+  onDelete: (id: string) => void;
+}) {
   const backdropRef = useRef<HTMLDivElement>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  async function handleDelete() {
+    if (!confirm(`Delete waiver for ${w.first_name} ${w.last_name}? This cannot be undone.`)) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const res = await fetch(`/api/admin/waivers/${w.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      setDeleteError("Failed to delete. Please try again.");
+      setDeleting(false);
+      return;
+    }
+    onDelete(w.id);
+  }
 
   return (
     <div
@@ -319,7 +356,6 @@ function WaiverModal({ waiver: w, onClose }: { waiver: WaiverRecord; onClose: ()
         </div>
 
         <div className={`${vulfMono.className} px-6 py-5 space-y-4 text-sm`}>
-          {/* Fields */}
           <Row label="Email" value={w.email} />
           <Row label="Phone" value={w.phone ?? "—"} />
           <Row label="Date of Birth" value={w.date_of_birth ? fmt(w.date_of_birth + "T00:00:00") : "—"} />
@@ -337,6 +373,18 @@ function WaiverModal({ waiver: w, onClose }: { waiver: WaiverRecord; onClose: ()
                 className="max-w-full max-h-40 object-contain"
               />
             </div>
+          </div>
+
+          {/* Delete */}
+          <div className="pt-2 border-t border-black/5">
+            {deleteError && <p className="text-xs text-red-600 mb-2">{deleteError}</p>}
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className={`${vulfMono.className} text-xs text-red-500 underline underline-offset-2 hover:text-red-700 disabled:opacity-50`}
+            >
+              {deleting ? "Deleting…" : "Delete this waiver"}
+            </button>
           </div>
         </div>
       </div>
