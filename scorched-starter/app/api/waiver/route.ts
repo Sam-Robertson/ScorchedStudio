@@ -89,6 +89,41 @@ export async function POST(req: Request) {
             See you soon!<br/>
             <strong>— The Scorched Studio Team</strong>
           </p>
+
+          <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0;" />
+
+          <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; margin-bottom: 8px;">While you&apos;re here</p>
+          <h2 style="font-size: 18px; margin: 0 0 8px;">Join Scorched VIP — It&apos;s Free</h2>
+          <p style="color: #555; font-size: 14px; margin-bottom: 20px;">
+            Sign up for our loyalty program and get exclusive deals, hear about new products first,
+            and pick up a <strong>free wooden ring</strong> on your next visit.
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 50%; padding-right: 12px; vertical-align: top;">
+                <div style="background: #f5f5f5; border-radius: 12px; padding: 16px; text-align: center;">
+                  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #884A20; margin: 0 0 10px;">Scan In Studio</p>
+                  <img
+                    src="https://scorchedstudio.com/squareQR.png"
+                    alt="Scorched VIP QR code"
+                    width="120"
+                    height="120"
+                    style="border-radius: 8px; display: block; margin: 0 auto;"
+                  />
+                  <p style="font-size: 12px; color: #666; margin: 10px 0 0;">Scan at the front desk</p>
+                </div>
+              </td>
+              <td style="width: 50%; padding-left: 12px; vertical-align: top;">
+                <div style="background: #F6E4E1; border-radius: 12px; padding: 16px; text-align: center;">
+                  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #884A20; margin: 0 0 10px;">Text to Join</p>
+                  <p style="font-size: 28px; font-weight: bold; color: #884A20; margin: 12px 0 4px;">JOIN</p>
+                  <p style="font-size: 13px; color: #555; margin: 0;">to <strong>833-388-5416</strong></p>
+                  <p style="font-size: 12px; color: #666; margin: 10px 0 0;">From anywhere, anytime</p>
+                </div>
+              </td>
+            </tr>
+          </table>
         </div>
       `,
     });
