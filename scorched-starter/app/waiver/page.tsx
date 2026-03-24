@@ -7,6 +7,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { vulfMono } from "@/app/fonts";
 import SignatureCanvas, { SignatureCanvasRef } from "@/components/ui/SignatureCanvas";
+import Image from "next/image";
+import { MessageSquare } from "lucide-react";
 
 const schema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -71,17 +73,57 @@ export default function WaiverPage() {
 
   if (submitted) {
     return (
-      <section className="container-px py-20 max-w-2xl mx-auto text-center">
-        <div className="rounded-2xl border border-green bg-white p-10 shadow-sm">
+      <section className="container-px py-12 max-w-2xl mx-auto text-center">
+        {/* Confirmation */}
+        <div className="rounded-2xl border border-green bg-white p-8 shadow-sm">
           <p className="eyebrow text-brand mb-3">All set!</p>
           <h1 className="h2 font-bold mb-4">Waiver Signed</h1>
           <p className={`${vulfMono.className} text-[15px] leading-[1.6] text-neutral-700`}>
             Thanks, {getValues("firstName")}! Your waiver is on file. You&apos;re ready
             to burn — we&apos;ll see you soon.
           </p>
-          <p className={`${vulfMono.className} mt-4 text-sm text-neutral-500`}>
+          <p className={`${vulfMono.className} mt-3 text-sm text-neutral-500`}>
             A confirmation has been sent to {getValues("email")}.
           </p>
+        </div>
+
+        {/* VIP sign-up */}
+        <div className="mt-6 rounded-2xl border border-black/10 bg-white p-8 shadow-sm">
+          <p className="eyebrow text-brand mb-2">While you&apos;re here</p>
+          <h2 className="h2 font-bold mb-3">Join Scorched VIP</h2>
+          <p className={`${vulfMono.className} text-[14px] leading-[1.6] text-neutral-600 max-w-sm mx-auto mb-6`}>
+            Free to join. Get exclusive deals, hear about new products first, and pick up a free wooden ring on your next visit.
+          </p>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* QR */}
+            <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
+              <p className="eyebrow text-brand mb-3">In Studio</p>
+              <Image
+                src="/squareQR.png"
+                alt="Scorched VIP sign-up QR code"
+                width={110}
+                height={110}
+                className="rounded-xl"
+              />
+              <p className={`${vulfMono.className} mt-3 text-[13px] text-neutral-600`}>
+                Scan the QR code at the front desk
+              </p>
+            </div>
+
+            {/* Text */}
+            <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
+              <p className="eyebrow text-brand mb-3">From Anywhere</p>
+              <div className="w-[110px] h-[110px] rounded-xl bg-blush flex flex-col items-center justify-center gap-1">
+                <MessageSquare className="w-7 h-7 text-brand" />
+                <p className={`${vulfMono.className} text-lg font-bold text-brand`}>Text Us</p>
+              </div>
+              <p className={`${vulfMono.className} mt-3 text-[13px] text-neutral-600`}>
+                Text <span className="font-bold text-brand">JOIN</span> to{" "}
+                <span className="font-bold text-brand">833-388-5416</span>
+              </p>
+            </div>
+          </div>
         </div>
       </section>
     );

@@ -77,8 +77,13 @@ export async function POST(req: Request) {
             </tr>
           </table>
           <p style="color: #555; font-size: 14px;">
-            Have questions? Reply to this email or give us a call at
+            Have questions? Email us at
+            <a href="mailto:contact@scorchedstudio.com" style="color: #884A20;">contact@scorchedstudio.com</a>
+            or give us a call at
             <a href="tel:+18013619066" style="color: #884A20;">(801) 361-9066</a>.
+          </p>
+          <p style="color: #aaa; font-size: 12px; margin-top: 12px;">
+            Please do not reply directly to this email — it is not monitored.
           </p>
           <p style="color: #555; font-size: 14px; margin-top: 24px;">
             See you soon!<br/>
