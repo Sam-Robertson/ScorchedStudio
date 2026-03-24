@@ -47,7 +47,7 @@ const SignatureCanvas = forwardRef<
     initCanvas();
     window.addEventListener("resize", initCanvas);
     return () => window.removeEventListener("resize", initCanvas);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useImperativeHandle(ref, () => ({
     getData: () =>

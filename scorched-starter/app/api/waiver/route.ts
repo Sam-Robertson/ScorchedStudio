@@ -1,7 +1,7 @@
 // app/api/waiver/route.ts
 import { Resend } from "resend";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       req.headers.get("x-real-ip") ||
       null;
 
-    const { error: dbError } = await supabase.from("waivers").insert({
+    const { error: dbError } = await getSupabase().from("waivers").insert({
       first_name: data.firstName,
       last_name: data.lastName,
       email: data.email,
