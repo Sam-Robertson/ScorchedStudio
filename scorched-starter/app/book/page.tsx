@@ -699,7 +699,7 @@ function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPayme
         <label className="flex items-start gap-3 cursor-pointer group">
           <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "gift_card"} onChange={() => toggleMethod("gift_card")} disabled={isLoading} />
           <div>
-            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I'm paying with a gift card</span>
+            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m paying with a gift card</span>
             <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — pay the $15/person studio fee in-studio</p>
           </div>
         </label>
@@ -711,7 +711,7 @@ function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPayme
         <label className="flex items-start gap-3 cursor-pointer group">
           <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "get_out_pass"} onChange={() => toggleMethod("get_out_pass")} disabled={isLoading} />
           <div>
-            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I'm using a Get Out Pass</span>
+            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m using a Get Out Pass</span>
             <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — bring your pass when you arrive</p>
           </div>
         </label>
@@ -719,7 +719,7 @@ function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPayme
 
       {!payBlocked && (
         <div className="rounded-2xl border border-black/5 bg-[#F7F6F3] px-5 py-4">
-          <p className={`${vulfMono.className} text-xs text-neutral-500`}>Paying? You'll be redirected to Stripe to complete payment securely. A confirmation email will be sent to {email}.</p>
+          <p className={`${vulfMono.className} text-xs text-neutral-500`}>Paying? You&apos;ll be redirected to Stripe to complete payment securely. A confirmation email will be sent to {email}.</p>
         </div>
       )}
 

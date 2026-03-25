@@ -1,5 +1,6 @@
 // app/book/confirmation/page.tsx
 import Stripe from "stripe";
+import Link from "next/link";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
@@ -108,7 +109,7 @@ function ConfirmationLayout({
             <div className="w-16 h-16 rounded-full bg-[#519A70] flex items-center justify-center text-white text-2xl font-bold mb-4">
               ✓
             </div>
-            <p className="eyebrow text-brand">You're all set</p>
+            <p className="eyebrow text-brand">You&apos;re all set</p>
             <h1 className="h2 font-bold">{total ? "Booking Confirmed" : "Spot Reserved"}</h1>
             <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2`}>
               A confirmation email has been sent to {email}
@@ -152,9 +153,9 @@ function ConfirmationLayout({
             >
               Need to reschedule or cancel? →
             </a>
-            <a href="/" className={`${vulfMono.className} text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
+            <Link href="/" className={`${vulfMono.className} text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
               Back to home
-            </a>
+            </Link>
           </div>
         </Container>
       </section>
