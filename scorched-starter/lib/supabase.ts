@@ -15,6 +15,22 @@ export function getSupabase() {
   return _client;
 }
 
+export type BookingRecord = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  date: string;
+  time_slot: string;
+  party_size: number;
+  amount_paid: number;
+  stripe_payment_intent_id: string | null;
+  stripe_session_id: string | null;
+  status: "confirmed" | "cancelled";
+  payment_method: "stripe" | "gift_card" | "get_out_pass" | null;
+  created_at: string;
+};
+
 export type WaiverRecord = {
   id: string;
   first_name: string;

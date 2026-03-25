@@ -248,14 +248,7 @@ export default function WaiverPage() {
             </p>
 
             <p>
-              <strong>7. Photography &amp; Media</strong><br />
-              I grant Scorched Studio permission to photograph or record my visit for use
-              in marketing and promotional materials on social media and its website,
-              unless I provide written notice otherwise at the time of my visit.
-            </p>
-
-            <p>
-              <strong>8. Indemnification</strong><br />
+              <strong>7. Indemnification</strong><br />
               I agree to indemnify and hold harmless Scorched Studio and its staff from
               any claims, costs, or expenses (including reasonable attorney fees) arising
               from my participation or the participation of any minor for whom I am

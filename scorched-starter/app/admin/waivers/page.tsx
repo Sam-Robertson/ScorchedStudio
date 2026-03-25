@@ -2,6 +2,7 @@
 
 // app/admin/waivers/page.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { WaiverRecord } from "@/lib/supabase";
 
@@ -38,72 +39,18 @@ const inputCls =
 /* ------------------------------------------------------------------ */
 
 export default function AdminWaiversPage() {
-  const [authed, setAuthed] = useState(false);
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const tokenRef = useRef<string | null>(null);
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
 
-  // Check sessionStorage on mount
   useEffect(() => {
     const saved = sessionStorage.getItem("adminToken");
-    if (saved) {
-      tokenRef.current = saved;
-      setAuthed(true);
-    }
-  }, []);
+    if (!saved) { router.replace("/admin"); return; }
+    setToken(saved);
+  }, [router]);
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError("");
-    const res = await fetch("/api/admin/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) {
-      setAuthError("Incorrect password.");
-      setAuthLoading(false);
-      return;
-    }
-    const { token } = await res.json();
-    sessionStorage.setItem("adminToken", token);
-    tokenRef.current = token;
-    setAuthed(true);
-    setAuthLoading(false);
-  }
+  if (!token) return null;
 
-  if (!authed) {
-    return (
-      <section className="container-px py-20 max-w-sm mx-auto">
-        <p className="eyebrow text-brand mb-2">Admin</p>
-        <h1 className="h2 font-bold mb-8">Waivers</h1>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <input
-              type="password"
-              className={`${inputCls} w-full py-3`}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
-            {authError && <p className="text-sm text-red-600 mt-1">{authError}</p>}
-          </div>
-          <button
-            type="submit"
-            disabled={authLoading}
-            className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.2em] text-white font-semibold hover:opacity-90 disabled:opacity-60`}
-          >
-            {authLoading ? "Checking…" : "LOG IN"}
-          </button>
-        </form>
-      </section>
-    );
-  }
-
-  return <WaiversDashboard token={tokenRef.current!} />;
+  return <WaiversDashboard token={token} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -183,12 +130,17 @@ function WaiversDashboard({ token }: { token: string }) {
             </p>
           )}
         </div>
-        <button
-          onClick={() => { sessionStorage.removeItem("adminToken"); window.location.reload(); }}
-          className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
-        >
-          Log out
-        </button>
+        <div className="flex items-center gap-4">
+          <a href="/admin" className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
+            ← Admin
+          </a>
+          <button
+            onClick={() => { sessionStorage.removeItem("adminToken"); window.location.href = "/admin"; }}
+            className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
+          >
+            Log out
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -230,8 +182,29 @@ function WaiversDashboard({ token }: { token: string }) {
 
       {/* Table */}
       {!loading && !error && (
-        <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white shadow-sm">
-          <table className={`${vulfMono.className} w-full text-sm`}>
+        <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
+          {/* Mobile card list */}
+          <div className="sm:hidden divide-y divide-black/5">
+            {filtered.length === 0 && (
+              <p className={`${vulfMono.className} px-4 py-10 text-center text-neutral-400 text-sm`}>No waivers found.</p>
+            )}
+            {filtered.map((w) => (
+              <div
+                key={w.id}
+                className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 active:bg-neutral-100"
+                onClick={() => setSelected(w)}
+              >
+                <div className="min-w-0">
+                  <p className={`${vulfMono.className} text-sm font-medium truncate`}>{w.first_name} {w.last_name}</p>
+                  <p className={`${vulfMono.className} text-xs text-neutral-500 truncate mt-0.5`}>{w.email}</p>
+                </div>
+                <p className={`${vulfMono.className} text-xs text-neutral-400 shrink-0`}>{fmt(w.signed_at)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <table className={`${vulfMono.className} hidden sm:table w-full text-sm`}>
             <thead>
               <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
                 <th className="px-4 py-3"><SortBtn field="first_name" label="Name" /></th>
@@ -256,13 +229,9 @@ function WaiversDashboard({ token }: { token: string }) {
                   className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
                   onClick={() => setSelected(w)}
                 >
-                  <td className="px-4 py-3 font-medium">
-                    {w.first_name} {w.last_name}
-                  </td>
+                  <td className="px-4 py-3 font-medium">{w.first_name} {w.last_name}</td>
                   <td className="px-4 py-3 text-neutral-600">{w.email}</td>
-                  <td className="px-4 py-3 text-neutral-600 hidden md:table-cell">
-                    {w.phone ?? "—"}
-                  </td>
+                  <td className="px-4 py-3 text-neutral-600 hidden md:table-cell">{w.phone ?? "—"}</td>
                   <td className="px-4 py-3 text-neutral-600 hidden lg:table-cell">
                     {w.date_of_birth ? fmt(w.date_of_birth + "T00:00:00") : "—"}
                   </td>

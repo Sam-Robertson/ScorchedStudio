@@ -10,7 +10,7 @@ const WORDS = [
   'Team Activities',
   'Birthdays',
   'Youth Groups',
-  'Weddings',
+  'Family Outings',
   'Church Groups',
 ];
 
