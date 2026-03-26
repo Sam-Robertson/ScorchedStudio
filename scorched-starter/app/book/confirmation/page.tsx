@@ -1,9 +1,10 @@
 // app/book/confirmation/page.tsx
-import Stripe from "stripe";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
+import { createBookingFromIntent } from "@/lib/create-booking-from-intent";
 
 export const metadata = {
   title: "Booking Confirmed | Scorched Studio",
@@ -12,9 +13,19 @@ export const metadata = {
 export default async function ConfirmationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session_id?: string; booking_id?: string }>;
+  searchParams: Promise<{ booking_id?: string; payment_intent?: string }>;
 }) {
-  const { session_id, booking_id } = await searchParams;
+  const { booking_id, payment_intent } = await searchParams;
+
+  // ── Payment Element redirect case ───────────────────────────────────────────
+  // Rare: fires when a redirect-based payment method is used instead of a card.
+  if (payment_intent) {
+    const result = await createBookingFromIntent(payment_intent);
+    if (result.ok) {
+      redirect(`/book/confirmation?booking_id=${result.booking_id}`);
+    }
+    return <ErrorView message="Payment received but booking could not be confirmed. Please contact us." />;
+  }
 
   // ── Free reservation (reserve route) ───────────────────────────────────────
   if (booking_id) {
@@ -50,42 +61,7 @@ export default async function ConfirmationPage({
     );
   }
 
-  // ── Paid via Stripe ─────────────────────────────────────────────────────────
-  if (!session_id) return <ErrorView message="No booking found." />;
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-  let session: Stripe.Checkout.Session;
-  try {
-    session = await stripe.checkout.sessions.retrieve(session_id);
-  } catch {
-    return <ErrorView message="Could not retrieve booking details." />;
-  }
-
-  if (session.payment_status !== "paid") {
-    return <ErrorView message="Payment was not completed. Please try again." />;
-  }
-
-  const { name, email, date, time_slot, party_size } = session.metadata ?? {};
-  const total = ((session.amount_total ?? 0) / 100).toFixed(2);
-
-  const formattedDate = date
-    ? new Date(date + "T12:00:00").toLocaleDateString("en-US", {
-        weekday: "long", month: "long", day: "numeric", year: "numeric",
-      })
-    : "—";
-
-  return (
-    <ConfirmationLayout
-      name={name ?? "—"}
-      email={email ?? "—"}
-      formattedDate={formattedDate}
-      timeSlot={time_slot ?? "—"}
-      partySize={Number(party_size ?? 0)}
-      total={`$${total}`}
-      paymentNote={null}
-    />
-  );
+  return <ErrorView message="No booking found." />;
 }
 
 // ── Shared layout ─────────────────────────────────────────────────────────────

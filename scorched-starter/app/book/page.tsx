@@ -1,9 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+
+const stripeAppearance = {
+  theme: "stripe" as const,
+  variables: {
+    colorPrimary: "#884A20",
+    colorBackground: "#ffffff",
+    colorText: "#3A3A3A",
+    colorDanger: "#ef4444",
+    borderRadius: "12px",
+    fontSizeBase: "14px",
+  },
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +127,7 @@ export default function BookPage() {
   const [partySize, setPartySize] = useState(1);
   const [formError, setFormError] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+  const [payClientSecret, setPayClientSecret] = useState("");
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState("");
   const [reserveLoading, setReserveLoading] = useState(false);
@@ -208,22 +225,26 @@ export default function BookPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handlePay() {
+  async function handleInitiatePayment() {
     setPayLoading(true);
     setPayError("");
     try {
-      const res = await fetch("/api/bookings/checkout", {
+      const res = await fetch("/api/bookings/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone }),
       });
       const data = await res.json();
       if (!res.ok) { setPayError(data.error || "Something went wrong."); setPayLoading(false); return; }
-      window.location.href = data.url;
+      setPayClientSecret(data.clientSecret);
     } catch {
       setPayError("Something went wrong. Please try again.");
-      setPayLoading(false);
     }
+    setPayLoading(false);
+  }
+
+  function handlePaySuccess(bookingId: string) {
+    window.location.href = `/book/confirmation?booking_id=${bookingId}`;
   }
 
   async function handleReserve() {
@@ -424,8 +445,10 @@ export default function BookPage() {
                 reserveLoading={reserveLoading}
                 reserveError={reserveError}
                 isLoading={bookIsLoading}
-                onBack={() => setBookStep(2)}
-                onPay={handlePay}
+                payClientSecret={payClientSecret}
+                onBack={() => { setBookStep(2); setPayClientSecret(""); setPayError(""); }}
+                onInitiatePayment={handleInitiatePayment}
+                onPaySuccess={handlePaySuccess}
                 onReserve={handleReserve}
               />
             )}
@@ -665,11 +688,17 @@ function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize,
 
 // ── Book Step 3 ───────────────────────────────────────────────────────────────
 
-function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPaymentMethod, payLoading, payError, reserveLoading, reserveError, isLoading, onBack, onPay, onReserve }: {
+function BookStep3({
+  date, slot, partySize, name, email,
+  paymentMethod, setPaymentMethod,
+  payLoading, payError, reserveLoading, reserveError, isLoading,
+  payClientSecret, onBack, onInitiatePayment, onPaySuccess, onReserve,
+}: {
   date: string; slot: string; partySize: number; name: string; email: string;
   paymentMethod: PaymentMethod; setPaymentMethod: (v: PaymentMethod) => void;
   payLoading: boolean; payError: string; reserveLoading: boolean; reserveError: string; isLoading: boolean;
-  onBack: () => void; onPay: () => void; onReserve: () => void;
+  payClientSecret: string;
+  onBack: () => void; onInitiatePayment: () => void; onPaySuccess: (id: string) => void; onReserve: () => void;
 }) {
   const total = 15 * partySize;
   const payBlocked = paymentMethod === "gift_card" || paymentMethod === "get_out_pass";
@@ -680,6 +709,7 @@ function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPayme
 
   return (
     <div className="space-y-4">
+      {/* Summary */}
       <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
         <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-4`}>Booking summary</p>
         <div className={`${vulfMono.className} space-y-3 text-sm`}>
@@ -694,47 +724,138 @@ function BookStep3({ date, slot, partySize, name, email, paymentMethod, setPayme
         </div>
       </div>
 
-      <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-3">
-        <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-1`}>Payment options</p>
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "gift_card"} onChange={() => toggleMethod("gift_card")} disabled={isLoading} />
-          <div>
-            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m paying with a gift card</span>
-            <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — pay the $15/person studio fee in-studio</p>
-          </div>
-        </label>
-        {paymentMethod === "gift_card" && (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-            <p className={`${vulfMono.className} text-xs text-amber-800`}><strong>Note:</strong> Please bring your gift card when you arrive. The $15 per-person studio fee will be collected in-studio.</p>
-          </div>
-        )}
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "get_out_pass"} onChange={() => toggleMethod("get_out_pass")} disabled={isLoading} />
-          <div>
-            <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m using a Get Out Pass</span>
-            <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — bring your pass when you arrive</p>
-          </div>
-        </label>
-      </div>
-
-      {!payBlocked && (
-        <div className="rounded-2xl border border-black/5 bg-[#F7F6F3] px-5 py-4">
-          <p className={`${vulfMono.className} text-xs text-neutral-500`}>Paying? You&apos;ll be redirected to Stripe to complete payment securely. A confirmation email will be sent to {email}.</p>
+      {/* Payment options */}
+      {!payClientSecret && (
+        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-3">
+          <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-1`}>Payment options</p>
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "gift_card"} onChange={() => toggleMethod("gift_card")} disabled={isLoading} />
+            <div>
+              <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m paying with a gift card</span>
+              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — pay the $15/person studio fee in-studio</p>
+            </div>
+          </label>
+          {paymentMethod === "gift_card" && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <p className={`${vulfMono.className} text-xs text-amber-800`}><strong>Note:</strong> Please bring your gift card when you arrive. The $15 per-person studio fee will be collected in-studio.</p>
+            </div>
+          )}
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "get_out_pass"} onChange={() => toggleMethod("get_out_pass")} disabled={isLoading} />
+            <div>
+              <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m using a Get Out Pass</span>
+              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — bring your pass when you arrive</p>
+            </div>
+          </label>
         </div>
       )}
 
-      {(payError || reserveError) && <p className={`${vulfMono.className} text-xs text-red-500 text-center`}>{payError || reserveError}</p>}
+      {/* Inline payment form */}
+      {!payBlocked && payClientSecret && (
+        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
+          <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-4`}>Card details</p>
+          <Elements stripe={stripePromise} options={{ clientSecret: payClientSecret, appearance: stripeAppearance }}>
+            <PaymentForm
+              total={total}
+              email={email}
+              onSuccess={onPaySuccess}
+            />
+          </Elements>
+        </div>
+      )}
 
-      <div className="flex gap-3">
-        <button onClick={onBack} disabled={isLoading} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50 disabled:opacity-50`}>Back</button>
-        <button onClick={onReserve} disabled={isLoading} className={`${vulfMono.className} flex-[2] rounded-xl py-3 text-sm tracking-[0.1em] font-semibold transition-opacity disabled:opacity-60 ${payBlocked ? "bg-[#519A70] text-white hover:opacity-90" : "border border-black/20 text-neutral-600 hover:bg-neutral-50"}`}>
-          {reserveLoading ? "Reserving…" : "RESERVE FREE"}
+      {(payError || reserveError) && (
+        <p className={`${vulfMono.className} text-xs text-red-500 text-center`}>{payError || reserveError}</p>
+      )}
+
+      {/* Action buttons */}
+      {!payClientSecret && (
+        <div className="flex gap-3">
+          <button onClick={onBack} disabled={isLoading} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50 disabled:opacity-50`}>Back</button>
+          <button onClick={onReserve} disabled={isLoading} className={`${vulfMono.className} flex-[2] rounded-xl py-3 text-sm tracking-[0.1em] font-semibold transition-opacity disabled:opacity-60 ${payBlocked ? "bg-[#519A70] text-white hover:opacity-90" : "border border-black/20 text-neutral-600 hover:bg-neutral-50"}`}>
+            {reserveLoading ? "Reserving…" : "RESERVE FREE"}
+          </button>
+          {!payBlocked && (
+            <button onClick={onInitiatePayment} disabled={isLoading} className={`${vulfMono.className} flex-[2] rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.1em] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-opacity`}>
+              {payLoading ? "Loading…" : `PAY $${total}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {payClientSecret && (
+        <button onClick={onBack} className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
+          ← Back
         </button>
-        <button onClick={onPay} disabled={isLoading || payBlocked} className={`${vulfMono.className} flex-[2] rounded-xl py-3 text-sm tracking-[0.1em] font-semibold transition-opacity ${payBlocked ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-[#519A70] text-white hover:opacity-90 disabled:opacity-60"}`}>
-          {payLoading ? "Redirecting…" : `PAY $${total}`}
-        </button>
-      </div>
+      )}
     </div>
+  );
+}
+
+// ── Payment form (must be inside <Elements>) ──────────────────────────────────
+
+function PaymentForm({
+  total, email, onSuccess,
+}: {
+  total: number;
+  email: string;
+  onSuccess: (bookingId: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [cardError, setCardError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setCardError("");
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      redirect: "if_required",
+      confirmParams: {
+        return_url: `${window.location.origin}/book/confirmation`,
+        receipt_email: email,
+      },
+    });
+
+    if (error) {
+      setCardError(error.message ?? "Payment failed. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+
+    // Payment succeeded — create the booking record
+    const res = await fetch("/api/bookings/confirm-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setCardError(data.error ?? "Payment succeeded but booking creation failed. Please contact us.");
+      setSubmitting(false);
+      return;
+    }
+
+    onSuccess(data.booking_id);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement />
+      {cardError && <p className={`${vulfMono.className} text-xs text-red-500`}>{cardError}</p>}
+      <button
+        type="submit"
+        disabled={!stripe || !elements || submitting}
+        className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-opacity`}
+      >
+        {submitting ? "Processing…" : `Complete Payment — $${total}`}
+      </button>
+    </form>
   );
 }
 
