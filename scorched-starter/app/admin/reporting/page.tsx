@@ -213,7 +213,7 @@ function ReportingDashboard({ token }: { token: string }) {
   function toggleSource(src: string) {
     setHiddenSources((prev) => {
       const next = new Set(prev);
-      next.has(src) ? next.delete(src) : next.add(src);
+      if (next.has(src)) { next.delete(src); } else { next.add(src); }
       return next;
     });
   }
@@ -405,7 +405,7 @@ function ReportingDashboard({ token }: { token: string }) {
                 {otherDetails.length > 0 && (
                   <details className="mt-5">
                     <summary className={`${vulfMono.className} text-xs text-neutral-400 cursor-pointer hover:text-neutral-600`}>
-                      "Other" responses ({otherDetails.length})
+                      &ldquo;Other&rdquo; responses ({otherDetails.length})
                     </summary>
                     <ul className="mt-3 space-y-1.5">
                       {otherDetails.map((d, i) => (
