@@ -52,6 +52,7 @@ export default async function ConfirmationPage({
 
     return (
       <ConfirmationLayout
+        bookingId={booking.id}
         name={booking.name}
         email={booking.email}
         formattedDate={formattedDate}
@@ -69,8 +70,9 @@ export default async function ConfirmationPage({
 // ── Shared layout ─────────────────────────────────────────────────────────────
 
 function ConfirmationLayout({
-  name, email, formattedDate, timeSlot, partySize, total, paymentNote,
+  bookingId, name, email, formattedDate, timeSlot, partySize, total, paymentNote,
 }: {
+  bookingId: string;
   name: string;
   email: string;
   formattedDate: string;
@@ -164,7 +166,7 @@ function ConfirmationLayout({
 
           <div className="flex flex-col items-center gap-3 mt-8">
             <a
-              href={`/book/manage?booking_id=${booking.id}`}
+              href={`/book/manage?booking_id=${bookingId}`}
               className={`${vulfMono.className} text-sm text-[#884A20] underline underline-offset-2 hover:opacity-70`}
             >
               Need to reschedule or cancel? →
