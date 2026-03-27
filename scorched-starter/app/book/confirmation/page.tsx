@@ -164,7 +164,7 @@ function ConfirmationLayout({
 
           <div className="flex flex-col items-center gap-3 mt-8">
             <a
-              href="/book/manage"
+              href={`/book/manage?booking_id=${booking.id}`}
               className={`${vulfMono.className} text-sm text-[#884A20] underline underline-offset-2 hover:opacity-70`}
             >
               Need to reschedule or cancel? →

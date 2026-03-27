@@ -36,6 +36,40 @@ function isEditable(bookingDate: string, timeSlot: string): boolean {
   return now < slotUTC;
 }
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const email = req.nextUrl.searchParams.get("email");
+
+  if (!email) {
+    return Response.json({ error: "Email is required." }, { status: 400 });
+  }
+
+  const { data: booking, error } = await getSupabase()
+    .from("bookings")
+    .select("id, name, email, date, time_slot, party_size, status, payment_method, amount_paid")
+    .eq("id", id)
+    .single();
+
+  if (error || !booking) {
+    return Response.json({ error: "Booking not found." }, { status: 404 });
+  }
+
+  if (booking.email.toLowerCase() !== email.toLowerCase()) {
+    return Response.json({ error: "Email does not match this booking." }, { status: 403 });
+  }
+
+  if (booking.status === "cancelled") {
+    return Response.json({ error: "This booking has already been cancelled." }, { status: 410 });
+  }
+
+  const editable = isEditable(booking.date, booking.time_slot);
+
+  return Response.json({ booking, editable });
+}
+
 const schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("cancel"),

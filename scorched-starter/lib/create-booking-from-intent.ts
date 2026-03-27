@@ -118,8 +118,8 @@ export async function createBookingFromIntent(
           </p>
         </div>
         <p style="color: #555; font-size: 14px;">
-          Need to make changes? Visit
-          <a href="https://scorchedstudio.com/book?tab=manage" style="color: #884A20;">scorchedstudio.com/book</a>.
+          Need to reschedule or cancel?
+          <a href="https://scorchedstudio.com/book/manage?booking_id=${booking.id}" style="color: #884A20;">Manage your booking →</a>
         </p>
         <p style="color: #aaa; font-size: 12px; margin-top: 12px;">Please do not reply to this email — it is not monitored.</p>
         <p style="color: #555; font-size: 14px; margin-top: 24px;">

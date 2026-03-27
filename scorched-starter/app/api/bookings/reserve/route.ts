@@ -151,6 +151,10 @@ export async function POST(req: NextRequest) {
         </div>
 
         <p style="color: #555; font-size: 14px;">
+          Need to reschedule or cancel?
+          <a href="https://scorchedstudio.com/book/manage?booking_id=${booking.id}" style="color: #884A20;">Manage your booking →</a>
+        </p>
+        <p style="color: #555; font-size: 14px; margin-top: 12px;">
           Questions? Email <a href="mailto:contact@scorchedstudio.com" style="color: #884A20;">contact@scorchedstudio.com</a>
           or call <a href="tel:+18013619066" style="color: #884A20;">(801) 361-9066</a>.
         </p>
