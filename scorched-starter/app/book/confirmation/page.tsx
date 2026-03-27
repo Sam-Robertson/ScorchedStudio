@@ -1,6 +1,8 @@
 // app/book/confirmation/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
+import { MessageSquare } from "lucide-react";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
@@ -120,6 +122,44 @@ function ConfirmationLayout({
               Each person needs to sign a waiver before their first visit.{" "}
               <a href="/waiver" className="underline text-[#884A20]">Sign waiver →</a>
             </p>
+          </div>
+
+          {/* Scorched VIP */}
+          <div className="mt-4">
+            <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-3 text-center`}>
+              Join Scorched VIP — it&apos;s free
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {/* QR Code */}
+              <div className="rounded-2xl border border-[#519A70] bg-white p-4 shadow-sm flex flex-col items-center text-center">
+                <p className="eyebrow text-brand text-[10px] mb-2">In Studio</p>
+                <Image
+                  src="/squareQR.png"
+                  alt="Scorched VIP sign-up QR code"
+                  width={96}
+                  height={96}
+                  className="rounded-xl"
+                />
+                <p className={`${vulfMono.className} text-[11px] font-bold mt-2`}>Scan the QR Code</p>
+                <p className={`${vulfMono.className} text-[11px] text-neutral-500 mt-1 leading-snug`}>
+                  Find our VIP QR code at the front desk and scan to join instantly.
+                </p>
+              </div>
+
+              {/* Text to Sign Up */}
+              <div className="rounded-2xl border border-[#519A70] bg-white p-4 shadow-sm flex flex-col items-center text-center">
+                <p className="eyebrow text-brand text-[10px] mb-2">From Anywhere</p>
+                <div className="w-24 h-24 rounded-xl bg-[#F6E4E1] flex flex-col items-center justify-center gap-1">
+                  <MessageSquare className="w-6 h-6 text-[#884A20]" />
+                  <p className={`${vulfMono.className} text-base font-bold text-[#884A20]`}>Text Us</p>
+                </div>
+                <p className={`${vulfMono.className} text-[11px] font-bold mt-2`}>Text to Sign Up</p>
+                <p className={`${vulfMono.className} text-[11px] text-neutral-500 mt-1 leading-snug`}>
+                  Text <span className="font-bold text-[#884A20]">JOIN</span> to{" "}
+                  <span className="font-bold text-[#884A20]">833-388-5416</span>
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col items-center gap-3 mt-8">
