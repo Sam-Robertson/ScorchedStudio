@@ -2,7 +2,7 @@
 title: "I burn, I pine, I punish"
 date: "2022-01-11"
 excerpt: "Five reasons Scorched Studio brings the heat for date night—walk-ins, traceable designs, drinks, and more."
-coverImage: "/blog/covers/bring-the-heat.jpg"
+coverImage: "/blog/covers/burn-pine-punish.jpg"
 tags: ["date-night", "studio", "guide"]
 ---
 

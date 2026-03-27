@@ -40,7 +40,7 @@ export async function createBookingFromIntent(
   }
 
   // 3. Insert booking
-  const { name, email, phone, date, time_slot, party_size } = intent.metadata ?? {};
+  const { name, email, phone, date, time_slot, party_size, referral_source, referral_other } = intent.metadata ?? {};
 
   if (!name || !email || !date || !time_slot || !party_size) {
     console.error("CREATE_BOOKING_MISSING_METADATA", intent.metadata);
@@ -60,6 +60,8 @@ export async function createBookingFromIntent(
       stripe_payment_intent_id: paymentIntentId,
       status: "confirmed",
       payment_method: "stripe",
+      referral_source: referral_source || null,
+      referral_other: referral_other || null,
     })
     .select()
     .single();

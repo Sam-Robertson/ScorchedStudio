@@ -1,9 +1,12 @@
 // app/api/bookings/manage/[id]/route.ts
 import { NextRequest } from "next/server";
+import Stripe from "stripe";
 import { Resend } from "resend";
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -82,6 +85,18 @@ export async function PATCH(
 
   // ── Cancel ──────────────────────────────────────────────────────────────────
   if (parsed.data.action === "cancel") {
+    // Issue Stripe refund if the booking was paid via card
+    let refunded = false;
+    if (booking.stripe_payment_intent_id && booking.amount_paid > 0) {
+      try {
+        await stripe.refunds.create({ payment_intent: booking.stripe_payment_intent_id });
+        refunded = true;
+      } catch (e) {
+        console.error("REFUND_ERROR", e);
+        return Response.json({ error: "Failed to issue refund. Please contact support." }, { status: 500 });
+      }
+    }
+
     const { error } = await getSupabase()
       .from("bookings")
       .update({ status: "cancelled" })
@@ -92,7 +107,36 @@ export async function PATCH(
       return Response.json({ error: "Failed to cancel booking." }, { status: 500 });
     }
 
-    return Response.json({ ok: true });
+    // Send cancellation email
+    if (booking.email) {
+      const formattedDate = new Date(booking.date + "T12:00:00").toLocaleDateString("en-US", {
+        weekday: "long", month: "long", day: "numeric", year: "numeric",
+      });
+      const firstName = booking.name.split(" ")[0];
+      const refundNote = refunded
+        ? `<p style="color: #555; font-size: 14px;">A full refund of <strong>$${(booking.amount_paid / 100).toFixed(2)}</strong> has been issued to your original payment method. It typically appears within 5–10 business days.</p>`
+        : "";
+
+      await resend.emails.send({
+        from: "Scorched Studio <bookings@scorchedstudio.com>",
+        to: booking.email,
+        subject: "Your Scorched Studio Booking Has Been Cancelled",
+        html: `
+          <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; color: #3A3A3A;">
+            <h1 style="font-size: 22px; margin-bottom: 8px;">Booking cancelled, ${firstName}</h1>
+            <p style="color: #555; margin-bottom: 16px;">Your reservation for <strong>${formattedDate}</strong> at <strong>${booking.time_slot}</strong> has been cancelled.</p>
+            ${refundNote}
+            <p style="color: #555; font-size: 14px; margin-top: 24px;">
+              Want to book again? Visit <a href="https://scorchedstudio.com/book" style="color: #884A20;">scorchedstudio.com/book</a>.
+            </p>
+            <p style="color: #aaa; font-size: 12px; margin-top: 12px;">Please do not reply to this email — it is not monitored.</p>
+            <p style="color: #555; font-size: 14px; margin-top: 24px;">— The Scorched Studio Team</p>
+          </div>
+        `,
+      }).catch((e) => console.error("CANCEL_EMAIL_ERROR", e));
+    }
+
+    return Response.json({ ok: true, refunded });
   }
 
   // ── Update ───────────────────────────────────────────────────────────────────

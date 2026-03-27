@@ -11,6 +11,15 @@ import { getSlotsForDate, MAX_PARTY_SIZE } from "@/lib/booking-utils";
 
 function fmtDate(dateStr: string) {
   return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function fmtDateShort(dateStr: string) {
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -50,6 +59,7 @@ export default function AdminBookingsPage() {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 type Filter = "upcoming" | "all";
+type ViewMode = "list" | "calendar";
 
 function BookingsDashboard({ token }: { token: string }) {
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -57,6 +67,12 @@ function BookingsDashboard({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("upcoming");
+  const [view, setView] = useState<ViewMode>("list");
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [calDate, setCalDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<BookingRecord | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -83,6 +99,7 @@ function BookingsDashboard({ token }: { token: string }) {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return bookings.filter((b) => {
+      if (b.status === "cancelled") return false;
       if (filter === "upcoming" && b.date < today) return false;
       if (q) {
         const match =
@@ -108,7 +125,6 @@ function BookingsDashboard({ token }: { token: string }) {
     filter === "upcoming" ? a.localeCompare(b) : b.localeCompare(a)
   );
 
-  const confirmedCount = filtered.filter((b) => b.status === "confirmed").length;
   const getOutPassCount = filtered.filter((b) => b.payment_method === "get_out_pass").length;
 
   return (
@@ -120,7 +136,7 @@ function BookingsDashboard({ token }: { token: string }) {
           <h1 className="h2 font-bold">Bookings</h1>
           {!loading && !error && (
             <p className={`${vulfMono.className} text-sm text-neutral-500 mt-1`}>
-              {confirmedCount} confirmed · {filtered.length} total shown
+              {filtered.length} booking{filtered.length !== 1 ? "s" : ""} shown
               {getOutPassCount > 0 && (
                 <span className="ml-2 inline-block rounded-full bg-purple-100 text-purple-700 text-xs px-2 py-0.5">
                   {getOutPassCount} Get Out Pass
@@ -150,14 +166,16 @@ function BookingsDashboard({ token }: { token: string }) {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input
-          type="search"
-          placeholder="Search by name, email, or date…"
-          className={`${inputCls} flex-1`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className="flex gap-2">
+        {view === "list" && (
+          <input
+            type="search"
+            placeholder="Search by name, email, or date…"
+            className={`${inputCls} flex-1`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+        <div className="flex gap-2 flex-wrap">
           {(["upcoming", "all"] as Filter[]).map((f) => (
             <button
               key={f}
@@ -171,8 +189,23 @@ function BookingsDashboard({ token }: { token: string }) {
               {f}
             </button>
           ))}
+          <div className="flex rounded-lg border border-black/20 overflow-hidden">
+            {(["list", "calendar"] as ViewMode[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`${vulfMono.className} px-4 py-2 text-xs capitalize transition-colors ${
+                  view === v
+                    ? "bg-neutral-800 text-white"
+                    : "text-neutral-500 hover:bg-neutral-50"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
-        {search && (
+        {search && view === "list" && (
           <button
             onClick={() => setSearch("")}
             className="text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700"
@@ -191,14 +224,26 @@ function BookingsDashboard({ token }: { token: string }) {
         <p className="text-sm text-red-600 py-10 text-center">Error: {error}</p>
       )}
 
-      {!loading && !error && sortedDates.length === 0 && (
+      {/* Calendar view */}
+      {!loading && !error && view === "calendar" && (
+        <AdminCalendar
+          bookings={filtered}
+          calMonth={calMonth}
+          setCalMonth={setCalMonth}
+          calDate={calDate}
+          setCalDate={setCalDate}
+          onSelect={setSelected}
+        />
+      )}
+
+      {/* List view */}
+      {!loading && !error && view === "list" && sortedDates.length === 0 && (
         <p className={`${vulfMono.className} text-sm text-neutral-400 py-10 text-center`}>
           No bookings found.
         </p>
       )}
 
-      {/* Grouped by date */}
-      {!loading && !error && sortedDates.length > 0 && (
+      {!loading && !error && view === "list" && sortedDates.length > 0 && (
         <div className="space-y-6">
           {sortedDates.map((date) => (
             <div key={date}>
@@ -223,9 +268,6 @@ function BookingsDashboard({ token }: { token: string }) {
                           )}
                         </p>
                       </div>
-                      <span className={`shrink-0 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${b.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                        {b.status}
-                      </span>
                     </div>
                   ))}
                 </div>
@@ -240,7 +282,6 @@ function BookingsDashboard({ token }: { token: string }) {
                       <th className="px-4 py-3 hidden md:table-cell">Phone</th>
                       <th className="px-4 py-3">Party</th>
                       <th className="px-4 py-3">Payment</th>
-                      <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -257,11 +298,6 @@ function BookingsDashboard({ token }: { token: string }) {
                         <td className="px-4 py-3 text-neutral-500 hidden md:table-cell">{b.phone ?? "—"}</td>
                         <td className="px-4 py-3">{b.party_size}</td>
                         <td className="px-4 py-3"><PaymentBadge method={b.payment_method} /></td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${b.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                            {b.status}
-                          </span>
-                        </td>
                         <td className="px-4 py-3 text-right">
                           <span className="text-xs text-brand underline underline-offset-2">View</span>
                         </td>
@@ -364,7 +400,7 @@ function BookingModal({
   }, [onClose]);
 
   async function handleCancel() {
-    if (!confirm(`Cancel booking for ${b.name} on ${fmtDate(b.date)} at ${b.time_slot}? This cannot be undone.`))
+    if (!confirm(`Cancel booking for ${b.name} on ${fmtDateShort(b.date)} at ${b.time_slot}? This cannot be undone.`))
       return;
     setCancelling(true);
     setCancelError(null);
@@ -440,11 +476,17 @@ function BookingModal({
           <DetailRow label="Phone" value={b.phone ?? "—"} />
           <DetailRow label="Paid" value={`$${(b.amount_paid / 100).toFixed(2)}`} />
           <div className="flex gap-3">
-            <span className="text-neutral-400 w-14 shrink-0">Payment</span>
+            <span className="text-neutral-400 w-16 shrink-0">Payment</span>
             <PaymentBadge method={b.payment_method} />
           </div>
           <DetailRow label="Status" value={b.status} />
           <DetailRow label="Booked" value={fmtDateTime(b.created_at)} />
+          {b.referral_source && (
+            <DetailRow
+              label="Heard"
+              value={b.referral_source === "Other" && b.referral_other ? `Other: ${b.referral_other}` : (b.referral_source ?? "")}
+            />
+          )}
 
           {/* Edit form */}
           {editing && (
@@ -754,20 +796,200 @@ function NewBookingModal({
   );
 }
 
+// ── Admin Calendar ────────────────────────────────────────────────────────────
+
+function AdminCalendar({
+  bookings,
+  calMonth,
+  setCalMonth,
+  calDate,
+  setCalDate,
+  onSelect,
+}: {
+  bookings: BookingRecord[];
+  calMonth: Date;
+  setCalMonth: (d: Date) => void;
+  calDate: string | null;
+  setCalDate: (d: string | null) => void;
+  onSelect: (b: BookingRecord) => void;
+}) {
+  const year = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+  const monthLabel = calMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date().toISOString().split("T")[0];
+
+  // Build a map of date → bookings for this month
+  const byDate = useMemo(() => {
+    const map: Record<string, BookingRecord[]> = {};
+    for (const b of bookings) {
+      if (!map[b.date]) map[b.date] = [];
+      map[b.date].push(b);
+    }
+    return map;
+  }, [bookings]);
+
+  const cells: Array<string | null> = [
+    ...Array(firstDayOfWeek).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => {
+      const d = i + 1;
+      return `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }),
+  ];
+
+  const dayBookings = calDate ? (byDate[calDate] ?? []) : [];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-black/10 bg-white shadow-sm p-5">
+        {/* Month nav */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={() => { setCalMonth(new Date(year, month - 1, 1)); setCalDate(null); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-100 text-xl"
+          >‹</button>
+          <span className={`${vulfMono.className} text-base font-medium`}>{monthLabel}</span>
+          <button
+            onClick={() => { setCalMonth(new Date(year, month + 1, 1)); setCalDate(null); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-100 text-xl"
+          >›</button>
+        </div>
+
+        {/* Day headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+            <div key={d} className={`${vulfMono.className} text-center text-xs text-neutral-400 py-1`}>{d}</div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((dateStr, i) => {
+            if (!dateStr) return <div key={`e-${i}`} />;
+            const dayBs = byDate[dateStr] ?? [];
+            const hasBookings = dayBs.length > 0;
+            const isToday = dateStr === today;
+            const isSelected = dateStr === calDate;
+            const totalPeople = dayBs.reduce((s, b) => s + b.party_size, 0);
+            return (
+              <button
+                key={dateStr}
+                onClick={() => setCalDate(isSelected ? null : dateStr)}
+                className={[
+                  "rounded-xl flex flex-col items-center justify-center py-2 px-1 transition-colors min-h-[52px]",
+                  isSelected ? "bg-[#884A20] text-white" : "",
+                  isToday && !isSelected ? "ring-2 ring-[#884A20] ring-offset-1" : "",
+                  hasBookings && !isSelected ? "bg-[#884A20]/8 hover:bg-[#884A20]/15 cursor-pointer" : "",
+                  !hasBookings && !isSelected ? "hover:bg-neutral-50 cursor-default" : "",
+                ].filter(Boolean).join(" ")}
+              >
+                <span className={`${vulfMono.className} text-sm font-medium leading-none`}>
+                  {parseInt(dateStr.split("-")[2], 10)}
+                </span>
+                {hasBookings && (
+                  <span className={`${vulfMono.className} text-[10px] mt-1 leading-none ${isSelected ? "text-white/80" : "text-[#884A20]"}`}>
+                    {totalPeople}p
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected day bookings */}
+      {calDate && (
+        <div>
+          <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-400 mb-2`}>
+            {fmtDate(calDate)}
+          </p>
+          {dayBookings.length === 0 ? (
+            <p className={`${vulfMono.className} text-sm text-neutral-400 py-6 text-center rounded-2xl border border-black/10 bg-white`}>
+              No bookings on this day.
+            </p>
+          ) : (
+            <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
+              <div className="sm:hidden divide-y divide-black/5">
+                {dayBookings.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50"
+                    onClick={() => onSelect(b)}
+                  >
+                    <div className="min-w-0">
+                      <p className={`${vulfMono.className} text-sm font-medium truncate`}>{b.time_slot} · {b.name}</p>
+                      <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
+                        {b.party_size} {b.party_size === 1 ? "person" : "people"}
+                        {b.payment_method && b.payment_method !== "stripe" && (
+                          <span className="ml-2"><PaymentBadge method={b.payment_method} /></span>
+                        )}
+                      </p>
+                    </div>
+                    <span className="text-xs text-brand underline underline-offset-2 shrink-0">View</span>
+                  </div>
+                ))}
+              </div>
+              <table className={`${vulfMono.className} hidden sm:table w-full text-sm`}>
+                <thead>
+                  <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
+                    <th className="px-4 py-3">Time</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3 hidden md:table-cell">Phone</th>
+                    <th className="px-4 py-3">Party</th>
+                    <th className="px-4 py-3">Payment</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {dayBookings.map((b) => (
+                    <tr
+                      key={b.id}
+                      className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
+                      onClick={() => onSelect(b)}
+                    >
+                      <td className="px-4 py-3 font-medium">{b.time_slot}</td>
+                      <td className="px-4 py-3">{b.name}</td>
+                      <td className="px-4 py-3 text-neutral-500">{b.email}</td>
+                      <td className="px-4 py-3 text-neutral-500 hidden md:table-cell">{b.phone ?? "—"}</td>
+                      <td className="px-4 py-3">{b.party_size}</td>
+                      <td className="px-4 py-3"><PaymentBadge method={b.payment_method} /></td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-xs text-brand underline underline-offset-2">View</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PaymentBadge({ method }: { method: BookingRecord["payment_method"] }) {
-  if (!method || method === "stripe") {
-    return <span className={`${vulfMono.className} text-xs text-neutral-400`}>{method === "stripe" ? "Stripe" : "—"}</span>;
+  if (!method) {
+    return <span className={`${vulfMono.className} text-xs text-neutral-400`}>—</span>;
+  }
+  if (method === "stripe") {
+    return <span className={`${vulfMono.className} text-xs text-neutral-800`}>Stripe</span>;
+  }
+  if (method === "complimentary") {
+    return <span className={`${vulfMono.className} text-xs text-neutral-800`}>Complimentary</span>;
   }
   if (method === "gift_card") {
-    return <span className="inline-block rounded-full bg-yellow-100 text-yellow-700 text-[11px] font-medium px-2 py-0.5">Gift card</span>;
+    return <span className="inline-block whitespace-nowrap rounded-full bg-yellow-100 text-yellow-700 text-[11px] font-medium px-2 py-0.5">Gift card</span>;
   }
-  return <span className="inline-block rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium px-2 py-0.5">Get Out Pass</span>;
+  return <span className="inline-block whitespace-nowrap rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium px-2 py-0.5">Get Out Pass</span>;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3">
-      <span className="text-neutral-400 w-14 shrink-0">{label}</span>
+      <span className="text-neutral-400 w-16 shrink-0">{label}</span>
       <span className="text-neutral-800 break-all">{value}</span>
     </div>
   );

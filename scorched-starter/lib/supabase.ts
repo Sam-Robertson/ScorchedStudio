@@ -27,7 +27,9 @@ export type BookingRecord = {
   stripe_payment_intent_id: string | null;
   stripe_session_id: string | null;
   status: "confirmed" | "cancelled";
-  payment_method: "stripe" | "gift_card" | "get_out_pass" | null;
+  payment_method: "stripe" | "gift_card" | "get_out_pass" | "complimentary" | null;
+  referral_source: string | null;
+  referral_other: string | null;
   created_at: string;
 };
 

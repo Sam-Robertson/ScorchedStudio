@@ -14,6 +14,8 @@ const schema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   phone: z.string().optional(),
+  referral_source: z.string().optional(),
+  referral_other: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { date, time_slot, party_size, name, email, phone } = parsed.data;
+  const { date, time_slot, party_size, name, email, phone, referral_source, referral_other } = parsed.data;
 
   const today = new Date().toISOString().split("T")[0];
   if (date < today) {
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: party_size * PRICE_PER_PERSON_CENTS,
     currency: "usd",
-    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "" },
+    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "" },
     receipt_email: email,
     description: `Scorched Studio – ${party_size} ${party_size === 1 ? "person" : "people"} on ${date} at ${time_slot}`,
   });

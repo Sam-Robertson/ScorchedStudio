@@ -15,6 +15,8 @@ const schema = z.object({
   email: z.string().email(),
   phone: z.string().optional(),
   payment_method: z.enum(["gift_card", "get_out_pass"]).nullable().optional(),
+  referral_source: z.string().optional(),
+  referral_other: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { date, time_slot, party_size, name, email, phone, payment_method } = parsed.data;
+  const { date, time_slot, party_size, name, email, phone, payment_method, referral_source, referral_other } = parsed.data;
 
   const today = new Date().toISOString().split("T")[0];
   if (date < today) {
@@ -76,6 +78,8 @@ export async function POST(req: NextRequest) {
       stripe_session_id: null,
       status: "confirmed",
       payment_method: payment_method ?? null,
+      referral_source: referral_source || null,
+      referral_other: referral_other || null,
     })
     .select("id")
     .single();

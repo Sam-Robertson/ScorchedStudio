@@ -19,6 +19,7 @@ const coreLinks = [
 ];
 
 const moreLinks = [
+  { href: "/blog", label: "Blog" },
   {
     href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
     label: "Gift Cards",
@@ -35,6 +36,7 @@ const MOBILE_NAV = [
   { href: "/book", label: "Calendar" },
   { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
+  { href: "/blog", label: "Blog" },
   { href: "/scorched-vip", label: "Scorched VIP" },
   { href: "/waiver", label: "Waiver" },
   { href: "/contact", label: "Contact" },
@@ -105,13 +107,13 @@ function DesktopHeader() {
           </Link>
 
           {/* Center Nav */}
-          <div className="flex-1 flex justify-center items-center gap-14">
+          <div className="flex-1 flex justify-center items-center gap-8">
             {coreLinks.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 className={clsx(
-                  "text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
+                  "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
                   isActive(l.href) && "underline underline-offset-4"
                 )}
               >

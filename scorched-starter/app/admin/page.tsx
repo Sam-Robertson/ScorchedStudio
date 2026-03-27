@@ -3,7 +3,7 @@
 // app/admin/page.tsx
 import { useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { ClipboardList, FileText } from "lucide-react";
+import { BarChart2, ClipboardList, FileText } from "lucide-react";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40";
@@ -118,6 +118,21 @@ export default function AdminPage() {
             <p className={`${vulfMono.className} font-bold text-sm`}>Waivers</p>
             <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
               View signed participant waivers
+            </p>
+          </div>
+        </a>
+
+        <a
+          href="/admin/reporting"
+          className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-xl bg-blush flex items-center justify-center">
+            <BarChart2 className="w-6 h-6 text-brand" />
+          </div>
+          <div>
+            <p className={`${vulfMono.className} font-bold text-sm`}>Reporting</p>
+            <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
+              Referral sources and booking insights
             </p>
           </div>
         </a>

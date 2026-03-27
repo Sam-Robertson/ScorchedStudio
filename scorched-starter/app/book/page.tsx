@@ -132,6 +132,8 @@ export default function BookPage() {
   const [payError, setPayError] = useState("");
   const [reserveLoading, setReserveLoading] = useState(false);
   const [reserveError, setReserveError] = useState("");
+  const [referralSource, setReferralSource] = useState("");
+  const [referralOther, setReferralOther] = useState("");
 
   // ── Manage tab state ────────────────────────────────────────────────────────
   const [manageScreen, setManageScreen] = useState<ManageScreen>("lookup");
@@ -220,6 +222,8 @@ export default function BookPage() {
     if (!name.trim()) { setFormError("Name is required."); return; }
     if (!email.trim()) { setFormError("Email is required."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setFormError("Please enter a valid email address."); return; }
+    if (!referralSource) { setFormError("Please tell us how you heard about us."); return; }
+    if (referralSource === "Other" && !referralOther.trim()) { setFormError("Please specify how you heard about us."); return; }
     setFormError("");
     setBookStep(3);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -232,7 +236,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setPayError(data.error || "Something went wrong."); setPayLoading(false); return; }
@@ -254,7 +258,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setReserveError(data.error || "Something went wrong."); setReserveLoading(false); return; }
@@ -426,6 +430,8 @@ export default function BookPage() {
                 email={email} setEmail={setEmail}
                 phone={phone} setPhone={setPhone}
                 partySize={partySize} setPartySize={setPartySize}
+                referralSource={referralSource} setReferralSource={setReferralSource}
+                referralOther={referralOther} setReferralOther={setReferralOther}
                 error={formError}
                 onBack={() => setBookStep(1)}
                 onContinue={handleStep2Continue}
@@ -643,11 +649,24 @@ function BookStep1({ calMonth, setCalMonth, fullDates, selectedDate, onDateClick
 
 // ── Book Step 2 ───────────────────────────────────────────────────────────────
 
-function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, error, onBack, onContinue }: {
+const REFERRAL_OPTIONS = [
+  "Get Out Pass",
+  "Family/Friend",
+  "TikTok",
+  "In-Person/Drive by",
+  "Returning Customer",
+  "Instagram",
+  "Google Search/Maps",
+  "Other",
+];
+
+function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, referralSource, setReferralSource, referralOther, setReferralOther, error, onBack, onContinue }: {
   name: string; setName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
   partySize: number; setPartySize: (v: number) => void;
+  referralSource: string; setReferralSource: (v: string) => void;
+  referralOther: string; setReferralOther: (v: string) => void;
   error: string; onBack: () => void; onContinue: () => void;
 }) {
   return (
@@ -675,6 +694,28 @@ function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize,
             <span className={`${vulfMono.className} text-xs text-neutral-400`}>{partySize === 1 ? "person" : "people"} · ${15 * partySize} total</span>
           </div>
           <p className={`${vulfMono.className} text-xs text-neutral-300 mt-1.5`}>Max {MAX_PARTY_SIZE} per booking</p>
+        </div>
+        <div>
+          <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1.5`}>How did you hear about Scorched Studio? <span className="text-red-400">*</span></label>
+          <select
+            className={inputCls}
+            value={referralSource}
+            onChange={(e) => { setReferralSource(e.target.value); setReferralOther(""); }}
+          >
+            <option value="">Select an option…</option>
+            {REFERRAL_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          {referralSource === "Other" && (
+            <input
+              type="text"
+              className={`${inputCls} mt-2`}
+              value={referralOther}
+              onChange={(e) => setReferralOther(e.target.value)}
+              placeholder="Please specify…"
+            />
+          )}
         </div>
       </div>
       {error && <p className={`${vulfMono.className} text-xs text-red-500`}>{error}</p>}
