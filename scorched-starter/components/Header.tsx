@@ -19,15 +19,15 @@ const coreLinks = [
 ];
 
 const moreLinks = [
-  { href: "/blog", label: "Blog" },
+  { href: "/waiver", label: "Waiver" },
   {
     href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
     label: "Gift Cards",
   },
   { href: "/scorched-vip", label: "Scorched VIP" },
-  { href: "/waiver", label: "Waiver" },
-  { href: "/contact", label: "Contact" },
   { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
+  { href: "/blog", label: "Blog" },
 ];
 
 // ===== Mobile links =====
