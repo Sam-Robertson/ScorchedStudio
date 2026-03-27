@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/ui/Container";
@@ -32,6 +32,14 @@ type View = "lookup" | "details" | "reschedule" | "done";
 type DoneType = "cancelled" | "rescheduled";
 
 export default function ManagePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <ManagePageInner />
+    </Suspense>
+  );
+}
+
+function ManagePageInner() {
   const searchParams = useSearchParams();
   const urlBookingId = searchParams.get("booking_id") ?? "";
 
