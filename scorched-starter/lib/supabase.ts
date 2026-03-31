@@ -44,3 +44,20 @@ export type WaiverRecord = {
   signed_at: string;
   ip_address: string | null;
 };
+
+export type TaskRecord = {
+  id: string;
+  asana_id: string | null;
+  name: string;
+  notes: string | null;
+  board_column: "To do" | "Doing" | "Done" | "Blocked";
+  priority: "High" | "Medium" | "Low" | null;
+  status: string | null;
+  assignee: string | null;
+  assignee_email: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  sprint_dates: string | null;
+  created_at: string;
+  updated_at: string;
+};
