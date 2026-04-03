@@ -118,7 +118,7 @@ export default function WaiverPage() {
             <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
               <p className="eyebrow text-brand mb-3">In Studio</p>
               <Image
-                src="/squareQR.png"
+                src="/loyalty-qr.svg"
                 alt="Scorched VIP sign-up QR code"
                 width={110}
                 height={110}
@@ -137,8 +137,8 @@ export default function WaiverPage() {
                 <p className={`${vulfMono.className} text-lg font-bold text-brand`}>Text Us</p>
               </div>
               <p className={`${vulfMono.className} mt-3 text-[13px] text-neutral-600`}>
-                Text <span className="font-bold text-brand">JOIN</span> to{" "}
-                <span className="font-bold text-brand">833-388-5416</span>
+                Text <span className="font-bold text-brand">BURN</span> to{" "}
+                <span className="font-bold text-brand">(844) 952-0456</span>
               </p>
             </div>
           </div>

@@ -90,7 +90,7 @@ function HowToJoin() {
           <div className="rounded-3xl border border-green bg-white p-5 shadow-sm flex flex-col items-center text-center">
             <p className="eyebrow text-brand mb-3">In Studio</p>
             <Image
-              src="/squareQR.png"
+              src="/loyalty-qr.svg"
               alt="Scorched VIP sign-up QR code"
               width={128}
               height={128}
@@ -118,9 +118,9 @@ function HowToJoin() {
               className={`${vulfMono.className} mt-2 text-[14px] leading-[1.6] text-neutral-600`}
             >
               Text{" "}
-              <span className="font-bold text-brand">JOIN</span>{" "}
+              <span className="font-bold text-brand">BURN</span>{" "}
               to{" "}
-              <span className="font-bold text-brand">833-388-5416</span>{" "}
+              <span className="font-bold text-brand">(844) 952-0456</span>{" "}
               and you&apos;re in. We&apos;ll send you a confirmation right away.
             </p>
           </div>
