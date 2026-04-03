@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="h3 font-semibold mb-3">1. Who We Are</h2>
           <p>
-            Scorched Studio ("we," "us," or "our") operates the website{" "}
+            Scorched Studio (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) operates the website{" "}
             <span className="font-medium">scorchedstudio.com</span> and the woodburning studio
             located at 218 E University Pkwy, Orem, UT 84058. This policy explains what information
             we collect, how we use it, and your rights regarding that information.

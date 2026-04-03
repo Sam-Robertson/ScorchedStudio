@@ -1,7 +1,7 @@
 "use client";
 
 // app/admin/projects/page.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import {
@@ -855,6 +855,7 @@ function ProjectsDashboard({ token }: { token: string }) {
 
   useEffect(() => {
     fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSaved(task: TaskRecord, isEdit: boolean) {
