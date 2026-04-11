@@ -90,7 +90,7 @@ function HowToJoin() {
           <div className="rounded-3xl border border-green bg-white p-5 shadow-sm flex flex-col items-center text-center">
             <p className="eyebrow text-brand mb-3">In Studio</p>
             <Image
-              src="/loyalty-qr.svg"
+              src="/loyalty-qr.png"
               alt="Scorched VIP sign-up QR code"
               width={128}
               height={128}

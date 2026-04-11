@@ -136,7 +136,7 @@ function ConfirmationLayout({
               <div className="rounded-2xl border border-[#519A70] bg-white p-4 shadow-sm flex flex-col items-center text-center">
                 <p className="eyebrow text-brand text-[10px] mb-2">In Studio</p>
                 <Image
-                  src="/loyalty-qr.svg"
+                  src="/loyalty-qr.png"
                   alt="Scorched VIP sign-up QR code"
                   width={96}
                   height={96}

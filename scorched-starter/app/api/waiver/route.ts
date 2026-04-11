@@ -105,7 +105,7 @@ export async function POST(req: Request) {
                 <table style="width: 100%; border-collapse: collapse; background: #f5f5f5; border-radius: 12px;">
                   <tr><td style="padding: 16px 16px 4px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #884A20;">Scan In Studio</td></tr>
                   <tr><td style="padding: 8px 16px; text-align: center;">
-                    <img src="https://scorchedstudio.com/loyalty-qr.svg" alt="Scorched VIP QR code" width="100" height="100" style="border-radius: 8px; display: block; margin: 0 auto;" />
+                    <img src="https://scorchedstudio.com/loyalty-qr.png" alt="Scorched VIP QR code" width="100" height="100" style="border-radius: 8px; display: block; margin: 0 auto;" />
                   </td></tr>
                   <tr><td style="padding: 4px 16px 16px; text-align: center; font-size: 12px; color: #666;">Scan at the front desk</td></tr>
                 </table>

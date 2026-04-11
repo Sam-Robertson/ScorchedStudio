@@ -118,7 +118,7 @@ export default function WaiverPage() {
             <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
               <p className="eyebrow text-brand mb-3">In Studio</p>
               <Image
-                src="/loyalty-qr.svg"
+                src="/loyalty-qr.png"
                 alt="Scorched VIP sign-up QR code"
                 width={110}
                 height={110}
