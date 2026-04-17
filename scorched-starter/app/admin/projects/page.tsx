@@ -117,7 +117,7 @@ function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
           </a>
           <p className="eyebrow text-brand">Projects</p>
         </div>
-        <h1 className="h2 font-bold">Who's using this?</h1>
+        <h1 className="h2 font-bold">Who&apos;s using this?</h1>
       </div>
       <div className="space-y-3">
         {PROJECT_USERS.map((u) => {
