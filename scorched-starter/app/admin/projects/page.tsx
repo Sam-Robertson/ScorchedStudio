@@ -220,7 +220,7 @@ function TaskModal({
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
           <h2 className={`${vulfMono.className} font-bold text-sm`}>
             {isEdit ? "Edit Task" : "New Task"}
@@ -341,7 +341,7 @@ function TaskModal({
               NOTES
             </label>
             <textarea
-              className={`${inputCls} min-h-[100px] resize-y`}
+              className={`${inputCls} min-h-[200px] resize-y`}
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
             />
@@ -453,7 +453,7 @@ function DetailPanel({
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-black/10 shrink-0 gap-4">
@@ -551,7 +551,7 @@ function DetailPanel({
             <div className="rounded-xl border border-black/15 overflow-hidden focus-within:border-black/30 transition-colors">
               <textarea
                 className="w-full px-3 pt-2 pb-1 text-sm text-neutral-700 bg-white outline-none resize-none leading-relaxed placeholder:text-neutral-400"
-                rows={3}
+                rows={6}
                 placeholder="Add a note…"
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
