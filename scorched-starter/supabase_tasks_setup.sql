@@ -28,7 +28,7 @@ INSERT INTO tasks (asana_id, name, notes, board_column, priority, status, assign
    'Orem Business License',
    $$This is blocked until we have the fire and city inspection done$$,
    'Blocked', 'Medium', 'On Hold',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-14', NULL),
 
   ('1213523595074726',
@@ -38,14 +38,14 @@ toilet paper, paper towels, hand soap, erasers, etc.
 
 Which are being used up rather than our wood & leather products. We need a way to make sure they are always in stock.$$,
    'To do', 'Low', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    '2026-04-25', '2026-04-25', NULL),
 
   ('1213523595074728',
    'Attach extension cords to tables',
    NULL,
    'To do', 'Low', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    '2026-03-05', '2026-03-09', NULL),
 
   ('1213523595074730',
@@ -59,7 +59,7 @@ Which are being used up rather than our wood & leather products. We need a way t
    'Find new Social Media Manager',
    NULL,
    'To do', 'Low', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-07-01', NULL),
 
   ('1213523595074798',
@@ -80,14 +80,14 @@ Which are being used up rather than our wood & leather products. We need a way t
    'Find new Area Manager',
    NULL,
    'To do', 'Medium', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-04-30', NULL),
 
   ('1213523595074814',
    'Get Wifi for Orem Studio',
    NULL,
    'To do', 'Low', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-04-30', NULL),
 
   ('1213523595074804',
@@ -112,7 +112,7 @@ I think we should review that and see if there isn't like a poster or a menu or 
 
 After we have a plan we will need to buy the equipment and have the employees running the farmers market test the set up in the parking lot and make sure they can set up, use the equipment, and take down in a reasonable time/with not too much effort.$$,
    'To do', 'Medium', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-04-30', 'March 16th - 29th'),
 
   ('1213523595074764',
@@ -123,7 +123,7 @@ I also need to set up alerts so that I know when to put in orders in the future.
 
 For this project I think we should both sit down and I can talk you through what I want.$$,
    'To do', 'Medium', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-31', NULL),
 
   ('1213523595074778',
@@ -132,7 +132,7 @@ For this project I think we should both sit down and I can talk you through what
 
 We would need to drill holes into the wood (I bought a drill set specifically for this, but i just haven't gotten around to it. I still need to buy drill bits). I need to create a system where we can drill those and have a couple hundred pre-drilled wood disks.$$,
    'To do', 'Low', 'Not Started',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-04-15', NULL),
 
   ('1213647056432328',
@@ -151,7 +151,7 @@ I haven't ever had the building inspected by the fire department. I'm sure they'
 
 fire inspection scheduled for Tuesday, March 10 · 1:00 – 2:00pm$$,
    'Doing', 'High', 'Behind',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-10', 'March 1st - 15th'),
 
   ('1213523595074838',
@@ -163,7 +163,7 @@ fire inspection scheduled for Tuesday, March 10 · 1:00 – 2:00pm$$,
 
 Your job would be to call Orem city (you'll have to google the number for inspections) and then make sure the studio has those three things done when they come.$$,
    'Doing', 'High', 'Behind',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-11', 'March 1st - 15th'),
 
   ('1213523595074862',
@@ -179,7 +179,7 @@ Your job would be to call Orem city (you'll have to google the number for inspec
 
 We need something where managers, area managers, and myself can check the feed on their phone.$$,
    'Doing', 'Medium', 'Done',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-21', 'March 1st - 15th'),
 
   ('1213523595074878',
@@ -190,7 +190,7 @@ We will need to do research on different smart locks and then find a locksmith t
 
 The new locks coupled with the cameras will make deliveries way easier.$$,
    'Doing', 'High', 'On track',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-21', NULL),
 
   ('1213523595074762',
@@ -199,7 +199,7 @@ The new locks coupled with the cameras will make deliveries way easier.$$,
 
 I have already talked to a couple suppliers, but getting the dimensions on the scripture cases is kind of tricky and I'd love to have you take this over with my oversight.$$,
    'Doing', 'High', 'Behind',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-13', NULL),
 
   ('1213523595074886',
@@ -213,7 +213,7 @@ I have already talked to a couple suppliers, but getting the dimensions on the s
    'Add More Products',
    NULL,
    'Doing', 'Low', 'On track',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-05-29', NULL),
 
   ('1213523595074905',
@@ -238,7 +238,7 @@ If you need our EIN it's: 39-2359834$$,
    'Employee Handbook',
    $$I am working on this and almost have the first draft done. When I have that done, I am going to send it to you to make edits and help clean it up$$,
    'Doing', 'High', 'On track',
-   'samuel scadden', 'ssscadden@gmail.com',
+   'Pearson Brown', NULL,
    NULL, '2026-03-06', 'March 1st - 15th'),
 
   ('1213523595074856',

@@ -13,7 +13,6 @@ import { vulfMono } from "@/app/fonts";
 // ===== Desktop links =====
 const coreLinks = [
   { href: "/", label: "Home" },
-  { href: "/book", label: "Calendar" },
   { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
 ];
@@ -33,7 +32,6 @@ const moreLinks = [
 // ===== Mobile links =====
 const MOBILE_NAV = [
   { href: "/", label: "Home" },
-  { href: "/book", label: "Calendar" },
   { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
   { href: "/blog", label: "Blog" },
@@ -107,7 +105,7 @@ function DesktopHeader() {
           </Link>
 
           {/* Center Nav */}
-          <div className="flex-1 flex justify-center items-center gap-8">
+          <div className="flex-1 flex justify-center items-center gap-12">
             {coreLinks.map((l) => (
               <Link
                 key={l.href}
@@ -252,8 +250,8 @@ function MobileHeader() {
         id="mobile-menu"
         ref={panelRef}
         className={clsx(
-          "overflow-hidden transition-[max-height] duration-300",
-          open ? "max-h-96" : "max-h-0"
+          "overflow-y-auto transition-[max-height] duration-300",
+          open ? "max-h-[calc(100dvh-3.5rem)]" : "max-h-0"
         )}
       >
         <div className={clsx("bg-white px-4 py-3 space-y-3", vulfMono.className)}>

@@ -25,6 +25,11 @@ type Priority = "High" | "Medium" | "Low";
 
 const COLUMNS: Col[] = ["To do", "Doing", "Done", "Blocked"];
 
+const PROJECT_USERS = [
+  { name: "Sam Robertson", initials: "SR" },
+  { name: "Pearson Brown", initials: "PB" },
+];
+
 const COL_STYLE: Record<Col, { header: string; dot: string; drop: string }> = {
   "To do": {
     header: "text-blue-700",
@@ -52,14 +57,6 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   High: "bg-red-100 text-red-700",
   Medium: "bg-amber-100 text-amber-700",
   Low: "bg-blue-100 text-blue-600",
-};
-
-const STATUS_BADGE: Record<string, string> = {
-  "On track": "bg-green-100 text-green-700",
-  Done: "bg-green-100 text-green-700",
-  Behind: "bg-red-100 text-red-700",
-  "On Hold": "bg-amber-100 text-amber-700",
-  "Not Started": "bg-neutral-100 text-neutral-500",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -108,6 +105,41 @@ function avatarColor(name: string | null): { bg: string; text: string } {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
+// ── UserSelect ────────────────────────────────────────────────────────────────
+
+function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
+  return (
+    <section className="container-px py-20 max-w-md mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <a href="/admin" className="text-neutral-400 hover:text-neutral-700 transition-colors shrink-0">
+            <ChevronLeft className="w-4 h-4" />
+          </a>
+          <p className="eyebrow text-brand">Projects</p>
+        </div>
+        <h1 className="h2 font-bold">Who's using this?</h1>
+      </div>
+      <div className="space-y-3">
+        {PROJECT_USERS.map((u) => {
+          const colors = avatarColor(u.name);
+          return (
+            <button
+              key={u.name}
+              onClick={() => onSelect(u.name)}
+              className="w-full flex items-center gap-4 rounded-2xl border border-black/10 bg-white p-5 shadow-sm hover:shadow-md hover:border-black/20 transition-all text-left"
+            >
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${colors.bg}`}>
+                <span className={`${vulfMono.className} text-sm font-bold ${colors.text}`}>{u.initials}</span>
+              </div>
+              <span className="font-medium text-sm">{u.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ── TaskModal ─────────────────────────────────────────────────────────────────
 
 type ModalState =
@@ -133,7 +165,6 @@ function TaskModal({
     notes: t?.notes ?? "",
     board_column: (t?.board_column ?? (modal.mode === "create" ? modal.column : "To do")) as Col,
     priority: t?.priority ?? "",
-    status: t?.status ?? "",
     assignee: t?.assignee ?? "",
     assignee_email: t?.assignee_email ?? "",
     due_date: t?.due_date ?? "",
@@ -157,7 +188,7 @@ function TaskModal({
       notes: form.notes || null,
       board_column: form.board_column,
       priority: (form.priority || null) as Priority | null,
-      status: form.status || null,
+      status: null,
       assignee: form.assignee || null,
       assignee_email: form.assignee_email || null,
       due_date: form.due_date || null,
@@ -189,7 +220,7 @@ function TaskModal({
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
           <h2 className={`${vulfMono.className} font-bold text-sm`}>
             {isEdit ? "Edit Task" : "New Task"}
@@ -245,23 +276,17 @@ function TaskModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-                STATUS
+                START DATE
               </label>
-              <select
+              <input
+                type="date"
                 className={inputCls}
-                value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-              >
-                <option value="">—</option>
-                <option>Not Started</option>
-                <option>On track</option>
-                <option>Behind</option>
-                <option>On Hold</option>
-                <option>Done</option>
-              </select>
+                value={form.start_date}
+                onChange={(e) => set("start_date", e.target.value)}
+              />
             </div>
             <div>
               <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
@@ -272,20 +297,6 @@ function TaskModal({
                 className={inputCls}
                 value={form.due_date}
                 onChange={(e) => set("due_date", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-                START DATE
-              </label>
-              <input
-                type="date"
-                className={inputCls}
-                value={form.start_date}
-                onChange={(e) => set("start_date", e.target.value)}
               />
             </div>
             <div>
@@ -360,127 +371,218 @@ function TaskModal({
   );
 }
 
+// ── Note helpers ─────────────────────────────────────────────────────────────
+
+const NOTE_SEP = "\n\n---\n\n";
+
+function splitNotes(raw: string | null): Array<{ header: string | null; text: string }> {
+  if (!raw) return [];
+  return raw.split(NOTE_SEP).map((chunk) => {
+    const nl = chunk.indexOf("\n\n");
+    if (nl !== -1) {
+      const firstLine = chunk.slice(0, nl);
+      if (firstLine.includes(" · ") && !firstLine.includes("\n")) {
+        return { header: firstLine, text: chunk.slice(nl + 2) };
+      }
+    }
+    return { header: null, text: chunk };
+  });
+}
+
+function formatNoteEntry(author: string, text: string): string {
+  const date = new Date().toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+  const header = author.trim() ? `${author.trim()} · ${date}` : date;
+  return `${header}\n\n${text.trim()}`;
+}
+
 // ── DetailPanel ───────────────────────────────────────────────────────────────
 
 function DetailPanel({
   task,
+  token,
+  currentUser,
   onClose,
   onEdit,
   onDelete,
+  onTaskUpdate,
 }: {
   task: TaskRecord;
+  token: string;
+  currentUser: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onTaskUpdate: (task: TaskRecord) => void;
 }) {
+  const [newNote, setNewNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  async function addNote() {
+    const trimmed = newNote.trim();
+    if (!trimmed) return;
+    const entry = formatNoteEntry(currentUser, trimmed);
+    const appended = task.notes ? `${task.notes}${NOTE_SEP}${entry}` : entry;
+    setNoteSaving(true);
+    const res = await fetch(`/api/admin/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ notes: appended }),
+    });
+    setNoteSaving(false);
+    if (res.ok) {
+      const updated = await res.json();
+      onTaskUpdate(updated);
+      setNewNote("");
+    }
+  }
+
+  function handleNoteKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      addNote();
+    }
+  }
+
+  const colStyle = COL_STYLE[task.board_column];
+  const noteEntries = splitNotes(task.notes);
+
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center sm:justify-end z-50"
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white w-full sm:w-[420px] sm:h-full sm:max-h-screen overflow-y-auto rounded-t-2xl sm:rounded-none shadow-xl flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/10 sticky top-0 bg-white z-10">
-          <h2 className={`${vulfMono.className} font-bold text-sm truncate pr-4`}>
-            {task.name}
-          </h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700 shrink-0">
-            <X className="w-5 h-5" />
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-black/10 shrink-0 gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`w-2 h-2 rounded-full ${colStyle.dot} shrink-0`} />
+              <span className={`${vulfMono.className} text-xs font-bold ${colStyle.header}`}>
+                {task.board_column.toUpperCase()}
+              </span>
+              {task.priority && (
+                <span className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE[task.priority as Priority]}`}>
+                  {task.priority}
+                </span>
+              )}
+            </div>
+            <h2 className="text-base font-semibold leading-snug text-neutral-900">{task.name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 flex-1 space-y-5">
-          {/* Badges */}
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={`${vulfMono.className} text-xs px-2.5 py-1 rounded-full font-medium ${COL_STYLE[task.board_column].header} bg-black/5`}
-            >
-              {task.board_column}
-            </span>
-            {task.priority && (
-              <span
-                className={`${vulfMono.className} text-xs px-2.5 py-1 rounded-full font-medium ${PRIORITY_BADGE[task.priority as Priority]}`}
-              >
-                {task.priority}
-              </span>
-            )}
-            {task.status && (
-              <span
-                className={`${vulfMono.className} text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[task.status] ?? "bg-neutral-100 text-neutral-500"}`}
-              >
-                {task.status}
-              </span>
-            )}
-          </div>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
 
-          {/* Meta */}
-          <div className="space-y-3 text-sm">
+          {/* Metadata */}
+          <div className="px-6 py-4 grid grid-cols-2 gap-x-6 gap-y-3 border-b border-black/8">
             {task.assignee && (
-              <div className="flex items-center gap-3">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${avatarColor(task.assignee).bg}`}>
-                  <span className={`${vulfMono.className} text-xs font-bold ${avatarColor(task.assignee).text}`}>
-                    {initials(task.assignee)}
-                  </span>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">{task.assignee}</p>
-                  {task.assignee_email && (
-                    <p className="text-xs text-neutral-500">{task.assignee_email}</p>
-                  )}
+              <div className="col-span-2">
+                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>ASSIGNEE</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${avatarColor(task.assignee).bg}`}>
+                    <span className={`${vulfMono.className} text-[10px] font-bold ${avatarColor(task.assignee).text}`}>
+                      {initials(task.assignee)}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{task.assignee}</p>
+                    {task.assignee_email && (
+                      <p className="text-xs text-neutral-400">{task.assignee_email}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
+            {task.start_date && (
+              <div>
+                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>START</p>
+                <p className="text-sm text-neutral-700">{fmtDate(task.start_date)}</p>
+              </div>
+            )}
+            {task.due_date && (
+              <div>
+                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>DUE</p>
+                <p className={`text-sm font-medium ${isOverdue(task.due_date) && task.board_column !== "Done" ? "text-red-600" : "text-neutral-700"}`}>
+                  {fmtDate(task.due_date)}
+                </p>
+              </div>
+            )}
+            {task.sprint_dates && (
+              <div className="col-span-2">
+                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>SPRINT</p>
+                <p className="text-sm text-neutral-700">{task.sprint_dates}</p>
+              </div>
+            )}
+          </div>
 
-            {(task.start_date || task.due_date) && (
-              <div className="flex gap-6">
-                {task.start_date && (
-                  <div>
-                    <p className={`${vulfMono.className} text-xs text-neutral-400 mb-0.5`}>START</p>
-                    <p className="text-sm">{fmtDate(task.start_date)}</p>
-                  </div>
-                )}
-                {task.due_date && (
-                  <div>
-                    <p className={`${vulfMono.className} text-xs text-neutral-400 mb-0.5`}>DUE</p>
-                    <p
-                      className={`text-sm font-medium ${isOverdue(task.due_date) && task.board_column !== "Done" ? "text-red-600" : ""}`}
-                    >
-                      {fmtDate(task.due_date)}
+          {/* Notes feed */}
+          <div className="px-6 py-4 space-y-4">
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400`}>NOTES</p>
+
+            {noteEntries.length === 0 ? (
+              <p className="text-sm text-neutral-400 italic">No notes yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {noteEntries.map((entry, i) => (
+                  <div key={i} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
+                    {entry.header && (
+                      <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
+                        {entry.header}
+                      </p>
+                    )}
+                    <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                      {entry.text}
                     </p>
                   </div>
-                )}
+                ))}
               </div>
             )}
 
-            {task.sprint_dates && (
-              <div>
-                <p className={`${vulfMono.className} text-xs text-neutral-400 mb-0.5`}>SPRINT</p>
-                <p className="text-sm">{task.sprint_dates}</p>
+            {/* Add note */}
+            <div className="rounded-xl border border-black/15 overflow-hidden focus-within:border-black/30 transition-colors">
+              <textarea
+                className="w-full px-3 pt-2 pb-1 text-sm text-neutral-700 bg-white outline-none resize-none leading-relaxed placeholder:text-neutral-400"
+                rows={3}
+                placeholder="Add a note…"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={handleNoteKeyDown}
+              />
+              <div className="flex items-center justify-between px-3 py-2 bg-neutral-50 border-t border-black/8">
+                <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>⌘ + Enter to save</span>
+                <button
+                  onClick={addNote}
+                  disabled={!newNote.trim() || noteSaving}
+                  className={`${vulfMono.className} text-xs px-3 py-1.5 rounded-lg bg-[#519A70] text-white hover:opacity-90 disabled:opacity-40 transition-opacity`}
+                >
+                  {noteSaving ? "Saving…" : "Add"}
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* Notes */}
-          {task.notes && (
-            <div>
-              <p className={`${vulfMono.className} text-xs text-neutral-400 mb-2`}>NOTES</p>
-              <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
-                {task.notes}
-              </p>
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="p-6 border-t border-black/10 flex gap-3">
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-black/10 flex gap-2 shrink-0">
           <button
             onClick={onEdit}
-            className="flex items-center gap-2 flex-1 justify-center rounded-xl border border-black/20 py-2.5 text-sm hover:bg-neutral-50"
+            className="flex items-center gap-2 flex-1 justify-center rounded-xl border border-black/20 py-2.5 text-sm hover:bg-neutral-50 transition-colors"
           >
             <Pencil className="w-4 h-4" />
             Edit
           </button>
           <button
             onClick={onDelete}
-            className="flex items-center gap-2 rounded-xl border border-red-200 text-red-600 py-2.5 px-4 text-sm hover:bg-red-50"
+            className="flex items-center gap-2 rounded-xl border border-red-200 text-red-600 py-2.5 px-4 text-sm hover:bg-red-50 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -526,13 +628,6 @@ function TaskCard({
                 className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE[task.priority as Priority]}`}
               >
                 {task.priority}
-              </span>
-            )}
-            {task.status && task.status !== "Not Started" && (
-              <span
-                className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[task.status] ?? "bg-neutral-100 text-neutral-500"}`}
-              >
-                {task.status}
               </span>
             )}
           </div>
@@ -720,9 +815,8 @@ function ListView({
           <thead className="bg-neutral-50 border-b border-black/10">
             <tr>
               <Th label="NAME" sortable="name" />
-              <Th label="COLUMN" sortable="board_column" col="w-28" />
+              <Th label="STATUS" sortable="board_column" col="w-28" />
               <Th label="PRIORITY" sortable="priority" col="w-24" />
-              <Th label="STATUS" sortable="status" col="w-28" />
               <Th label="ASSIGNEE" col="w-32" />
               <Th label="DUE DATE" sortable="due_date" col="w-32" />
             </tr>
@@ -761,15 +855,6 @@ function ListView({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {task.status && (
-                    <span
-                      className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[task.status] ?? "bg-neutral-100 text-neutral-500"}`}
-                    >
-                      {task.status}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
                   {task.assignee && (
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${avatarColor(task.assignee).bg}`}>
@@ -800,7 +885,7 @@ function ListView({
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-neutral-400 text-sm">
+                <td colSpan={5} className="px-4 py-12 text-center text-neutral-400 text-sm">
                   No tasks yet.
                 </td>
               </tr>
@@ -831,12 +916,11 @@ type Filters = {
   search: string;
   assignee: string;
   priority: string;
-  status: string;
 };
 
-const EMPTY_FILTERS: Filters = { search: "", assignee: "", priority: "", status: "" };
+const EMPTY_FILTERS: Filters = { search: "", assignee: "", priority: "" };
 
-function ProjectsDashboard({ token }: { token: string }) {
+function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string; currentUser: string; onSwitchUser: () => void }) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -847,14 +931,41 @@ function ProjectsDashboard({ token }: { token: string }) {
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  async function fetchTasks() {
+  async function fetchTasks(): Promise<TaskRecord[]> {
     const res = await fetch("/api/admin/tasks", { headers });
-    if (res.ok) setTasks(await res.json());
+    if (res.ok) {
+      const data: TaskRecord[] = await res.json();
+      setTasks(data);
+      setLoading(false);
+      return data;
+    }
     setLoading(false);
+    return [];
   }
 
   useEffect(() => {
-    fetchTasks();
+    (async () => {
+      const loaded = await fetchTasks();
+      if (localStorage.getItem("migrated_scadden")) return;
+      const toMigrate = loaded.filter((t) =>
+        t.assignee?.toLowerCase().includes("scadden")
+      );
+      if (toMigrate.length === 0) {
+        localStorage.setItem("migrated_scadden", "1");
+        return;
+      }
+      await Promise.all(
+        toMigrate.map((t) =>
+          fetch(`/api/admin/tasks/${t.id}`, {
+            method: "PATCH",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ assignee: "Pearson Brown", assignee_email: null }),
+          })
+        )
+      );
+      localStorage.setItem("migrated_scadden", "1");
+      fetchTasks();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -919,7 +1030,6 @@ function ProjectsDashboard({ token }: { token: string }) {
     if (filters.search && !t.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
     if (filters.assignee && t.assignee !== filters.assignee) return false;
     if (filters.priority && t.priority !== filters.priority) return false;
-    if (filters.status && t.status !== filters.status) return false;
     return true;
   });
 
@@ -941,6 +1051,17 @@ function ProjectsDashboard({ token }: { token: string }) {
           <p className="eyebrow text-brand">Admin</p>
           <h1 className="h2 font-bold">Projects</h1>
         </div>
+        <button
+          onClick={onSwitchUser}
+          className="flex items-center gap-2 rounded-xl border border-black/15 px-3 py-2 hover:bg-neutral-50 transition-colors"
+        >
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${avatarColor(currentUser).bg}`}>
+            <span className={`${vulfMono.className} text-[10px] font-bold ${avatarColor(currentUser).text}`}>
+              {initials(currentUser)}
+            </span>
+          </div>
+          <span className="text-sm hidden sm:inline">{currentUser}</span>
+        </button>
         <div className="flex items-center gap-2">
           {/* View toggle */}
           <div className="flex rounded-xl border border-black/15 overflow-hidden">
@@ -1053,23 +1174,6 @@ function ProjectsDashboard({ token }: { token: string }) {
               </select>
             </div>
 
-            {/* Status */}
-            <div className="min-w-[150px]">
-              <label className={`${vulfMono.className} block text-xs text-neutral-400 mb-1`}>STATUS</label>
-              <select
-                className="rounded-lg border border-black/20 bg-neutral-50 px-3 py-2 text-sm outline-none focus:border-black/40 w-full"
-                value={filters.status}
-                onChange={(e) => setFilter("status", e.target.value)}
-              >
-                <option value="">All</option>
-                <option>Not Started</option>
-                <option>On track</option>
-                <option>Behind</option>
-                <option>On Hold</option>
-                <option>Done</option>
-              </select>
-            </div>
-
             {/* Clear */}
             {activeFilterCount > 0 && (
               <button
@@ -1092,9 +1196,6 @@ function ProjectsDashboard({ token }: { token: string }) {
               )}
               {filters.priority && (
                 <Chip label={filters.priority} onRemove={() => setFilter("priority", "")} />
-              )}
-              {filters.status && (
-                <Chip label={filters.status} onRemove={() => setFilter("status", "")} />
               )}
               <span className={`${vulfMono.className} text-xs text-neutral-400 self-center`}>
                 {filteredTasks.length} of {tasks.length} tasks
@@ -1131,9 +1232,15 @@ function ProjectsDashboard({ token }: { token: string }) {
       {detail && (
         <DetailPanel
           task={detail}
+          token={token}
+          currentUser={currentUser}
           onClose={() => setDetail(null)}
           onEdit={() => openEdit(detail)}
           onDelete={() => handleDelete(detail.id)}
+          onTaskUpdate={(updated) => {
+            setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+            setDetail(updated);
+          }}
         />
       )}
     </section>
@@ -1145,6 +1252,7 @@ function ProjectsDashboard({ token }: { token: string }) {
 export default function AdminProjectsPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = sessionStorage.getItem("adminToken");
@@ -1153,9 +1261,22 @@ export default function AdminProjectsPage() {
       return;
     }
     setToken(saved);
+    const user = sessionStorage.getItem("projectsUser");
+    if (user) setCurrentUser(user);
   }, [router]);
 
-  if (!token) return null;
+  function handleSelectUser(name: string) {
+    sessionStorage.setItem("projectsUser", name);
+    setCurrentUser(name);
+  }
 
-  return <ProjectsDashboard token={token} />;
+  function handleSwitchUser() {
+    sessionStorage.removeItem("projectsUser");
+    setCurrentUser(null);
+  }
+
+  if (!token) return null;
+  if (!currentUser) return <UserSelect onSelect={handleSelectUser} />;
+
+  return <ProjectsDashboard token={token} currentUser={currentUser} onSwitchUser={handleSwitchUser} />;
 }
