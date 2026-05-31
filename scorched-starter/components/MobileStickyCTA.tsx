@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export default function MobileStickyCTA() {
   const pathname = usePathname();
-  if (pathname === '/book') return null;
+  if (pathname === '/book' || pathname?.startsWith('/admin')) return null;
 
   return (
     // No background box; just a floating pill

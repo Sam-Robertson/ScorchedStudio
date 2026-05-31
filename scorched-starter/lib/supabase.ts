@@ -61,3 +61,21 @@ export type TaskRecord = {
   created_at: string;
   updated_at: string;
 };
+
+export type ProductRecord = {
+  id: string;
+  name: string;
+  width_in: number;
+  height_in: number;
+  notes: string | null;
+  active: boolean;
+};
+
+export type PrintJobRecord = {
+  id: string;
+  product_id: string | null;
+  image_base64: string;
+  status: "pending" | "printed";
+  created_at: string;
+  printed_at: string | null;
+};

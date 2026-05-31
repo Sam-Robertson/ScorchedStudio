@@ -66,8 +66,8 @@ function BookingsDashboard({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("upcoming");
-  const [view, setView] = useState<ViewMode>("list");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<ViewMode>("calendar");
   const [calMonth, setCalMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -94,7 +94,8 @@ function BookingsDashboard({ token }: { token: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -447,7 +448,8 @@ function BookingModal({
     setEditSaving(false);
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
 
   return (
     <div
@@ -605,7 +607,8 @@ function NewBookingModal({
   onCreate: (booking: BookingRecord) => void;
 }) {
   const backdropRef = useRef<HTMLDivElement>(null);
-  const today = new Date().toISOString().split("T")[0];
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -818,7 +821,8 @@ function AdminCalendar({
   const monthLabel = calMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const firstDayOfWeek = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date().toISOString().split("T")[0];
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
 
   // Build a map of date → bookings for this month
   const byDate = useMemo(() => {

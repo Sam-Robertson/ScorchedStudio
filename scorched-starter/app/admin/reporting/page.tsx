@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
 } from "recharts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -36,6 +36,7 @@ const SOURCE_COLORS: Record<string, string> = {
 };
 
 type TimeFrame = "week" | "month" | "year";
+type SortDir = "desc" | "asc";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -49,7 +50,6 @@ function addDays(d: Date, n: number) {
   return r;
 }
 
-// Build bucket keys and labels for each time frame
 function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -65,7 +65,6 @@ function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
   }
 
   if (tf === "month") {
-    // Last 8 weeks (Sunday-based weekly buckets)
     const buckets: { key: string; label: string }[] = [];
     for (let i = 7; i >= 0; i--) {
       const weekStart = addDays(today, -(i * 7 + today.getDay()));
@@ -77,7 +76,6 @@ function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
     return buckets;
   }
 
-  // year — last 12 months
   return Array.from({ length: 12 }, (_, i) => {
     const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
     return {
@@ -87,21 +85,15 @@ function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
   });
 }
 
-// Assign a booking's created_at to a bucket key
 function bucketKey(createdAt: string, tf: TimeFrame): string {
   const d = new Date(createdAt);
   if (tf === "week") return toDateStr(d);
-  if (tf === "year") {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }
-  // month: find the Sunday on or before this date
+  if (tf === "year") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const dayOfWeek = d.getDay();
   const sunday = addDays(d, -dayOfWeek);
   sunday.setHours(0, 0, 0, 0);
   return toDateStr(sunday);
 }
-
-// ── Build chart data ──────────────────────────────────────────────────────────
 
 function buildChartData(
   bookings: BookingRecord[],
@@ -110,15 +102,11 @@ function buildChartData(
 ): { label: string; [source: string]: number | string }[] {
   const buckets = getBuckets(tf);
   const bucketSet = new Set(buckets.map((b) => b.key));
-
-  // Initialise each bucket with 0 for every active source
   const map: Record<string, Record<string, number>> = {};
   for (const b of buckets) {
     map[b.key] = {};
     for (const src of activeSources) map[b.key][src] = 0;
   }
-
-  // Count bookings into buckets
   for (const b of bookings) {
     if (b.status !== "confirmed") continue;
     const src = b.referral_source || "(not recorded)";
@@ -127,8 +115,46 @@ function buildChartData(
     if (!bucketSet.has(key)) continue;
     map[key][src] = (map[key][src] ?? 0) + 1;
   }
-
   return buckets.map(({ key, label }) => ({ label, ...map[key] }));
+}
+
+// ── Custom tooltip (hides zero-value sources) ─────────────────────────────────
+
+function ChartTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: { dataKey: string; value: number; fill: string }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const items = [...payload].reverse().filter((p) => p.value > 0);
+  if (!items.length) return null;
+  const total = items.reduce((s, p) => s + p.value, 0);
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-display, monospace)",
+        fontSize: 12,
+        borderRadius: 10,
+        border: "1px solid rgba(0,0,0,0.08)",
+        background: "#fff",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+        padding: "10px 14px",
+        minWidth: 160,
+      }}
+    >
+      <p style={{ fontWeight: "bold", marginBottom: 6, color: "#374151" }}>
+        {label}
+        <span style={{ fontWeight: 400, color: "#9ca3af", marginLeft: 6 }}>
+          ({total} total)
+        </span>
+      </p>
+      {items.map((item) => (
+        <p key={item.dataKey} style={{ padding: "2px 0", color: item.fill }}>
+          {item.dataKey}: {item.value}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -155,6 +181,7 @@ function ReportingDashboard({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [timeFrame, setTimeFrame] = useState<TimeFrame>("month");
   const [hiddenSources, setHiddenSources] = useState<Set<string>>(new Set());
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -168,11 +195,9 @@ function ReportingDashboard({ token }: { token: string }) {
 
   const confirmed = useMemo(() => bookings.filter((b) => b.status === "confirmed"), [bookings]);
 
-  // All sources that appear in the data
   const presentSources = useMemo(() => {
     const seen = new Set<string>();
     for (const b of confirmed) seen.add(b.referral_source || "(not recorded)");
-    // Return in canonical order, then anything extra
     return [
       ...REFERRAL_OPTIONS.filter((o) => seen.has(o)),
       ...[...seen].filter((s) => !REFERRAL_OPTIONS.includes(s)),
@@ -189,7 +214,7 @@ function ReportingDashboard({ token }: { token: string }) {
     [confirmed, timeFrame, activeSources]
   );
 
-  // All-time breakdown table
+  // All-time breakdown, sorted by share
   const { rows, otherDetails } = useMemo(() => {
     const counts: Record<string, number> = {};
     const details: string[] = [];
@@ -198,15 +223,16 @@ function ReportingDashboard({ token }: { token: string }) {
       counts[src] = (counts[src] ?? 0) + 1;
       if (b.referral_source === "Other" && b.referral_other) details.push(b.referral_other);
     }
-    const sorted = [
+    const all = [
       ...REFERRAL_OPTIONS.filter((o) => counts[o] !== undefined).map((o) => ({ label: o, count: counts[o] })),
       ...Object.entries(counts)
         .filter(([k]) => !REFERRAL_OPTIONS.includes(k))
-        .map(([k, v]) => ({ label: k, count: v }))
-        .sort((a, b) => b.count - a.count),
+        .map(([k, v]) => ({ label: k, count: v })),
     ];
-    return { rows: sorted, otherDetails: details };
-  }, [confirmed]);
+    // Always sort by share (count); dir controls desc vs asc
+    all.sort((a, b) => sortDir === "desc" ? b.count - a.count : a.count - b.count);
+    return { rows: all, otherDetails: details };
+  }, [confirmed, sortDir]);
 
   const total = confirmed.length;
 
@@ -217,6 +243,8 @@ function ReportingDashboard({ token }: { token: string }) {
       return next;
     });
   }
+
+  const activeSourcesList = [...activeSources];
 
   return (
     <section className="container-px py-10 max-w-5xl mx-auto">
@@ -250,13 +278,12 @@ function ReportingDashboard({ token }: { token: string }) {
       {!loading && !error && (
         <div className="space-y-6">
 
-          {/* ── Line chart ── */}
+          {/* ── Stacked bar chart ── */}
           <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-black/10">
               <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-500`}>
-                Referral sources over time
+                Bookings by source over time
               </p>
-              {/* Time frame toggle */}
               <div className="flex rounded-lg border border-black/15 overflow-hidden self-start sm:self-auto">
                 {(["week", "month", "year"] as TimeFrame[]).map((tf) => (
                   <button
@@ -304,50 +331,35 @@ function ReportingDashboard({ token }: { token: string }) {
                   })}
                 </div>
 
-                <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={chartData} margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 24, left: 0, bottom: 4 }} barCategoryGap="30%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fontFamily: "var(--font-vulg-mono, monospace)", fill: "#9ca3af" }}
+                      tick={{ fontSize: 11, fontFamily: "var(--font-display, monospace)", fill: "#9ca3af" }}
                       axisLine={false}
                       tickLine={false}
                       interval="preserveStartEnd"
                     />
                     <YAxis
                       allowDecimals={false}
-                      tick={{ fontSize: 11, fontFamily: "var(--font-vulg-mono, monospace)", fill: "#9ca3af" }}
+                      tick={{ fontSize: 11, fontFamily: "var(--font-display, monospace)", fill: "#9ca3af" }}
                       axisLine={false}
                       tickLine={false}
                       width={28}
                     />
-                    <Tooltip
-                      contentStyle={{
-                        fontFamily: "var(--font-vulg-mono, monospace)",
-                        fontSize: 12,
-                        borderRadius: 10,
-                        border: "1px solid rgba(0,0,0,0.08)",
-                        boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-                      }}
-                      itemStyle={{ padding: "2px 0" }}
-                      labelStyle={{ fontWeight: "bold", marginBottom: 4 }}
-                    />
-                    <Legend
-                      wrapperStyle={{ display: "none" }}
-                    />
-                    {[...activeSources].map((src) => (
-                      <Line
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                    {activeSourcesList.map((src, i) => (
+                      <Bar
                         key={src}
-                        type="monotone"
                         dataKey={src}
-                        stroke={SOURCE_COLORS[src] ?? "#888"}
-                        strokeWidth={2}
-                        dot={{ r: 3, strokeWidth: 0 }}
-                        activeDot={{ r: 5, strokeWidth: 0 }}
-                        connectNulls
+                        stackId="a"
+                        fill={SOURCE_COLORS[src] ?? "#888"}
+                        radius={i === activeSourcesList.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                        maxBarSize={56}
                       />
                     ))}
-                  </LineChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
@@ -363,7 +375,7 @@ function ReportingDashboard({ token }: { token: string }) {
 
             {total === 0 ? (
               <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>
-                No confirmed bookings with referral data yet.
+                No confirmed bookings yet.
               </p>
             ) : (
               <div className="px-6 py-5">
@@ -372,7 +384,12 @@ function ReportingDashboard({ token }: { token: string }) {
                     <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
                       <th className="pb-3 font-medium">Source</th>
                       <th className="pb-3 font-medium text-right">Count</th>
-                      <th className="pb-3 font-medium text-right">Share</th>
+                      <th
+                        className="pb-3 font-medium text-right cursor-pointer select-none hover:text-neutral-600 transition-colors"
+                        onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+                      >
+                        Share {sortDir === "desc" ? "↓" : "↑"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -387,7 +404,7 @@ function ReportingDashboard({ token }: { token: string }) {
                               <span className="text-neutral-800">{label}</span>
                             </div>
                           </td>
-                          <td className="py-3 text-right text-neutral-600 font-medium">{count}</td>
+                          <td className="py-3 text-right text-neutral-600 font-medium tabular-nums">{count}</td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-3">
                               <div className="hidden sm:block w-24 h-1.5 rounded-full bg-black/5 overflow-hidden">

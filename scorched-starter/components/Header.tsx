@@ -18,6 +18,7 @@ const coreLinks = [
 ];
 
 const moreLinks = [
+  { href: "/print-design", label: "Print Design" },
   { href: "/waiver", label: "Waiver" },
   {
     href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
@@ -34,6 +35,7 @@ const MOBILE_NAV = [
   { href: "/", label: "Home" },
   { href: "/hours", label: "Hours & Pricing" },
   { href: "/group-events", label: "Group Events" },
+  { href: "/print-design", label: "Print Design" },
   { href: "/blog", label: "Blog" },
   { href: "/scorched-vip", label: "Scorched VIP" },
   { href: "/waiver", label: "Waiver" },
