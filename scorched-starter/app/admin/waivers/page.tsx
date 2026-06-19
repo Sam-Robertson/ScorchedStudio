@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
-import type { WaiverRecord } from "@/lib/supabase";
+import type { WaiverRecord, WaiverMinor } from "@/lib/supabase";
 
 /* ------------------------------------------------------------------ */
 /* Types & helpers                                                       */
@@ -330,6 +330,25 @@ function WaiverModal({
           <Row label="Date of Birth" value={w.date_of_birth ? fmt(w.date_of_birth + "T00:00:00") : "—"} />
           <Row label="Signed At" value={fmtFull(w.signed_at)} />
           <Row label="IP Address" value={w.ip_address ?? "—"} />
+
+          {/* Minors */}
+          {w.minors && w.minors.length > 0 && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-neutral-400 mb-2">
+                Minor Participants ({w.minors.length})
+              </p>
+              <div className="space-y-2">
+                {w.minors.map((m: WaiverMinor, i: number) => (
+                  <div key={i} className="rounded-lg bg-neutral-50 border border-black/8 px-3 py-2">
+                    <p className="text-sm font-medium">{m.firstName} {m.lastName}</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      b. {fmt(m.dateOfBirth + "T00:00:00")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Signature */}
           <div>

@@ -13,8 +13,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Package,
   Printer,
+  Share2,
   X,
 } from "lucide-react";
 
@@ -26,11 +26,11 @@ const NAV = [
   { href: "/admin/waivers",   label: "Waivers",    icon: FileText },
   { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
   { href: "/admin/projects",  label: "Projects",   icon: KanbanSquare },
+  { href: "/admin/social",    label: "Social",     icon: Share2 },
 ];
 
 const PRINT_NAV = [
   { href: "/admin/print-queue", label: "Print Queue", icon: Printer },
-  { href: "/admin/products",    label: "Products",    icon: Package },
 ];
 
 // ── Nav item ──────────────────────────────────────────────────────────────────

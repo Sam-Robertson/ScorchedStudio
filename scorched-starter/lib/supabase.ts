@@ -33,6 +33,12 @@ export type BookingRecord = {
   created_at: string;
 };
 
+export type WaiverMinor = {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+};
+
 export type WaiverRecord = {
   id: string;
   first_name: string;
@@ -43,6 +49,7 @@ export type WaiverRecord = {
   signature_data: string;
   signed_at: string;
   ip_address: string | null;
+  minors: WaiverMinor[] | null;
 };
 
 export type TaskRecord = {
@@ -78,4 +85,21 @@ export type PrintJobRecord = {
   status: "pending" | "printed";
   created_at: string;
   printed_at: string | null;
+};
+
+export type SocialPostRecord = {
+  id: string;
+  title: string;
+  caption: string | null;
+  priority: "High" | "Medium" | "Low" | null;
+  status: "Draft" | "In Review" | "Approved" | "Published";
+  scheduled_date: string | null;
+  media_url: string | null;
+  media_path: string | null;
+  media_type: "image" | "video" | null;
+  media_deleted: boolean;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 };

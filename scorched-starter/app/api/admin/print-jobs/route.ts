@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
   try {
     const sb = getSupabase();
 
-    // Auto-cleanup: delete printed jobs older than 24 hours
+    // Auto-cleanup: delete all print jobs older than 24 hours regardless of status
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    await sb.from("print_jobs").delete().eq("status", "printed").lt("printed_at", cutoff);
+    await sb.from("print_jobs").delete().lt("created_at", cutoff);
 
     const { data, error } = await sb
       .from("print_jobs")

@@ -5,6 +5,12 @@ import { getSupabase } from "@/lib/supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const minorSchema = z.object({
+  firstName: z.string().min(1, "Required"),
+  lastName: z.string().min(1, "Required"),
+  dateOfBirth: z.string().min(1, "Required"),
+});
+
 const schema = z.object({
   firstName: z.string().min(1, "Required"),
   lastName: z.string().min(1, "Required"),
@@ -12,6 +18,7 @@ const schema = z.object({
   phone: z.string().optional(),
   dateOfBirth: z.string().min(1, "Required"),
   signatureData: z.string().min(1, "Signature required"),
+  minors: z.array(minorSchema).optional().default([]),
 });
 
 export async function POST(req: Request) {
@@ -41,6 +48,7 @@ export async function POST(req: Request) {
       date_of_birth: data.dateOfBirth,
       signature_data: data.signatureData,
       ip_address: ip,
+      minors: data.minors.length > 0 ? data.minors : null,
     });
 
     if (dbError) {
@@ -75,6 +83,16 @@ export async function POST(req: Request) {
               <td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #888; font-size: 13px;">Signed on</td>
               <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px;">${signedDate}</td>
             </tr>
+            ${data.minors.length > 0 ? `
+            <tr>
+              <td style="padding: 8px 0; color: #888; font-size: 13px; vertical-align: top; padding-top: 12px;">Minor participants</td>
+              <td style="padding: 8px 0; font-size: 13px; padding-top: 12px;">
+                ${data.minors.map((m) => {
+                  const dob = new Date(m.dateOfBirth + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return `<div style="margin-bottom: 4px;">${m.firstName} ${m.lastName} <span style="color: #aaa;">(b. ${dob})</span></div>`;
+                }).join("")}
+              </td>
+            </tr>` : ""}
           </table>
           <p style="color: #555; font-size: 14px;">
             Have questions? Email us at

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
-import { CheckCheck, Download, Inbox, Printer, RotateCcw } from "lucide-react";
+import { CheckCheck, Download, Inbox, Printer, RotateCcw, Settings2 } from "lucide-react";
 import type { PrintJobRecord } from "@/lib/supabase";
 
 type JobWithProduct = PrintJobRecord & {
@@ -63,6 +64,21 @@ function openPrintTab(job: JobWithProduct) {
     @page { margin: 0; size: auto; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #fff; }
+    .close-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: #3A3A3A;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      z-index: 999;
+    }
     .page {
       display: flex;
       flex-direction: column;
@@ -89,10 +105,12 @@ function openPrintTab(job: JobWithProduct) {
     @media print {
       @page { margin: 0; }
       .page { padding: 0.375in; }
+      .close-btn { display: none; }
     }
   </style>
 </head>
 <body>
+  <button class="close-btn" onclick="window.close()">✕ Close</button>
   <div class="page">
     <img src="${job.image_base64}" alt="${name}" />
     <p class="label">${label}</p>
@@ -196,12 +214,21 @@ function PrintQueueDashboard({ token }: { token: string }) {
         <div>
           <h1 className="h2 font-bold">Print Queue</h1>
         </div>
-        <button
-          onClick={load}
-          className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/products"
+            className={`${vulfMono.className} flex items-center gap-1.5 text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50 transition-colors`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Edit Dimensions
+          </Link>
+          <button
+            onClick={load}
+            className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && (

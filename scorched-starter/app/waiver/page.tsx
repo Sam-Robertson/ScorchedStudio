@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { vulfMono } from "@/app/fonts";
 import SignatureCanvas, { SignatureCanvasRef } from "@/components/ui/SignatureCanvas";
 import Image from "next/image";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Plus, X } from "lucide-react";
 
 const schema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -20,6 +20,8 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+type Minor = { firstName: string; lastName: string; dateOfBirth: string };
 
 const inputCls =
   "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
@@ -33,6 +35,20 @@ export default function WaiverPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submittedName, setSubmittedName] = useState("");
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const [minors, setMinors] = useState<Minor[]>([]);
+  const [minorErrors, setMinorErrors] = useState<string | null>(null);
+
+  function addMinor() {
+    setMinors((prev) => [...prev, { firstName: "", lastName: "", dateOfBirth: "" }]);
+  }
+
+  function removeMinor(i: number) {
+    setMinors((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function updateMinor(i: number, field: keyof Minor, value: string) {
+    setMinors((prev) => prev.map((m, idx) => (idx === i ? { ...m, [field]: value } : m)));
+  }
 
   const {
     register,
@@ -44,6 +60,16 @@ export default function WaiverPage() {
   const clearSigError = useCallback(() => setSigError(null), []);
 
   async function onSubmit(values: FormValues) {
+    // Validate minors — all fields required if a minor was added
+    const incomplete = minors.some(
+      (m) => !m.firstName.trim() || !m.lastName.trim() || !m.dateOfBirth
+    );
+    if (incomplete) {
+      setMinorErrors("Please fill in all fields for each minor.");
+      return;
+    }
+    setMinorErrors(null);
+
     const signatureData = sigRef.current?.getData();
     if (!signatureData) {
       setSigError("Please sign before submitting.");
@@ -62,6 +88,7 @@ export default function WaiverPage() {
         phone: values.phone ?? "",
         dateOfBirth: values.dateOfBirth,
         signatureData,
+        minors: minors.length > 0 ? minors : [],
       }),
     });
 
@@ -96,6 +123,8 @@ export default function WaiverPage() {
               setSubmittedEmail("");
               setSigError(null);
               setServerError(null);
+              setMinors([]);
+              setMinorErrors(null);
               reset();
               sigRef.current?.clear();
             }}
@@ -185,6 +214,82 @@ export default function WaiverPage() {
           <label className={labelCls}>Date of Birth</label>
           <input type="date" className={inputCls} {...register("dateOfBirth")} />
           {errors.dateOfBirth && <p className={errorCls}>{errors.dateOfBirth.message}</p>}
+        </div>
+
+        {/* Minor participants */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h2 className="h3 font-bold">Minor Participants</h2>
+              <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
+                Optional — your signature below covers any minors listed here.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addMinor}
+              className={`${vulfMono.className} flex items-center gap-1.5 text-sm text-[#519A70] hover:opacity-75 transition-opacity shrink-0 ml-4`}
+            >
+              <Plus className="w-4 h-4" />
+              Add minor
+            </button>
+          </div>
+
+          {minors.length > 0 && (
+            <div className="space-y-3 mt-3">
+              {minors.map((minor, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-black/10 bg-neutral-50 p-4"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className={`${vulfMono.className} text-xs font-bold text-neutral-400 uppercase tracking-wide`}>
+                      Minor {i + 1}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => removeMinor(i)}
+                      className="text-neutral-400 hover:text-neutral-700 transition-colors"
+                      aria-label="Remove minor"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">First Name</label>
+                      <input
+                        className="w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40"
+                        value={minor.firstName}
+                        onChange={(e) => updateMinor(i, "firstName", e.target.value)}
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Last Name</label>
+                      <input
+                        className="w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40"
+                        value={minor.lastName}
+                        onChange={(e) => updateMinor(i, "lastName", e.target.value)}
+                        placeholder="Last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        className="w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40"
+                        value={minor.dateOfBirth}
+                        onChange={(e) => updateMinor(i, "dateOfBirth", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {minorErrors && <p className="text-sm text-red-600 mt-2">{minorErrors}</p>}
         </div>
 
         {/* Waiver text */}
