@@ -57,6 +57,8 @@ export default function AdminWaiversPage() {
 /* Dashboard (authenticated)                                            */
 /* ------------------------------------------------------------------ */
 
+const PAGE_SIZE = 30;
+
 function WaiversDashboard({ token }: { token: string }) {
   const [waivers, setWaivers] = useState<WaiverRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +69,7 @@ function WaiversDashboard({ token }: { token: string }) {
   const [sortField, setSortField] = useState<SortField>("signed_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<WaiverRecord | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetch("/api/admin/waivers", {
@@ -105,6 +108,12 @@ function WaiversDashboard({ token }: { token: string }) {
       });
   }, [waivers, search, dateFrom, dateTo, sortField, sortDir]);
 
+  // Reset to page 1 whenever filters or sort change
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, sortField, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const SortBtn = ({ field, label }: { field: SortField; label: string }) => (
     <button
       onClick={() => handleSort(field)}
@@ -127,6 +136,7 @@ function WaiversDashboard({ token }: { token: string }) {
           {!loading && !error && (
             <p className={`${vulfMono.className} text-sm text-neutral-500 mt-1`}>
               {filtered.length} of {waivers.length} total
+              {totalPages > 1 && ` · page ${page} of ${totalPages}`}
             </p>
           )}
         </div>
@@ -162,7 +172,7 @@ function WaiversDashboard({ token }: { token: string }) {
         </div>
         {(search || dateFrom || dateTo) && (
           <button
-            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setPage(1); }}
             className="text-xs text-neutral-400 underline underline-offset-2 whitespace-nowrap hover:text-neutral-700"
           >
             Clear filters
@@ -188,7 +198,7 @@ function WaiversDashboard({ token }: { token: string }) {
             {filtered.length === 0 && (
               <p className={`${vulfMono.className} px-4 py-10 text-center text-neutral-400 text-sm`}>No waivers found.</p>
             )}
-            {filtered.map((w) => (
+            {paginated.map((w) => (
               <div
                 key={w.id}
                 className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 active:bg-neutral-100"
@@ -223,7 +233,7 @@ function WaiversDashboard({ token }: { token: string }) {
                   </td>
                 </tr>
               )}
-              {filtered.map((w) => (
+              {paginated.map((w) => (
                 <tr
                   key={w.id}
                   className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
@@ -243,6 +253,55 @@ function WaiversDashboard({ token }: { token: string }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && !error && totalPages > 1 && (
+        <div className={`${vulfMono.className} flex items-center justify-between mt-4 text-sm`}>
+          <p className="text-xs text-neutral-400">
+            {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
+            >
+              ← Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+              .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === "…" ? (
+                  <span key={`ellipsis-${i}`} className="px-1 text-xs text-neutral-400">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${
+                      page === p
+                        ? "bg-[#884A20] text-white"
+                        : "border border-black/20 text-neutral-500 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       )}
 
