@@ -339,12 +339,23 @@ function WaiverModal({
   const backdropRef = useRef<HTMLDivElement>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [loadingSignature, setLoadingSignature] = useState(true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    fetch(`/api/admin/waivers/${w.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { setSignatureData(d.signature_data ?? null); setLoadingSignature(false); })
+      .catch(() => setLoadingSignature(false));
+  }, [w.id, token]);
 
   async function handleDelete() {
     if (!confirm(`Delete waiver for ${w.first_name} ${w.last_name}? This cannot be undone.`)) return;
@@ -412,13 +423,19 @@ function WaiverModal({
           {/* Signature */}
           <div>
             <p className="text-xs uppercase tracking-wide text-neutral-400 mb-2">Signature</p>
-            <div className="rounded-xl border border-black/10 bg-neutral-50 p-3 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={w.signature_data}
-                alt={`Signature of ${w.first_name} ${w.last_name}`}
-                className="max-w-full max-h-40 object-contain"
-              />
+            <div className="rounded-xl border border-black/10 bg-neutral-50 p-3 flex items-center justify-center min-h-[80px]">
+              {loadingSignature ? (
+                <span className="text-xs text-neutral-400">Loading…</span>
+              ) : signatureData ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={signatureData}
+                  alt={`Signature of ${w.first_name} ${w.last_name}`}
+                  className="max-w-full max-h-40 object-contain"
+                />
+              ) : (
+                <span className="text-xs text-neutral-400">Unavailable</span>
+              )}
             </div>
           </div>
 

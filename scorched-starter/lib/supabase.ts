@@ -46,7 +46,7 @@ export type WaiverRecord = {
   email: string;
   phone: string | null;
   date_of_birth: string;
-  signature_data: string;
+  signature_data?: string | null;
   signed_at: string;
   ip_address: string | null;
   minors: WaiverMinor[] | null;

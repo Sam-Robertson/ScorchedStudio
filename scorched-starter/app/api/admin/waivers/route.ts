@@ -9,7 +9,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await getSupabase()
     .from("waivers")
-    .select("id, first_name, last_name, email, phone, date_of_birth, signature_data, signed_at, ip_address")
+    .select("id, first_name, last_name, email, phone, date_of_birth, signed_at, ip_address, minors")
     .order("signed_at", { ascending: false });
 
   if (error) {
