@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
-import { getSlotsForDate } from "@/lib/booking-utils";
 
 type Booking = {
   id: string;
@@ -57,6 +56,8 @@ function ManagePageInner() {
   const [newSlot, setNewSlot] = useState("");
   const [newPartySize, setNewPartySize] = useState(1);
   const [rescheduleError, setRescheduleError] = useState("");
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   useEffect(() => {
     setBookingId(urlBookingId);
@@ -149,7 +150,15 @@ function ManagePageInner() {
     }
   }
 
-  const slots = newDate ? getSlotsForDate(newDate) : [];
+  useEffect(() => {
+    if (!newDate) { setSlots([]); return; }
+    setSlotsLoading(true);
+    fetch(`/api/bookings/availability?date=${newDate}`)
+      .then((r) => (r.ok ? r.json() : { slots: [] }))
+      .then((data) => setSlots((data.slots ?? []).map((s: { time: string }) => s.time)))
+      .finally(() => setSlotsLoading(false));
+  }, [newDate]);
+
   const today = new Date().toISOString().split("T")[0];
 
   return (
@@ -299,13 +308,17 @@ function ManagePageInner() {
                   />
                 </div>
 
-                {newDate && slots.length === 0 && (
+                {newDate && slotsLoading && (
+                  <p className={`${vulfMono.className} text-sm text-neutral-500`}>Loading times…</p>
+                )}
+
+                {newDate && !slotsLoading && slots.length === 0 && (
                   <p className={`${vulfMono.className} text-sm text-neutral-500`}>
-                    Studio is closed on Sundays. Please pick another day.
+                    No time slots available on this date. Please pick another day.
                   </p>
                 )}
 
-                {newDate && slots.length > 0 && (
+                {newDate && !slotsLoading && slots.length > 0 && (
                   <div>
                     <label className={`${vulfMono.className} text-xs text-neutral-500 uppercase tracking-wider block mb-1`}>
                       Time Slot

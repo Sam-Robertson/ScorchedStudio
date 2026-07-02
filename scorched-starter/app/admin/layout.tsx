@@ -8,6 +8,7 @@ import clsx from "clsx";
 import {
   BarChart2,
   ClipboardList,
+  Clock,
   FileText,
   KanbanSquare,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
 const NAV = [
   { href: "/admin",           label: "Dashboard",  icon: LayoutDashboard },
   { href: "/admin/bookings",  label: "Bookings",   icon: ClipboardList },
+  { href: "/admin/hours",     label: "Hours",      icon: Clock },
   { href: "/admin/waivers",   label: "Waivers",    icon: FileText },
   { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
   { href: "/admin/projects",  label: "Projects",   icon: KanbanSquare },

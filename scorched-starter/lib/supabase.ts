@@ -69,6 +69,20 @@ export type TaskRecord = {
   updated_at: string;
 };
 
+export type BusinessHoursRecord = {
+  weekday: number;
+  is_open: boolean;
+  open_time: string;
+  close_time: string;
+  updated_at: string;
+};
+
+export type BlockedDateRecord = {
+  date: string;
+  reason: string | null;
+  created_at: string;
+};
+
 export type ProductRecord = {
   id: string;
   name: string;

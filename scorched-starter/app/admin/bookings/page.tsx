@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
-import { getSlotsForDate, MAX_PARTY_SIZE } from "@/lib/booking-utils";
+import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -385,14 +385,18 @@ function BookingModal({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const slots = getSlotsForDate(editDate);
+  const [slots, setSlots] = useState<string[]>([]);
 
-  // Reset slot if date changes and current slot isn't valid
+  // Fetch valid slots for the selected date, resetting the selection if it's no longer valid
   useEffect(() => {
-    if (!slots.includes(editSlot) && slots.length > 0) {
-      setEditSlot(slots[0]);
-    }
-  }, [editDate, slots, editSlot]);
+    fetch(`/api/bookings/availability?date=${editDate}`)
+      .then((r) => (r.ok ? r.json() : { slots: [] }))
+      .then((data) => {
+        const list = (data.slots ?? []).map((s: { time: string }) => s.time);
+        setSlots(list);
+        setEditSlot((prev) => (!list.includes(prev) && list.length > 0 ? list[0] : prev));
+      });
+  }, [editDate]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -509,7 +513,7 @@ function BookingModal({
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Time slot</label>
                 {slots.length === 0 ? (
-                  <p className="text-xs text-red-500">No slots available on Sundays.</p>
+                  <p className="text-xs text-red-500">No slots available on this date.</p>
                 ) : (
                   <select
                     value={editSlot}
@@ -620,12 +624,17 @@ function NewBookingModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const slots = getSlotsForDate(date);
+  const [slots, setSlots] = useState<string[]>([]);
 
   useEffect(() => {
-    if (slots.length > 0) setSlot(slots[0]);
-    else setSlot("");
-  }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetch(`/api/bookings/availability?date=${date}`)
+      .then((r) => (r.ok ? r.json() : { slots: [] }))
+      .then((data) => {
+        const list = (data.slots ?? []).map((s: { time: string }) => s.time);
+        setSlots(list);
+        setSlot(list.length > 0 ? list[0] : "");
+      });
+  }, [date]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -635,7 +644,7 @@ function NewBookingModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!slot) { setError("No time slots available on Sundays."); return; }
+    if (!slot) { setError("No time slots available on this date."); return; }
     setSaving(true);
     setError(null);
 
@@ -748,7 +757,7 @@ function NewBookingModal({
           <div>
             <label className="block text-xs text-neutral-500 mb-1">Time slot *</label>
             {slots.length === 0 ? (
-              <p className="text-xs text-red-500">No slots available on Sundays.</p>
+              <p className="text-xs text-red-500">No slots available on this date.</p>
             ) : (
               <select
                 value={slot}

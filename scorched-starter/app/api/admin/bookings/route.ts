@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   const { name, email, phone, date, time_slot, party_size, payment_method } = parsed.data;
 
-  const validSlots = getSlotsForDate(date);
+  const validSlots = await getSlotsForDate(date);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }
