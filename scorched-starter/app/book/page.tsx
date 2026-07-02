@@ -60,10 +60,6 @@ function formatDateShort(dateStr: string): string {
   });
 }
 
-function isSunday(dateStr: string): boolean {
-  return new Date(dateStr + "T12:00:00").getDay() === 0;
-}
-
 function isPast(dateStr: string): boolean {
   return dateStr < toDateStr(new Date());
 }
@@ -117,6 +113,7 @@ export default function BookPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [bookFullDates, setBookFullDates] = useState<Set<string>>(new Set());
+  const [bookClosedDates, setBookClosedDates] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState("");
   const [bookSlots, setBookSlots] = useState<SlotInfo[]>([]);
   const [bookSlotsLoading, setBookSlotsLoading] = useState(false);
@@ -151,6 +148,7 @@ export default function BookPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [editFullDates, setEditFullDates] = useState<Set<string>>(new Set());
+  const [editClosedDates, setEditClosedDates] = useState<Set<string>>(new Set());
   const [newDate, setNewDate] = useState("");
   const [editSlots, setEditSlots] = useState<SlotInfo[]>([]);
   const [editSlotsLoading, setEditSlotsLoading] = useState(false);
@@ -165,8 +163,11 @@ export default function BookPage() {
     if (tab !== "book") return;
     const monthStr = `${bookCalMonth.getFullYear()}-${String(bookCalMonth.getMonth() + 1).padStart(2, "0")}`;
     fetch(`/api/bookings/availability?month=${monthStr}`)
-      .then((r) => (r.ok ? r.json() : { fullDates: [] }))
-      .then((data) => setBookFullDates(new Set(data.fullDates ?? [])))
+      .then((r) => (r.ok ? r.json() : { fullDates: [], closedDates: [] }))
+      .then((data) => {
+        setBookFullDates(new Set(data.fullDates ?? []));
+        setBookClosedDates(new Set(data.closedDates ?? []));
+      })
       .catch(() => {});
   }, [bookCalMonth, tab]);
 
@@ -187,8 +188,11 @@ export default function BookPage() {
     const monthStr = `${editCalMonth.getFullYear()}-${String(editCalMonth.getMonth() + 1).padStart(2, "0")}`;
     const excludeId = editingBooking?.id ?? "";
     fetch(`/api/bookings/availability?month=${monthStr}&exclude_id=${excludeId}`)
-      .then((r) => (r.ok ? r.json() : { fullDates: [] }))
-      .then((data) => setEditFullDates(new Set(data.fullDates ?? [])))
+      .then((r) => (r.ok ? r.json() : { fullDates: [], closedDates: [] }))
+      .then((data) => {
+        setEditFullDates(new Set(data.fullDates ?? []));
+        setEditClosedDates(new Set(data.closedDates ?? []));
+      })
       .catch(() => {});
   }, [editCalMonth, manageScreen, editingBooking?.id]);
 
@@ -206,7 +210,7 @@ export default function BookPage() {
   // ── Book tab handlers ───────────────────────────────────────────────────────
 
   function handleDateClick(dateStr: string) {
-    if (isPast(dateStr) || isSunday(dateStr) || bookFullDates.has(dateStr)) return;
+    if (isPast(dateStr) || bookClosedDates.has(dateStr) || bookFullDates.has(dateStr)) return;
     if (dateStr === selectedDate) return;
     setSelectedDate(dateStr);
     setSelectedSlot("");
@@ -355,7 +359,7 @@ export default function BookPage() {
           </h1>
           <p className={`${vulfMono.className} text-center text-neutral-500 mt-2 text-sm`}>
             {tab === "book"
-              ? "$15 per person · 90-minute sessions · Open Mon–Sat"
+              ? "$15 per person · 90-minute sessions"
               : "Cancel or reschedule before your session starts"}
           </p>
 
@@ -415,6 +419,7 @@ export default function BookPage() {
                 calMonth={bookCalMonth}
                 setCalMonth={setBookCalMonth}
                 fullDates={bookFullDates}
+                closedDates={bookClosedDates}
                 selectedDate={selectedDate}
                 onDateClick={handleDateClick}
                 slots={bookSlots}
@@ -495,6 +500,7 @@ export default function BookPage() {
                 calMonth={editCalMonth}
                 setCalMonth={setEditCalMonth}
                 fullDates={editFullDates}
+                closedDates={editClosedDates}
                 newDate={newDate}
                 setNewDate={(d) => { setNewDate(d); setNewSlot(""); }}
                 slots={editSlots}
@@ -519,11 +525,12 @@ export default function BookPage() {
 // ── Calendar (shared) ─────────────────────────────────────────────────────────
 
 function Calendar({
-  calMonth, setCalMonth, fullDates, selectedDate, onDateClick,
+  calMonth, setCalMonth, fullDates, closedDates, selectedDate, onDateClick,
 }: {
   calMonth: Date;
   setCalMonth: (d: Date) => void;
   fullDates: Set<string>;
+  closedDates: Set<string>;
   selectedDate: string;
   onDateClick: (d: string) => void;
 }) {
@@ -560,12 +567,12 @@ function Calendar({
       <div className="grid grid-cols-7 gap-1">
         {cells.map((dateStr, i) => {
           if (!dateStr) return <div key={`e-${i}`} />;
-          const disabled = isSunday(dateStr) || isPast(dateStr) || fullDates.has(dateStr);
+          const disabled = closedDates.has(dateStr) || isPast(dateStr) || fullDates.has(dateStr);
           const isSelected = dateStr === selectedDate;
           const isToday = dateStr === today;
           return (
             <button key={dateStr} onClick={() => !disabled && onDateClick(dateStr)} disabled={disabled}
-              title={isSunday(dateStr) ? "Closed Sunday" : fullDates.has(dateStr) ? "Fully booked" : undefined}
+              title={closedDates.has(dateStr) ? "Closed" : fullDates.has(dateStr) ? "Fully booked" : undefined}
               className={[
                 "aspect-square w-full rounded-xl text-sm font-medium transition-colors flex items-center justify-center",
                 isSelected ? "bg-[#884A20] text-white" : "",
@@ -616,8 +623,8 @@ function SlotGrid({ slots, selectedSlot, onSelect }: {
 
 // ── Book Step 1 ───────────────────────────────────────────────────────────────
 
-function BookStep1({ calMonth, setCalMonth, fullDates, selectedDate, onDateClick, slots, slotsLoading, selectedSlot, setSelectedSlot, onContinue }: {
-  calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>;
+function BookStep1({ calMonth, setCalMonth, fullDates, closedDates, selectedDate, onDateClick, slots, slotsLoading, selectedSlot, setSelectedSlot, onContinue }: {
+  calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>; closedDates: Set<string>;
   selectedDate: string; onDateClick: (d: string) => void;
   slots: SlotInfo[]; slotsLoading: boolean;
   selectedSlot: string; setSelectedSlot: (s: string) => void; onContinue: () => void;
@@ -626,7 +633,7 @@ function BookStep1({ calMonth, setCalMonth, fullDates, selectedDate, onDateClick
     <div className="space-y-6">
       <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
         <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-5`}>Select a date</p>
-        <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} selectedDate={selectedDate} onDateClick={onDateClick} />
+        <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} closedDates={closedDates} selectedDate={selectedDate} onDateClick={onDateClick} />
       </div>
 
       {selectedDate && (
@@ -1007,9 +1014,9 @@ function BookingList({ email, bookings, confirmCancelId, setConfirmCancelId, can
 
 // ── Manage: Edit Flow ─────────────────────────────────────────────────────────
 
-function EditFlow({ booking, step, setStep, calMonth, setCalMonth, fullDates, newDate, setNewDate, slots, slotsLoading, newSlot, setNewSlot, newPartySize, setNewPartySize, saveLoading, saveError, onBack, onSave }: {
+function EditFlow({ booking, step, setStep, calMonth, setCalMonth, fullDates, closedDates, newDate, setNewDate, slots, slotsLoading, newSlot, setNewSlot, newPartySize, setNewPartySize, saveLoading, saveError, onBack, onSave }: {
   booking: SimpleBooking; step: EditStep; setStep: (s: EditStep) => void;
-  calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>;
+  calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>; closedDates: Set<string>;
   newDate: string; setNewDate: (d: string) => void;
   slots: SlotInfo[]; slotsLoading: boolean;
   newSlot: string; setNewSlot: (s: string) => void;
@@ -1034,7 +1041,7 @@ function EditFlow({ booking, step, setStep, calMonth, setCalMonth, fullDates, ne
         <div className="space-y-4">
           <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
             <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-5`}>New date</p>
-            <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} selectedDate={newDate} onDateClick={setNewDate} />
+            <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} closedDates={closedDates} selectedDate={newDate} onDateClick={setNewDate} />
           </div>
           {newDate && (
             <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">

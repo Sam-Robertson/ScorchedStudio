@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate slot exists for that date/day
-  const validSlots = getSlotsForDate(date);
+  const validSlots = await getSlotsForDate(date);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }

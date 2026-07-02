@@ -181,7 +181,7 @@ export async function PATCH(
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }
 
-  const validSlots = getSlotsForDate(date);
+  const validSlots = await getSlotsForDate(date);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }

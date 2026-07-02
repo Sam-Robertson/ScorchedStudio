@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const month = searchParams.get("month");
 
   if (date) {
-    const slots = getSlotsForDate(date);
+    const slots = await getSlotsForDate(date);
     if (slots.length === 0) return Response.json({ slots: [] });
 
     const excludeId = searchParams.get("exclude_id");
@@ -59,17 +59,26 @@ export async function GET(req: NextRequest) {
       map[row.date][row.time_slot] = (map[row.date][row.time_slot] ?? 0) + row.party_size;
     }
 
-    // A date is "full" when every slot has >= MAX_CAPACITY booked
+    // Walk every day in the month (not just days with bookings) so closed
+    // days with zero bookings are still reported as closed.
     const fullDates: string[] = [];
-    for (const [dateStr, slotMap] of Object.entries(map)) {
-      const slots = getSlotsForDate(dateStr);
-      if (slots.length === 0) continue;
-      if (slots.every((s) => (slotMap[s] ?? 0) >= MAX_CAPACITY)) {
-        fullDates.push(dateStr);
-      }
-    }
+    const closedDates: string[] = [];
+    await Promise.all(
+      Array.from({ length: lastDay }, (_, i) => i + 1).map(async (day) => {
+        const dateStr = `${year}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const slots = await getSlotsForDate(dateStr);
+        if (slots.length === 0) {
+          closedDates.push(dateStr);
+          return;
+        }
+        const slotMap = map[dateStr] ?? {};
+        if (slots.every((s) => (slotMap[s] ?? 0) >= MAX_CAPACITY)) {
+          fullDates.push(dateStr);
+        }
+      })
+    );
 
-    return Response.json({ fullDates });
+    return Response.json({ fullDates, closedDates });
   }
 
   return Response.json({ error: "Provide date or month param" }, { status: 400 });
