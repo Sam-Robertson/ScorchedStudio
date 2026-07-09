@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import {
   Archive,
+  ChevronDown,
   ChevronLeft,
   Info,
   LayoutGrid,
@@ -308,41 +309,17 @@ function TaskModal({
                 onChange={(e) => set("due_date", e.target.value)}
               />
             </div>
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-                SPRINT
-              </label>
-              <input
-                className={inputCls}
-                placeholder="e.g. March 1–15"
-                value={form.sprint_dates}
-                onChange={(e) => set("sprint_dates", e.target.value)}
-              />
-            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-                ASSIGNEE
-              </label>
-              <input
-                className={inputCls}
-                value={form.assignee}
-                onChange={(e) => set("assignee", e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-                ASSIGNEE EMAIL
-              </label>
-              <input
-                type="email"
-                className={inputCls}
-                value={form.assignee_email}
-                onChange={(e) => set("assignee_email", e.target.value)}
-              />
-            </div>
+          <div>
+            <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
+              ASSIGNEE
+            </label>
+            <input
+              className={inputCls}
+              value={form.assignee}
+              onChange={(e) => set("assignee", e.target.value)}
+            />
           </div>
 
           <div>
@@ -506,9 +483,6 @@ function DetailPanel({
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{task.assignee}</p>
-                    {task.assignee_email && (
-                      <p className="text-xs text-neutral-400">{task.assignee_email}</p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -525,12 +499,6 @@ function DetailPanel({
                 <p className={`text-sm font-medium ${isOverdue(task.due_date) && task.board_column !== "Done" ? "text-red-600" : "text-neutral-700"}`}>
                   {fmtDate(task.due_date)}
                 </p>
-              </div>
-            )}
-            {task.sprint_dates && (
-              <div className="col-span-2">
-                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>SPRINT</p>
-                <p className="text-sm text-neutral-700">{task.sprint_dates}</p>
               </div>
             )}
           </div>
@@ -860,11 +828,6 @@ function ListView({
               >
                 <td className="px-4 py-3">
                   <p className="text-sm font-medium">{task.name}</p>
-                  {task.sprint_dates && (
-                    <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>
-                      {task.sprint_dates}
-                    </p>
-                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -1176,6 +1139,7 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
+  const [boardExpanded, setBoardExpanded] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -1293,7 +1257,7 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <a
-          href="/admin"
+          href="/admin/boards"
           className="text-neutral-400 hover:text-neutral-700 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -1394,6 +1358,10 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
           </button>
         </div>
       </div>
+
+      {/* Board (collapsible with fade) */}
+      <div className="relative mb-10">
+        <div className={boardExpanded ? "" : "max-h-[70vh] overflow-hidden"}>
 
       {/* Stats bar */}
       <div className="flex gap-4 mb-6 overflow-x-auto pb-1">
@@ -1510,6 +1478,23 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
       ) : (
         <ListView tasks={visibleTasks} onRowClick={setDetail} />
       )}
+
+        </div>
+
+        {/* Fade + toggle */}
+        {!boardExpanded && (
+          <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+        )}
+        <div className={`flex justify-center ${boardExpanded ? "mt-4" : "absolute bottom-0 left-0 right-0 pb-2"}`}>
+          <button
+            onClick={() => setBoardExpanded((v) => !v)}
+            className={`${vulfMono.className} flex items-center gap-1.5 rounded-full border border-black/15 bg-white px-4 py-1.5 text-xs text-neutral-500 shadow-sm hover:shadow-md hover:border-black/25 transition-all`}
+          >
+            <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${boardExpanded ? "rotate-180" : ""}`} />
+            {boardExpanded ? "Collapse board" : "Show all tasks"}
+          </button>
+        </div>
+      </div>
 
       {/* Ongoing Responsibilities */}
       <ResponsibilitiesSection token={token} />
