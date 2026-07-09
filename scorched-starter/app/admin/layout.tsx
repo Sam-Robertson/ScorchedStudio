@@ -11,28 +11,24 @@ import {
   Clock,
   FileText,
   KanbanSquare,
-  LayoutDashboard,
   LogOut,
   Menu,
   Printer,
-  Share2,
   X,
 } from "lucide-react";
 
 // ── Nav config ────────────────────────────────────────────────────────────────
 
-const NAV = [
-  { href: "/admin",           label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/admin/bookings",  label: "Bookings",   icon: ClipboardList },
-  { href: "/admin/hours",     label: "Hours",      icon: Clock },
-  { href: "/admin/waivers",   label: "Waivers",    icon: FileText },
-  { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
-  { href: "/admin/projects",  label: "Projects",   icon: KanbanSquare },
-  { href: "/admin/social",    label: "Social",     icon: Share2 },
+const IN_STUDIO_NAV = [
+  { href: "/admin/bookings",    label: "Bookings",     icon: ClipboardList },
+  { href: "/admin/waivers",     label: "Waivers",      icon: FileText },
+  { href: "/admin/print-queue", label: "Print Queue",  icon: Printer },
 ];
 
-const PRINT_NAV = [
-  { href: "/admin/print-queue", label: "Print Queue", icon: Printer },
+const ADMIN_NAV = [
+  { href: "/admin/hours",     label: "Hours",      icon: Clock },
+  { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
+  { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
 
 // ── Nav item ──────────────────────────────────────────────────────────────────
@@ -51,7 +47,11 @@ function NavItem({
   onClick?: () => void;
 }) {
   const active =
-    href === "/admin" ? pathname === "/admin" : pathname?.startsWith(href);
+    href === "/admin/boards"
+      ? pathname?.startsWith("/admin/boards") ||
+        pathname?.startsWith("/admin/projects") ||
+        pathname?.startsWith("/admin/social")
+      : pathname?.startsWith(href);
   return (
     <Link
       href={href}
@@ -94,16 +94,26 @@ function SidebarContent({
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV.map((item) => (
-          <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
-        ))}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <p className={clsx(vulfMono.className, "text-[9px] uppercase tracking-widest text-neutral-400 px-3 mb-1")}>
+          In Studio
+        </p>
+        <div className="space-y-0.5 mb-4">
+          {IN_STUDIO_NAV.map((item) => (
+            <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+          ))}
+        </div>
 
-        <div className="my-3 border-t border-black/8" />
+        <div className="border-t border-black/8 mb-4" />
 
-        {PRINT_NAV.map((item) => (
-          <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
-        ))}
+        <p className={clsx(vulfMono.className, "text-[9px] uppercase tracking-widest text-neutral-400 px-3 mb-1")}>
+          Admin
+        </p>
+        <div className="space-y-0.5">
+          {ADMIN_NAV.map((item) => (
+            <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+          ))}
+        </div>
       </nav>
 
       {/* Log out */}

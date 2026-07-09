@@ -561,6 +561,31 @@ function MediaUpload({
   );
 }
 
+// ── Note helpers ─────────────────────────────────────────────────────────────
+
+const NOTE_SEP = "\n\n---\n\n";
+
+function splitNotes(raw: string | null): Array<{ header: string | null; text: string }> {
+  if (!raw) return [];
+  return raw.split(NOTE_SEP).map((chunk) => {
+    const nl = chunk.indexOf("\n\n");
+    if (nl !== -1) {
+      const firstLine = chunk.slice(0, nl);
+      if (firstLine.includes(" · ") && !firstLine.includes("\n")) {
+        return { header: firstLine, text: chunk.slice(nl + 2) };
+      }
+    }
+    return { header: null, text: chunk };
+  });
+}
+
+function formatNoteEntry(author: string, text: string): string {
+  const date = new Date().toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+  return `${author.trim()} · ${date}\n\n${text.trim()}`;
+}
+
 // ── DetailPanel ───────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -580,7 +605,31 @@ function DetailPanel({
   onDelete: () => void;
   onUpdate: (post: SocialPostRecord) => void;
 }) {
+  const SOCIAL_NOTE_AUTHORS = ["Jess", "Sam Robertson"];
+  const [newNote, setNewNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [commentAs, setCommentAs] = useState(SOCIAL_NOTE_AUTHORS[0]);
+
   const statusStyle = STATUS_STYLE[post.status];
+  const noteEntries = splitNotes(post.notes);
+
+  async function addNote() {
+    const trimmed = newNote.trim();
+    if (!trimmed) return;
+    const entry = formatNoteEntry(commentAs, trimmed);
+    const appended = post.notes ? `${post.notes}${NOTE_SEP}${entry}` : entry;
+    setNoteSaving(true);
+    const res = await fetch(`/api/admin/social-posts/${post.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ notes: appended }),
+    });
+    setNoteSaving(false);
+    if (res.ok) {
+      onUpdate(await res.json());
+      setNewNote("");
+    }
+  }
 
   async function patchStatus(status: SocialStatus) {
     const res = await fetch(`/api/admin/social-posts/${post.id}`, {
@@ -663,17 +712,65 @@ function DetailPanel({
             </div>
           )}
 
-          {/* Notes */}
-          {post.notes && (
-            <div className="px-6 py-4 border-b border-black/8">
-              <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
-                INTERNAL NOTES
-              </p>
-              <p className="text-sm text-neutral-600 whitespace-pre-wrap leading-relaxed">
-                {post.notes}
-              </p>
+          {/* Notes feed */}
+          <div className="px-6 py-4 space-y-4 border-b border-black/8">
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400`}>NOTES</p>
+
+            {noteEntries.length === 0 ? (
+              <p className="text-sm text-neutral-400 italic">No notes yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {noteEntries.map((entry, i) => (
+                  <div key={i} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
+                    {entry.header && (
+                      <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
+                        {entry.header}
+                      </p>
+                    )}
+                    <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                      {entry.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-black/15 overflow-hidden focus-within:border-black/30 transition-colors">
+              <textarea
+                className="w-full px-3 pt-2 pb-1 text-sm text-neutral-700 bg-white outline-none resize-none leading-relaxed placeholder:text-neutral-400"
+                rows={4}
+                placeholder="Add a note…"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    addNote();
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between px-3 py-2 bg-neutral-50 border-t border-black/8">
+                <div className="flex items-center gap-2">
+                  <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>as</span>
+                  <select
+                    className={`${vulfMono.className} text-[10px] border border-black/15 rounded-lg px-1.5 py-1 bg-white outline-none text-neutral-600`}
+                    value={commentAs}
+                    onChange={(e) => setCommentAs(e.target.value)}
+                  >
+                    {SOCIAL_NOTE_AUTHORS.map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                  <span className={`${vulfMono.className} text-[10px] text-neutral-400 hidden sm:inline`}>⌘+Enter</span>
+                </div>
+                <button
+                  onClick={addNote}
+                  disabled={!newNote.trim() || noteSaving}
+                  className={`${vulfMono.className} text-xs px-3 py-1.5 rounded-lg bg-[#519A70] text-white hover:opacity-90 disabled:opacity-40 transition-opacity`}
+                >
+                  {noteSaving ? "Saving…" : "Add"}
+                </button>
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Media */}
           <div className="px-6 py-4">
@@ -811,7 +908,7 @@ function KanbanView({
   const [dragOverCol, setDragOverCol] = useState<SocialStatus | null>(null);
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       {STATUSES.map((status) => {
         const colPosts = posts.filter((p) => p.status === status);
         const style = STATUS_STYLE[status];
@@ -821,7 +918,7 @@ function KanbanView({
           <div
             key={status}
             className={clsx(
-              "flex-shrink-0 w-72 flex flex-col rounded-2xl bg-neutral-50 border border-black/8 transition-all",
+              "flex flex-col rounded-2xl bg-neutral-50 border border-black/8 transition-all min-h-[200px]",
               isOver && style.drop
             )}
             onDragOver={(e) => {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import {
+  Archive,
   ChevronLeft,
   LayoutGrid,
   List,
@@ -23,7 +24,7 @@ import type { TaskRecord } from "@/lib/supabase";
 type Col = TaskRecord["board_column"];
 type Priority = "High" | "Medium" | "Low";
 
-const COLUMNS: Col[] = ["To do", "Doing", "Done", "Blocked"];
+const COLUMNS: Col[] = ["To do", "Doing", "Done"];
 
 const PROJECT_USERS = [
   { name: "Sam Robertson", initials: "SR" },
@@ -76,6 +77,13 @@ function fmtDate(d: string | null) {
 function isOverdue(due: string | null) {
   if (!due) return false;
   return new Date(due + "T00:00:00") < new Date();
+}
+
+const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+
+function isArchived(task: TaskRecord) {
+  if (task.board_column !== "Done") return false;
+  return Date.now() - new Date(task.updated_at).getTime() > TWO_WEEKS_MS;
 }
 
 function initials(name: string | null) {
@@ -416,13 +424,15 @@ function DetailPanel({
   onDelete: () => void;
   onTaskUpdate: (task: TaskRecord) => void;
 }) {
+  const NOTE_AUTHORS = ["Pearson Brown", "Sam Robertson"];
   const [newNote, setNewNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  const [commentAs, setCommentAs] = useState(NOTE_AUTHORS[0]);
 
   async function addNote() {
     const trimmed = newNote.trim();
     if (!trimmed) return;
-    const entry = formatNoteEntry(currentUser, trimmed);
+    const entry = formatNoteEntry(commentAs, trimmed);
     const appended = task.notes ? `${task.notes}${NOTE_SEP}${entry}` : entry;
     setNoteSaving(true);
     const res = await fetch(`/api/admin/tasks/${task.id}`, {
@@ -558,7 +568,17 @@ function DetailPanel({
                 onKeyDown={handleNoteKeyDown}
               />
               <div className="flex items-center justify-between px-3 py-2 bg-neutral-50 border-t border-black/8">
-                <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>⌘ + Enter to save</span>
+                <div className="flex items-center gap-2">
+                  <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>as</span>
+                  <select
+                    className={`${vulfMono.className} text-[10px] border border-black/15 rounded-lg px-1.5 py-1 bg-white outline-none text-neutral-600`}
+                    value={commentAs}
+                    onChange={(e) => setCommentAs(e.target.value)}
+                  >
+                    {NOTE_AUTHORS.map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                  <span className={`${vulfMono.className} text-[10px] text-neutral-400 hidden sm:inline`}>⌘+Enter</span>
+                </div>
                 <button
                   onClick={addNote}
                   disabled={!newNote.trim() || noteSaving}
@@ -607,6 +627,8 @@ function TaskCard({
   onDragEnd: () => void;
   isDragging: boolean;
 }) {
+  const archived = isArchived(task);
+
   return (
     <div
       draggable
@@ -614,7 +636,7 @@ function TaskCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={`group bg-white rounded-xl border border-black/10 p-3.5 shadow-sm cursor-pointer hover:shadow-md transition-all select-none ${
-        isDragging ? "opacity-40 rotate-1" : ""
+        isDragging ? "opacity-40 rotate-1" : archived ? "opacity-50" : ""
       }`}
     >
       <div className="flex items-start gap-2">
@@ -628,6 +650,11 @@ function TaskCard({
                 className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE[task.priority as Priority]}`}
               >
                 {task.priority}
+              </span>
+            )}
+            {archived && (
+              <span className={`${vulfMono.className} text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-400`}>
+                Archived
               </span>
             )}
           </div>
@@ -677,7 +704,7 @@ function KanbanView({
   const [dragOverCol, setDragOverCol] = useState<Col | null>(null);
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 min-h-0">
+    <div className="grid grid-cols-3 gap-4">
       {COLUMNS.map((col) => {
         const colTasks = tasks.filter((t) => t.board_column === col);
         const style = COL_STYLE[col];
@@ -686,7 +713,7 @@ function KanbanView({
         return (
           <div
             key={col}
-            className={`flex-shrink-0 w-72 flex flex-col rounded-2xl bg-neutral-50 border border-black/8 transition-all ${
+            className={`flex flex-col rounded-2xl bg-neutral-50 border border-black/8 transition-all ${
               isOver ? style.drop : ""
             }`}
             onDragOver={(e) => {
@@ -928,6 +955,7 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
   const [detail, setDetail] = useState<TaskRecord | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(true);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -1033,6 +1061,9 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
     return true;
   });
 
+  const archivedCount = tasks.filter(isArchived).length;
+  const visibleTasks = showArchived ? filteredTasks : filteredTasks.filter((t) => !isArchived(t));
+
   function setFilter(key: keyof Filters, val: string) {
     setFilters((f) => ({ ...f, [key]: val }));
   }
@@ -1078,6 +1109,20 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
               <List className="w-4 h-4" />
             </button>
           </div>
+          {/* Archive toggle */}
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setShowArchived((s) => !s)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                showArchived
+                  ? "border-[#884A20] bg-[#884A20]/10 text-[#884A20]"
+                  : "border-black/15 hover:bg-neutral-100 text-neutral-500"
+              }`}
+            >
+              <Archive className="w-4 h-4" />
+              <span className={`${vulfMono.className} text-xs`}>{archivedCount}</span>
+            </button>
+          )}
           {/* Filter toggle */}
           <button
             onClick={() => setFiltersOpen((o) => !o)}
@@ -1210,13 +1255,13 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
         <div className="py-20 text-center text-neutral-400 text-sm">Loading tasks…</div>
       ) : view === "kanban" ? (
         <KanbanView
-          tasks={filteredTasks}
+          tasks={visibleTasks}
           onCardClick={setDetail}
           onAddTask={(col) => setModal({ mode: "create", column: col })}
           onDrop={handleDrop}
         />
       ) : (
-        <ListView tasks={filteredTasks} onRowClick={setDetail} />
+        <ListView tasks={visibleTasks} onRowClick={setDetail} />
       )}
 
       {/* Modals */}
