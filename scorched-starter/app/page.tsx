@@ -1,6 +1,5 @@
 import Hero from '@/components/sections/Hero';
 import HowItWorks from '@/components/sections/HowItWorks';
-import ScorchedIRL from '@/components/sections/ScorchedIRL';
 import Pricing from '@/components/sections/Pricing';
 import PastProjects from '@/components/sections/PastProjects';
 import Hours from '@/components/sections/Hours';

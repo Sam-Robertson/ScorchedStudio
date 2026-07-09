@@ -5,8 +5,6 @@ import { vulfMono } from "@/app/fonts";
 import Image from "next/image";
 import GroupPricingSection from "@/components/sections/GroupPricing";
 
-type PriceTier = { range: string; price: string };
-
 export const metadata = {
   title: "Group Events & Pricing | Scorched Studio",
   description:

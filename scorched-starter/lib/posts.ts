@@ -43,5 +43,5 @@ export async function getAllPosts(): Promise<PostMeta[]> {
   const posts = slugs.map(s => getPostBySlug(s))
   return posts
     .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    .map(({ content, ...meta }) => meta)
+    .map(({ content: _content, ...meta }) => meta)
 }

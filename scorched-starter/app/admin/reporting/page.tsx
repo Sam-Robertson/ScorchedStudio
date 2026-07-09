@@ -350,7 +350,7 @@ function ReportingDashboard({ token }: { token: string }) {
   const realRepeatRate = uniqueCustomers > 0 ? returningCustomers / uniqueCustomers : 0;
 
   function toggleSource(src: string) {
-    setHiddenSources((prev) => { const n = new Set(prev); n.has(src) ? n.delete(src) : n.add(src); return n; });
+    setHiddenSources((prev) => { const n = new Set(prev); if (n.has(src)) { n.delete(src); } else { n.add(src); } return n; });
   }
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir((d) => d === "desc" ? "asc" : "desc");
@@ -679,8 +679,8 @@ function ReportingDashboard({ token }: { token: string }) {
                 </table>
               )}
               <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-4`}>
-                Repeat rate computed from email identity, not the self-reported "Returning Customer" source label.
-                Cohort retention = % of first-time customers in that month who made at least one additional booking.
+                {`Repeat rate computed from email identity, not the self-reported "Returning Customer" source label.
+                Cohort retention = % of first-time customers in that month who made at least one additional booking.`}
               </p>
             </div>
           </Section>

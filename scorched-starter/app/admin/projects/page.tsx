@@ -410,7 +410,7 @@ function formatNoteEntry(author: string, text: string): string {
 function DetailPanel({
   task,
   token,
-  currentUser,
+  currentUser: _currentUser,
   onClose,
   onEdit,
   onDelete,
