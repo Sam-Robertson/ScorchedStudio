@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
 const createSchema = z.object({
   text: z.string().min(1),
   cadence: z.enum(["daily", "weekly", "monthly"]),
+  hours: z.number().positive().nullable().optional(),
   position: z.number().int().default(0),
 });
 

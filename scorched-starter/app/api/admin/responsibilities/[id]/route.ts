@@ -12,6 +12,7 @@ function isAuthed(req: NextRequest) {
 const patchSchema = z.object({
   text: z.string().min(1).optional(),
   cadence: z.enum(["daily", "weekly", "monthly"]).optional(),
+  hours: z.number().positive().nullable().optional(),
   position: z.number().int().optional(),
 });
 

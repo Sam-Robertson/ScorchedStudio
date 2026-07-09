@@ -96,6 +96,7 @@ export type ResponsibilityRecord = {
   id: string;
   text: string;
   cadence: "daily" | "weekly" | "monthly";
+  hours: number | null;
   position: number;
   created_at: string;
   updated_at: string;

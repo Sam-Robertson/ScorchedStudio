@@ -7,6 +7,7 @@ import { vulfMono } from "@/app/fonts";
 import {
   Archive,
   ChevronLeft,
+  Info,
   LayoutGrid,
   List,
   Plus,
@@ -945,6 +946,7 @@ type ResponsibilityItem = {
   id: string;
   text: string;
   cadence: Cadence;
+  hours: number | null;
   position: number;
   created_at: string;
 };
@@ -955,13 +957,25 @@ const CADENCE_CONFIG: Record<Cadence, { label: string; dot: string; labelColor: 
   monthly: { label: "Monthly", dot: "bg-amber-400",  labelColor: "text-amber-700"  },
 };
 
+function fmtHours(h: number | null) {
+  if (h == null) return null;
+  return Number.isInteger(h) ? `${h}h` : `${h}h`;
+}
+
+function parseHours(val: string): number | null {
+  const n = parseFloat(val.replace("h", "").trim());
+  return isNaN(n) || n <= 0 ? null : n;
+}
+
 function ResponsibilitiesSection({ token }: { token: string }) {
   const [items, setItems] = useState<ResponsibilityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<Cadence | null>(null);
   const [newText, setNewText] = useState("");
+  const [newHours, setNewHours] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [editHours, setEditHours] = useState("");
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -975,13 +989,15 @@ function ResponsibilitiesSection({ token }: { token: string }) {
 
   async function addItem(cadence: Cadence) {
     const text = newText.trim();
+    const hours = parseHours(newHours);
     setAdding(null);
     setNewText("");
+    setNewHours("");
     if (!text) return;
     const res = await fetch("/api/admin/responsibilities", {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, cadence }),
+      body: JSON.stringify({ text, cadence, hours }),
     });
     if (res.ok) {
       const created = await res.json();
@@ -991,12 +1007,13 @@ function ResponsibilitiesSection({ token }: { token: string }) {
 
   async function saveEdit(id: string) {
     const text = editText.trim();
+    const hours = parseHours(editHours);
     setEditingId(null);
     if (!text) return;
     const res = await fetch(`/api/admin/responsibilities/${id}`, {
       method: "PATCH",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, hours }),
     });
     if (res.ok) {
       const updated = await res.json();
@@ -1026,6 +1043,7 @@ function ResponsibilitiesSection({ token }: { token: string }) {
             const cadenceItems = items
               .filter((i) => i.cadence === cadence)
               .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at));
+            const totalHours = cadenceItems.reduce((sum, i) => sum + (i.hours ?? 0), 0);
             return (
               <div key={cadence} className="rounded-2xl border border-black/10 bg-white p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -1033,34 +1051,54 @@ function ResponsibilitiesSection({ token }: { token: string }) {
                   <span className={`${vulfMono.className} text-xs font-medium ${cfg.labelColor}`}>
                     {cfg.label.toUpperCase()}
                   </span>
-                  <span className={`${vulfMono.className} text-xs text-neutral-400 ml-auto`}>
-                    {cadenceItems.length}
-                  </span>
+                  <div className={`${vulfMono.className} text-xs text-neutral-400 ml-auto flex items-center gap-2`}>
+                    {totalHours > 0 && (
+                      <span className="text-neutral-500">{fmtHours(totalHours)} total</span>
+                    )}
+                    <span>{cadenceItems.length}</span>
+                  </div>
                 </div>
                 <ul className="space-y-1.5 mb-3 min-h-[2rem]">
                   {cadenceItems.map((item) => (
                     <li key={item.id} className="group flex items-start gap-2">
                       {editingId === item.id ? (
-                        <input
-                          className="flex-1 rounded-lg border border-black/20 bg-white px-2 py-1 text-sm outline-none focus:border-black/40"
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveEdit(item.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          onBlur={() => saveEdit(item.id)}
-                          autoFocus
-                        />
+                        <div className="flex-1 flex gap-1.5">
+                          <input
+                            className="flex-1 rounded-lg border border-black/20 bg-white px-2 py-1 text-sm outline-none focus:border-black/40"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEdit(item.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            autoFocus
+                          />
+                          <input
+                            className="w-14 rounded-lg border border-black/20 bg-white px-2 py-1 text-sm outline-none focus:border-black/40 text-center"
+                            placeholder="hrs"
+                            value={editHours}
+                            onChange={(e) => setEditHours(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEdit(item.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            onBlur={() => saveEdit(item.id)}
+                          />
+                        </div>
                       ) : (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0 mt-[7px]" />
                           <span
                             className="flex-1 text-sm text-neutral-700 leading-snug cursor-pointer hover:text-black"
-                            onClick={() => { setEditingId(item.id); setEditText(item.text); }}
+                            onClick={() => { setEditingId(item.id); setEditText(item.text); setEditHours(item.hours != null ? String(item.hours) : ""); }}
                           >
                             {item.text}
                           </span>
+                          {item.hours != null && (
+                            <span className={`${vulfMono.className} text-xs text-neutral-400 shrink-0 mt-0.5`}>
+                              {fmtHours(item.hours)}
+                            </span>
+                          )}
                           <button
                             onClick={() => deleteItem(item.id)}
                             className="opacity-0 group-hover:opacity-100 text-neutral-300 hover:text-red-400 transition-opacity shrink-0 mt-0.5"
@@ -1076,21 +1114,33 @@ function ResponsibilitiesSection({ token }: { token: string }) {
                   )}
                 </ul>
                 {adding === cadence ? (
-                  <input
-                    className="w-full rounded-lg border border-black/20 bg-neutral-50 px-2.5 py-1.5 text-sm outline-none focus:border-black/40"
-                    placeholder="Add responsibility…"
-                    value={newText}
-                    onChange={(e) => setNewText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addItem(cadence);
-                      if (e.key === "Escape") { setAdding(null); setNewText(""); }
-                    }}
-                    onBlur={() => addItem(cadence)}
-                    autoFocus
-                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      className="flex-1 rounded-lg border border-black/20 bg-neutral-50 px-2.5 py-1.5 text-sm outline-none focus:border-black/40"
+                      placeholder="Responsibility…"
+                      value={newText}
+                      onChange={(e) => setNewText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addItem(cadence);
+                        if (e.key === "Escape") { setAdding(null); setNewText(""); setNewHours(""); }
+                      }}
+                      autoFocus
+                    />
+                    <input
+                      className="w-14 rounded-lg border border-black/20 bg-neutral-50 px-2 py-1.5 text-sm outline-none focus:border-black/40 text-center"
+                      placeholder="hrs"
+                      value={newHours}
+                      onChange={(e) => setNewHours(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addItem(cadence);
+                        if (e.key === "Escape") { setAdding(null); setNewText(""); setNewHours(""); }
+                      }}
+                      onBlur={() => addItem(cadence)}
+                    />
+                  </div>
                 ) : (
                   <button
-                    onClick={() => { setAdding(cadence); setNewText(""); }}
+                    onClick={() => { setAdding(cadence); setNewText(""); setNewHours(""); }}
                     className={`${vulfMono.className} flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 transition-colors`}
                   >
                     <Plus className="w-3 h-3" />
@@ -1125,6 +1175,7 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -1249,7 +1300,34 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
         </a>
         <div className="flex-1">
           <p className="eyebrow text-brand">Admin</p>
-          <h1 className="h2 font-bold">Projects</h1>
+          <div className="flex items-baseline gap-2">
+            <h1 className="h2 font-bold">Projects</h1>
+            <button
+              onClick={() => setShowInfo((v) => !v)}
+              className={`rounded-full p-0.5 transition-colors ${showInfo ? "text-[#519A70]" : "text-neutral-300 hover:text-neutral-500"}`}
+              aria-label="How to use this board"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
+          {showInfo && (
+            <div className="mt-3 rounded-2xl border border-[#519A70]/30 bg-[#519A70]/5 px-4 py-3 max-w-lg">
+              <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-[#519A70] mb-2`}>How this board works</p>
+              <ul className="space-y-1.5">
+                {[
+                  "Keep exactly 3 tasks in Doing at all times.",
+                  "Each Doing task should be completable within a single week.",
+                  "If a task is too large for one week, break it into week-sized chunks before starting it.",
+                  "We review the board together each week. Move done items and pull in what's next.",
+                ].map((rule) => (
+                  <li key={rule} className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#519A70] shrink-0 mt-[5px]" />
+                    <span className={`${vulfMono.className} text-xs text-neutral-600 leading-snug`}>{rule}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <button
           onClick={onSwitchUser}
