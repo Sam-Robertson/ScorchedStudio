@@ -20,6 +20,7 @@ const patchSchema = z.object({
   start_date: z.string().nullable().optional(),
   due_date: z.string().nullable().optional(),
   sprint_dates: z.string().nullable().optional(),
+  manually_archived: z.boolean().nullable().optional(),
 });
 
 export async function PATCH(

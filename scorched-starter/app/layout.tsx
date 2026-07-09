@@ -49,15 +49,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fbq('track', 'PageView');
         `}
       </Script>
-      <noscript>
+      <body className={`${vulfSans.variable} ${vulfMono.variable}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img height="1" width="1" style={{display:'none'}}
+        <noscript><img height="1" width="1" style={{display:'none'}}
           src="https://www.facebook.com/tr?id=1504787707993380&ev=PageView&noscript=1"
           alt=""
-        />
-      </noscript>
-
-      <body className={`${vulfSans.variable} ${vulfMono.variable}`}>
+        /></noscript>
         <Header />
         <main className="pb-24 md:pb-0">{children}</main>
         <MobileStickyCTA />

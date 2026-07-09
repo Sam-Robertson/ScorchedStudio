@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import {
   Archive,
+  ArchiveX,
   ChevronDown,
   ChevronLeft,
   Info,
@@ -84,6 +85,7 @@ function isOverdue(due: string | null) {
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
 function isArchived(task: TaskRecord) {
+  if (task.manually_archived) return true;
   if (task.board_column !== "Done") return false;
   return Date.now() - new Date(task.updated_at).getTime() > TWO_WEEKS_MS;
 }
@@ -433,6 +435,18 @@ function DetailPanel({
     }
   }
 
+  async function toggleArchive() {
+    const res = await fetch(`/api/admin/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ manually_archived: !task.manually_archived }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      onTaskUpdate(updated);
+    }
+  }
+
   const colStyle = COL_STYLE[task.board_column];
   const noteEntries = splitNotes(task.notes);
 
@@ -570,6 +584,16 @@ function DetailPanel({
             Edit
           </button>
           <button
+            onClick={toggleArchive}
+            className={`flex items-center gap-2 rounded-xl border py-2.5 px-4 text-sm transition-colors ${
+              task.manually_archived
+                ? "border-[#884A20] text-[#884A20] hover:bg-[#884A20]/10"
+                : "border-black/20 text-neutral-500 hover:bg-neutral-50"
+            }`}
+          >
+            {task.manually_archived ? <ArchiveX className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+          </button>
+          <button
             onClick={onDelete}
             className="flex items-center gap-2 rounded-xl border border-red-200 text-red-600 py-2.5 px-4 text-sm hover:bg-red-50 transition-colors"
           >
@@ -675,7 +699,17 @@ function KanbanView({
   return (
     <div className="grid grid-cols-3 gap-4">
       {COLUMNS.map((col) => {
-        const colTasks = tasks.filter((t) => t.board_column === col);
+        const priOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+        const colTasks = tasks
+          .filter((t) => t.board_column === col)
+          .sort((a, b) => {
+            if (col === "Done") {
+              const aArch = isArchived(a) ? 1 : 0;
+              const bArch = isArchived(b) ? 1 : 0;
+              if (aArch !== bArch) return aArch - bArch;
+            }
+            return (priOrder[a.priority ?? ""] ?? 99) - (priOrder[b.priority ?? ""] ?? 99);
+          });
         const style = COL_STYLE[col];
         const isOver = dragOverCol === col;
 
@@ -751,7 +785,7 @@ function ListView({
   tasks: TaskRecord[];
   onRowClick: (task: TaskRecord) => void;
 }) {
-  const [sortKey, setSortKey] = useState<keyof TaskRecord>("board_column");
+  const [sortKey, setSortKey] = useState<keyof TaskRecord>("priority");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
 
   function toggleSort(key: keyof TaskRecord) {
@@ -766,6 +800,12 @@ function ListView({
   const priOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
   const sorted = [...tasks].sort((a, b) => {
+    // Done (non-archived) always floats to the top
+    const aDone = a.board_column === "Done" && !isArchived(a) ? 0 : 1;
+    const bDone = b.board_column === "Done" && !isArchived(b) ? 0 : 1;
+    if (aDone !== bDone) return aDone - bDone;
+
+    // Secondary: user-selected column sort
     let av: unknown = a[sortKey];
     let bv: unknown = b[sortKey];
     if (sortKey === "board_column") {

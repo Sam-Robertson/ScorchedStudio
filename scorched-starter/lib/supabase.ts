@@ -65,6 +65,7 @@ export type TaskRecord = {
   start_date: string | null;
   due_date: string | null;
   sprint_dates: string | null;
+  manually_archived: boolean | null;
   created_at: string;
   updated_at: string;
 };
