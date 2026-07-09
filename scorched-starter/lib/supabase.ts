@@ -92,6 +92,15 @@ export type ProductRecord = {
   active: boolean;
 };
 
+export type ResponsibilityRecord = {
+  id: string;
+  text: string;
+  cadence: "daily" | "weekly" | "monthly";
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PrintJobRecord = {
   id: string;
   product_id: string | null;

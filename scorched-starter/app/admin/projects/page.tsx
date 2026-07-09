@@ -937,6 +937,175 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
+// ── Responsibilities ──────────────────────────────────────────────────────────
+
+type Cadence = "daily" | "weekly" | "monthly";
+
+type ResponsibilityItem = {
+  id: string;
+  text: string;
+  cadence: Cadence;
+  position: number;
+  created_at: string;
+};
+
+const CADENCE_CONFIG: Record<Cadence, { label: string; dot: string; labelColor: string }> = {
+  daily:   { label: "Daily",   dot: "bg-violet-400", labelColor: "text-violet-700" },
+  weekly:  { label: "Weekly",  dot: "bg-sky-400",    labelColor: "text-sky-700"    },
+  monthly: { label: "Monthly", dot: "bg-amber-400",  labelColor: "text-amber-700"  },
+};
+
+function ResponsibilitiesSection({ token }: { token: string }) {
+  const [items, setItems] = useState<ResponsibilityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<Cadence | null>(null);
+  const [newText, setNewText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    fetch("/api/admin/responsibilities", { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { setItems(data); setLoading(false); })
+      .catch(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function addItem(cadence: Cadence) {
+    const text = newText.trim();
+    setAdding(null);
+    setNewText("");
+    if (!text) return;
+    const res = await fetch("/api/admin/responsibilities", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, cadence }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setItems((prev) => [...prev, created]);
+    }
+  }
+
+  async function saveEdit(id: string) {
+    const text = editText.trim();
+    setEditingId(null);
+    if (!text) return;
+    const res = await fetch(`/api/admin/responsibilities/${id}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+    }
+  }
+
+  async function deleteItem(id: string) {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    await fetch(`/api/admin/responsibilities/${id}`, { method: "DELETE", headers });
+  }
+
+  const cadences: Cadence[] = ["daily", "weekly", "monthly"];
+
+  return (
+    <div className="mt-12 border-t border-black/10 pt-8">
+      <div className="mb-5">
+        <p className={`${vulfMono.className} text-xs text-neutral-400 uppercase tracking-wide mb-0.5`}>Pearson</p>
+        <h2 className="text-lg font-bold">Ongoing Responsibilities</h2>
+      </div>
+      {loading ? (
+        <div className="text-sm text-neutral-400">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {cadences.map((cadence) => {
+            const cfg = CADENCE_CONFIG[cadence];
+            const cadenceItems = items
+              .filter((i) => i.cadence === cadence)
+              .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at));
+            return (
+              <div key={cadence} className="rounded-2xl border border-black/10 bg-white p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+                  <span className={`${vulfMono.className} text-xs font-medium ${cfg.labelColor}`}>
+                    {cfg.label.toUpperCase()}
+                  </span>
+                  <span className={`${vulfMono.className} text-xs text-neutral-400 ml-auto`}>
+                    {cadenceItems.length}
+                  </span>
+                </div>
+                <ul className="space-y-1.5 mb-3 min-h-[2rem]">
+                  {cadenceItems.map((item) => (
+                    <li key={item.id} className="group flex items-start gap-2">
+                      {editingId === item.id ? (
+                        <input
+                          className="flex-1 rounded-lg border border-black/20 bg-white px-2 py-1 text-sm outline-none focus:border-black/40"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEdit(item.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          onBlur={() => saveEdit(item.id)}
+                          autoFocus
+                        />
+                      ) : (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0 mt-[7px]" />
+                          <span
+                            className="flex-1 text-sm text-neutral-700 leading-snug cursor-pointer hover:text-black"
+                            onClick={() => { setEditingId(item.id); setEditText(item.text); }}
+                          >
+                            {item.text}
+                          </span>
+                          <button
+                            onClick={() => deleteItem(item.id)}
+                            className="opacity-0 group-hover:opacity-100 text-neutral-300 hover:text-red-400 transition-opacity shrink-0 mt-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                  {cadenceItems.length === 0 && adding !== cadence && (
+                    <li className={`${vulfMono.className} text-xs text-neutral-300 py-1`}>Nothing yet.</li>
+                  )}
+                </ul>
+                {adding === cadence ? (
+                  <input
+                    className="w-full rounded-lg border border-black/20 bg-neutral-50 px-2.5 py-1.5 text-sm outline-none focus:border-black/40"
+                    placeholder="Add responsibility…"
+                    value={newText}
+                    onChange={(e) => setNewText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addItem(cadence);
+                      if (e.key === "Escape") { setAdding(null); setNewText(""); }
+                    }}
+                    onBlur={() => addItem(cadence)}
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setAdding(cadence); setNewText(""); }}
+                    className={`${vulfMono.className} flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 transition-colors`}
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 type Filters = {
@@ -1263,6 +1432,9 @@ function ProjectsDashboard({ token, currentUser, onSwitchUser }: { token: string
       ) : (
         <ListView tasks={visibleTasks} onRowClick={setDetail} />
       )}
+
+      {/* Ongoing Responsibilities */}
+      <ResponsibilitiesSection token={token} />
 
       {/* Modals */}
       {modal && (
