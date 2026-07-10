@@ -93,6 +93,21 @@ export type ProductRecord = {
   active: boolean;
 };
 
+export type EventRecord = {
+  id: string;
+  title: string;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  group_size: number | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  notes: string | null;
+  status: "confirmed" | "tentative" | "cancelled";
+  created_at: string;
+  updated_at: string;
+};
+
 export type ResponsibilityRecord = {
   id: string;
   text: string;

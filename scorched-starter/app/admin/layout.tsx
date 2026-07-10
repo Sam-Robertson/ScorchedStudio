@@ -7,6 +7,7 @@ import { vulfMono } from "@/app/fonts";
 import clsx from "clsx";
 import {
   BarChart2,
+  CalendarDays,
   ClipboardList,
   Clock,
   FileText,
@@ -28,6 +29,7 @@ const IN_STUDIO_NAV = [
 const ADMIN_NAV = [
   { href: "/admin/hours",     label: "Hours",      icon: Clock },
   { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
+  { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
 
