@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
@@ -854,8 +854,7 @@ function PaymentForm({
   const [submitting, setSubmitting] = useState(false);
   const [cardError, setCardError] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function confirmPayment() {
     if (!stripe || !elements) return;
     setSubmitting(true);
     setCardError("");
@@ -892,9 +891,18 @@ function PaymentForm({
     onSuccess(data.booking_id);
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await confirmPayment();
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
+      <ExpressCheckoutElement
+        options={{ paymentMethods: { link: "never" } }}
+        onConfirm={confirmPayment}
+      />
+      <PaymentElement options={{ paymentMethodOrder: ["card", "link"], wallets: { link: "never" } }} />
       {cardError && <p className={`${vulfMono.className} text-xs text-red-500`}>{cardError}</p>}
       <button
         type="submit"
