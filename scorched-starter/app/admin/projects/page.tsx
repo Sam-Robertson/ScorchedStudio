@@ -317,11 +317,19 @@ function TaskModal({
             <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
               ASSIGNEE
             </label>
-            <input
+            <select
               className={inputCls}
               value={form.assignee}
               onChange={(e) => set("assignee", e.target.value)}
-            />
+            >
+              <option value="">Unassigned</option>
+              {PROJECT_USERS.map((u) => (
+                <option key={u.name} value={u.name}>{u.name}</option>
+              ))}
+              {form.assignee && !PROJECT_USERS.some((u) => u.name === form.assignee) && (
+                <option value={form.assignee}>{form.assignee}</option>
+              )}
+            </select>
           </div>
 
           <div>
