@@ -28,10 +28,6 @@ function fmtTime(t: string | null) {
   return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, "0")}${ampm}`;
 }
 
-function monthKey(year: number, month: number) {
-  return `${year}-${String(month + 1).padStart(2, "0")}`;
-}
-
 function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -125,7 +121,7 @@ function EventModal({
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
           <h2 className={`${vulfMono.className} font-bold text-sm`}>
             {isEdit ? "Edit Event" : "New Group Event"}
@@ -185,7 +181,7 @@ function EventModal({
 
           <div>
             <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>NOTES</label>
-            <textarea className={`${inputCls} min-h-[80px] resize-y`} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+            <textarea className={`${inputCls} min-h-[220px] resize-y`} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -249,13 +245,13 @@ export default function AdminEventsPage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetch(`/api/admin/events?month=${monthKey(year, month)}`, {
+    fetch(`/api/admin/events`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => { setEvents(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [token, year, month]);
+  }, [token]);
 
   function prevMonth() {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -304,6 +300,11 @@ export default function AdminEventsPage() {
     .filter((e) => e.date >= todayStr && e.status !== "cancelled")
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5);
+
+  // All events, chronological
+  const allEventsSorted = [...events].sort((a, b) => {
+    return a.date.localeCompare(b.date) || (a.start_time ?? "").localeCompare(b.start_time ?? "");
+  });
 
   return (
     <section className="container-px py-10 max-w-5xl mx-auto">
@@ -444,6 +445,48 @@ export default function AdminEventsPage() {
             </ul>
           </div>
         </div>
+      </div>
+
+      {/* All events, chronological */}
+      <div className="rounded-2xl border border-black/10 bg-white mt-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-black/8">
+          <p className={`${vulfMono.className} text-[10px] uppercase tracking-wide text-neutral-400`}>All Events</p>
+        </div>
+        {loading ? (
+          <div className="py-16 text-center text-sm text-neutral-400">Loading…</div>
+        ) : allEventsSorted.length === 0 ? (
+          <div className="py-16 text-center text-sm text-neutral-400">No events yet.</div>
+        ) : (
+          <ul className="divide-y divide-black/5">
+            {allEventsSorted.map((event) => {
+              const d = new Date(event.date + "T12:00:00");
+              const s = STATUS_STYLE[event.status];
+              return (
+                <li key={event.id}>
+                  <button
+                    onClick={() => setModal({ mode: "edit", event })}
+                    className="w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+                    <span className={`${vulfMono.className} text-xs text-neutral-500 w-24 shrink-0`}>
+                      {d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <span className="text-sm font-medium truncate flex-1 min-w-0">{event.title}</span>
+                    {fmtTime(event.start_time) && (
+                      <span className={`${vulfMono.className} text-xs text-neutral-400 shrink-0`}>{fmtTime(event.start_time)}</span>
+                    )}
+                    {event.group_size != null && (
+                      <span className={`${vulfMono.className} text-xs text-neutral-400 shrink-0`}>{event.group_size} ppl</span>
+                    )}
+                    <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full shrink-0 ${s.bg} ${s.text}`}>
+                      {s.label}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {modal && token && (
