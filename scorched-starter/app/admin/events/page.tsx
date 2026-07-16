@@ -118,93 +118,95 @@ function EventModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/40 overflow-y-auto z-50"
       onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
-          <h2 className={`${vulfMono.className} font-bold text-sm`}>
-            {isEdit ? "Edit Event" : "New Group Event"}
-          </h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>GROUP / EVENT NAME *</label>
-            <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} required autoFocus />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>DATE *</label>
-              <input type="date" className={inputCls} value={form.date} onChange={(e) => set("date", e.target.value)} required />
-            </div>
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>GROUP SIZE</label>
-              <input type="number" min={1} className={inputCls} placeholder="e.g. 12" value={form.group_size} onChange={(e) => set("group_size", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>START TIME</label>
-              <input type="time" className={inputCls} value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
-            </div>
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>END TIME</label>
-              <input type="time" className={inputCls} value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>CONTACT NAME</label>
-              <input className={inputCls} value={form.contact_name} onChange={(e) => set("contact_name", e.target.value)} />
-            </div>
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>CONTACT EMAIL</label>
-              <input type="email" className={inputCls} value={form.contact_email} onChange={(e) => set("contact_email", e.target.value)} />
-            </div>
-          </div>
-
-          <div>
-            <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>STATUS</label>
-            <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
-              <option value="confirmed">Confirmed</option>
-              <option value="tentative">Tentative</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>NOTES</label>
-            <textarea className={`${inputCls} min-h-[220px] resize-y`} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className={`${vulfMono.className} flex-1 rounded-xl bg-[#519A70] py-2.5 text-xs tracking-wide text-white hover:opacity-90 disabled:opacity-60`}
-            >
-              {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Event"}
+      <div className="min-h-full flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
+            <h2 className={`${vulfMono.className} font-bold text-sm`}>
+              {isEdit ? "Edit Event" : "New Group Event"}
+            </h2>
+            <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+              <X className="w-5 h-5" />
             </button>
-            {isEdit && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="rounded-xl border border-red-200 text-red-500 px-4 py-2.5 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div>
+              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>GROUP / EVENT NAME *</label>
+              <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} required autoFocus />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>DATE *</label>
+                <input type="date" className={inputCls} value={form.date} onChange={(e) => set("date", e.target.value)} required />
+              </div>
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>GROUP SIZE</label>
+                <input type="number" min={1} className={inputCls} placeholder="e.g. 12" value={form.group_size} onChange={(e) => set("group_size", e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>START TIME</label>
+                <input type="time" className={inputCls} value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
+              </div>
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>END TIME</label>
+                <input type="time" className={inputCls} value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>CONTACT NAME</label>
+                <input className={inputCls} value={form.contact_name} onChange={(e) => set("contact_name", e.target.value)} />
+              </div>
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>CONTACT EMAIL</label>
+                <input type="email" className={inputCls} value={form.contact_email} onChange={(e) => set("contact_email", e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>STATUS</label>
+              <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                <option value="confirmed">Confirmed</option>
+                <option value="tentative">Tentative</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div>
+              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>NOTES</label>
+              <textarea className={`${inputCls} min-h-[220px] resize-y`} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className={`${vulfMono.className} flex-1 rounded-xl bg-[#519A70] py-2.5 text-xs tracking-wide text-white hover:opacity-90 disabled:opacity-60`}
+              >
+                {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Event"}
+              </button>
+              {isEdit && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="rounded-xl border border-red-200 text-red-500 px-4 py-2.5 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
