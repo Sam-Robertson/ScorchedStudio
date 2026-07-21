@@ -390,19 +390,50 @@ function MediaUpload({
     async (file: File) => {
       setUploading(true);
       setUploadError("");
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`/api/admin/social-posts/${post.id}/media`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      setUploading(false);
-      if (!res.ok) {
-        setUploadError("Upload failed. Check file size and try again.");
-        return;
+      try {
+        // 1. Ask the server for a signed Supabase Storage upload URL.
+        const signRes = await fetch(`/api/admin/social-posts/${post.id}/media/sign`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
+        });
+        if (!signRes.ok) {
+          const body = await signRes.json().catch(() => null);
+          setUploadError(body?.error ?? `Upload failed (${signRes.status}).`);
+          return;
+        }
+        const { signedUrl, path, mediaType } = await signRes.json();
+
+        // 2. Upload the file straight to storage, bypassing this server entirely
+        //    (so large videos aren't subject to the app server's body size limit).
+        const putFd = new FormData();
+        putFd.append("cacheControl", "3600");
+        putFd.append("", file);
+        const putRes = await fetch(signedUrl, {
+          method: "PUT",
+          headers: { "x-upsert": "true" },
+          body: putFd,
+        });
+        if (!putRes.ok) {
+          setUploadError(`Upload to storage failed (${putRes.status}).`);
+          return;
+        }
+
+        // 3. Point the post at the newly uploaded file.
+        const finalizeRes = await fetch(`/api/admin/social-posts/${post.id}/media`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ path, mediaType }),
+        });
+        if (!finalizeRes.ok) {
+          const body = await finalizeRes.json().catch(() => null);
+          setUploadError(body?.error ?? `Upload failed (${finalizeRes.status}).`);
+          return;
+        }
+        onUpdate(await finalizeRes.json());
+      } finally {
+        setUploading(false);
       }
-      onUpdate(await res.json());
     },
     [post.id, token, onUpdate]
   );

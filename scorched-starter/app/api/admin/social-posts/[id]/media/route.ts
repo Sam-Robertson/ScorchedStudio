@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 
-// Allow larger uploads for video files
-export const maxDuration = 60;
-
 function isAuthed(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return false;
   return auth.slice(7) === process.env.ADMIN_PASSWORD;
 }
 
+// Finalizes an upload the browser already sent directly to Supabase Storage
+// via a signed URL from .../media/sign — this only touches a JSON pointer,
+// never the file bytes, so it isn't subject to the server's body size limit.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,16 +17,10 @@ export async function POST(
   if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  if (!file) return Response.json({ error: "No file provided" }, { status: 400 });
-
-  const mediaType = file.type.startsWith("video/") ? "video" : "image";
-  const ext = file.name.split(".").pop() ?? "bin";
-  const path = `${id}/${Date.now()}.${ext}`;
-
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
+  const { path, mediaType } = await req.json();
+  if (!path || (mediaType !== "image" && mediaType !== "video")) {
+    return Response.json({ error: "Missing path or mediaType" }, { status: 400 });
+  }
 
   // Remove previous media if any
   const { data: existing } = await getSupabase()
@@ -34,18 +28,8 @@ export async function POST(
     .select("media_path")
     .eq("id", id)
     .single();
-  if (existing?.media_path) {
+  if (existing?.media_path && existing.media_path !== path) {
     await getSupabase().storage.from("social-media").remove([existing.media_path]);
-  }
-
-  const { error: uploadError } = await getSupabase()
-    .storage
-    .from("social-media")
-    .upload(path, buffer, { contentType: file.type, upsert: true });
-
-  if (uploadError) {
-    console.error("SOCIAL_MEDIA_UPLOAD_ERROR", uploadError);
-    return Response.json({ error: "Upload failed" }, { status: 500 });
   }
 
   const { data: { publicUrl } } = getSupabase()
