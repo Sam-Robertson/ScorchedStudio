@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import clsx from "clsx";
 import {
   CalendarDays,
@@ -1424,7 +1425,7 @@ export default function AdminSocialPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
     const user = sessionStorage.getItem("socialUser");

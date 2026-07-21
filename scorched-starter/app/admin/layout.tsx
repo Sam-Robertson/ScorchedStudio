@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
+import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/adminAuth";
 import clsx from "clsx";
 import {
   BarChart2,
@@ -218,11 +219,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [authed, setAuthed] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (saved) setAuthed(true);
     setInitialized(true);
   }, []);
@@ -242,13 +244,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
     const { token } = await res.json();
-    sessionStorage.setItem("adminToken", token);
+    setAdminToken(token, remember);
     setAuthed(true);
     setAuthLoading(false);
   }
 
   function handleLogout() {
-    sessionStorage.removeItem("adminToken");
+    clearAdminToken();
     setAuthed(false);
     setPassword("");
   }
@@ -272,6 +274,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             />
             {authError && <p className="text-sm text-red-600 mt-1">{authError}</p>}
           </div>
+          <label className="flex items-center gap-2 text-sm text-neutral-600 select-none">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-black/20"
+            />
+            Remember this device
+          </label>
           <button
             type="submit"
             disabled={authLoading}

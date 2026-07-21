@@ -3,6 +3,7 @@
 // app/admin/events/page.tsx
 import { useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil } from "lucide-react";
 import type { EventRecord } from "@/lib/supabase";
 
@@ -241,7 +242,7 @@ export default function AdminEventsPage() {
   const [token, setToken]     = useState<string | null>(null);
 
   useEffect(() => {
-    setToken(sessionStorage.getItem("adminToken"));
+    setToken(getAdminToken());
   }, []);
 
   useEffect(() => {

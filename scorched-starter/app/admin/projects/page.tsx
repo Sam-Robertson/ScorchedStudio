@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import {
   Archive,
   ArchiveX,
@@ -1583,7 +1584,7 @@ export default function AdminProjectsPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) {
       router.replace("/admin");
       return;

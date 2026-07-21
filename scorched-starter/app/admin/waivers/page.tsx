@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import type { WaiverRecord, WaiverMinor } from "@/lib/supabase";
 
 /* ------------------------------------------------------------------ */
@@ -43,7 +44,7 @@ export default function AdminWaiversPage() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
   }, [router]);
@@ -145,7 +146,7 @@ function WaiversDashboard({ token }: { token: string }) {
             ← Admin
           </a>
           <button
-            onClick={() => { sessionStorage.removeItem("adminToken"); window.location.href = "/admin"; }}
+            onClick={() => { clearAdminToken(); window.location.href = "/admin"; }}
             className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}
           >
             Log out

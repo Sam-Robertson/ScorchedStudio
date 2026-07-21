@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import { CheckCheck, Download, Inbox, Printer, RotateCcw, Settings2 } from "lucide-react";
 import type { PrintJobRecord } from "@/lib/supabase";
 
@@ -130,7 +131,7 @@ export default function PrintQueuePage() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
   }, [router]);

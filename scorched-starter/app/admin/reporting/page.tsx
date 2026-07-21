@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import type { BookingRecord } from "@/lib/supabase";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -705,7 +706,7 @@ export default function ReportingPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
   }, [router]);

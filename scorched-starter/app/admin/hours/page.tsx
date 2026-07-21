@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import { Check, Trash2 } from "lucide-react";
 import type { BusinessHoursRecord, BlockedDateRecord } from "@/lib/supabase";
 
@@ -16,7 +17,7 @@ export default function AdminHoursPage() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("adminToken");
+    const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
   }, [router]);
