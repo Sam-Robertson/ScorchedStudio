@@ -290,7 +290,7 @@ function ReportForm({
 
       <div>
         <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
-          What's going on?
+          What&apos;s going on?
         </label>
         <textarea
           value={notes}
