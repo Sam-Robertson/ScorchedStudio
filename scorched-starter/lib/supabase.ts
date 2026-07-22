@@ -127,6 +127,17 @@ export type PrintJobRecord = {
   printed_at: string | null;
 };
 
+export type EquipmentReportRecord = {
+  id: string;
+  category: "Low Inventory" | "Broken" | "Other";
+  priority: "High" | "Medium" | "Low" | null;
+  notes: string;
+  status: "Open" | "Resolved";
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+};
+
 export type SocialPostRecord = {
   id: string;
   title: string;

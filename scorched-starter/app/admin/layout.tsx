@@ -7,6 +7,7 @@ import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/adminAuth";
 import clsx from "clsx";
 import {
+  AlertTriangle,
   BarChart2,
   CalendarDays,
   ClipboardList,
@@ -25,6 +26,7 @@ const IN_STUDIO_NAV = [
   { href: "/admin/bookings",    label: "Bookings",     icon: ClipboardList },
   { href: "/admin/waivers",     label: "Waivers",      icon: FileText },
   { href: "/admin/print-queue", label: "Print Queue",  icon: Printer },
+  { href: "/admin/requests",    label: "Requests",     icon: AlertTriangle },
 ];
 
 const ADMIN_NAV = [
