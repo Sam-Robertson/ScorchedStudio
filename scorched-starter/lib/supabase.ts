@@ -138,6 +138,34 @@ export type EquipmentReportRecord = {
   resolved_at: string | null;
 };
 
+export type StaffRecord = {
+  id: string;
+  square_team_member_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ScheduleShiftRecord = {
+  id: string;
+  square_shift_id: string;
+  square_location_id: string;
+  square_team_member_id: string;
+  job_title: string | null;
+  start_at: string;
+  end_at: string | null;
+  notes: string | null;
+  status: "draft" | "published";
+  is_deleted: boolean;
+  raw_payload: unknown;
+  synced_at: string;
+  created_at: string;
+};
+
+export type ScheduleShiftWithStaff = ScheduleShiftRecord & {
+  staff_name: string | null;
+};
+
 export type SocialPostRecord = {
   id: string;
   title: string;

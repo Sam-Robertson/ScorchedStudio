@@ -9,6 +9,7 @@ import clsx from "clsx";
 import {
   AlertTriangle,
   BarChart2,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
   Clock,
@@ -33,6 +34,7 @@ const ADMIN_NAV = [
   { href: "/admin/hours",     label: "Hours",      icon: Clock },
   { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
+  { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
 
