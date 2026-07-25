@@ -21,7 +21,7 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import type { TaskRecord } from "@/lib/supabase";
+import type { TaskRecord, CommentRecord } from "@/lib/supabase";
 
 // ── Types & constants ─────────────────────────────────────────────────────────
 
@@ -72,6 +72,16 @@ const inputCls =
 function fmtDate(d: string | null) {
   if (!d) return null;
   return new Date(d + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// comment.created_at is a real timestamptz, not a bare date, so it must not
+// go through fmtDate's noon-hack (that's only valid for bare YYYY-MM-DD).
+function fmtCommentDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -386,14 +396,6 @@ function splitNotes(raw: string | null): Array<{ header: string | null; text: st
   });
 }
 
-function formatNoteEntry(author: string, text: string): string {
-  const date = new Date().toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-  const header = author.trim() ? `${author.trim()} · ${date}` : date;
-  return `${header}\n\n${text.trim()}`;
-}
-
 // ── DetailPanel ───────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -417,22 +419,30 @@ function DetailPanel({
   const [newNote, setNewNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [commentAs, setCommentAs] = useState(NOTE_AUTHORS[0]);
+  const [comments, setComments] = useState<CommentRecord[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/admin/comments?board=operations&entityId=${task.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setComments)
+      .catch(() => setComments([]));
+  }, [task.id, token]);
 
   async function addNote() {
     const trimmed = newNote.trim();
     if (!trimmed) return;
-    const entry = formatNoteEntry(commentAs, trimmed);
-    const appended = task.notes ? `${task.notes}${NOTE_SEP}${entry}` : entry;
     setNoteSaving(true);
-    const res = await fetch(`/api/admin/tasks/${task.id}`, {
-      method: "PATCH",
+    const res = await fetch("/api/admin/comments", {
+      method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ notes: appended }),
+      body: JSON.stringify({ board: "operations", entity_id: task.id, author: commentAs, body: trimmed }),
     });
     setNoteSaving(false);
     if (res.ok) {
-      const updated = await res.json();
-      onTaskUpdate(updated);
+      const comment = await res.json();
+      setComments((prev) => [...prev, comment]);
       setNewNote("");
     }
   }
@@ -530,12 +540,12 @@ function DetailPanel({
           <div className="px-6 py-4 space-y-4">
             <p className={`${vulfMono.className} text-[10px] text-neutral-400`}>NOTES</p>
 
-            {noteEntries.length === 0 ? (
+            {noteEntries.length === 0 && comments.length === 0 ? (
               <p className="text-sm text-neutral-400 italic">No notes yet.</p>
             ) : (
               <div className="space-y-3">
                 {noteEntries.map((entry, i) => (
-                  <div key={i} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
+                  <div key={`legacy-${i}`} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
                     {entry.header && (
                       <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
                         {entry.header}
@@ -543,6 +553,16 @@ function DetailPanel({
                     )}
                     <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
                       {entry.text}
+                    </p>
+                  </div>
+                ))}
+                {comments.map((comment) => (
+                  <div key={comment.id} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
+                    <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
+                      {comment.author} · {fmtCommentDate(comment.created_at)}
+                    </p>
+                    <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                      {comment.body}
                     </p>
                   </div>
                 ))}

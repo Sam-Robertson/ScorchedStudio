@@ -166,6 +166,15 @@ export type ScheduleShiftWithStaff = ScheduleShiftRecord & {
   staff_name: string | null;
 };
 
+export type CommentRecord = {
+  id: string;
+  board: "operations" | "social";
+  entity_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+};
+
 export type SocialPostRecord = {
   id: string;
   title: string;
