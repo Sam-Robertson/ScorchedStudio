@@ -28,7 +28,7 @@ const moreLinks = [
   },
   { href: "/scorched-vip", label: "Scorched VIP" },
   { href: "/faq", label: "FAQ" },
-  { href: "/contact", label: "Contact" },
+  { href: "/contact", label: "Contact Us" },
   { href: "/blog", label: "Blog" },
 ];
 
@@ -42,7 +42,7 @@ const MOBILE_NAV = [
   { href: "/blog", label: "Blog" },
   { href: "/scorched-vip", label: "Scorched VIP" },
   { href: "/waiver", label: "Waiver" },
-  { href: "/contact", label: "Contact" },
+  { href: "/contact", label: "Contact Us" },
   { href: "/faq", label: "FAQ" },
   {
     href: "https://app.squareup.com/gift/ML3N1RN3EGATW/order",
