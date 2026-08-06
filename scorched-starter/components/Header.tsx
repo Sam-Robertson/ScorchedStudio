@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { ChevronDown } from "lucide-react";
 
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
@@ -14,6 +15,7 @@ import { vulfMono } from "@/app/fonts";
 const coreLinks = [
   { href: "/", label: "Home" },
   { href: "/hours", label: "Hours & Pricing" },
+  { href: "/memberships", label: "Memberships" },
   { href: "/group-events", label: "Group Events" },
 ];
 
@@ -34,6 +36,7 @@ const moreLinks = [
 const MOBILE_NAV = [
   { href: "/", label: "Home" },
   { href: "/hours", label: "Hours & Pricing" },
+  { href: "/memberships", label: "Memberships" },
   { href: "/group-events", label: "Group Events" },
   { href: "/print-design", label: "Print Design" },
   { href: "/blog", label: "Blog" },
@@ -125,11 +128,14 @@ function DesktopHeader() {
               <button
                 ref={triggerRef}
                 onClick={() => setOpen((s) => !s)}
-                className="text-[15px] leading-[1.1] transition-opacity hover:opacity-80"
+                className="flex items-center gap-1 text-[15px] leading-[1.1] transition-opacity hover:opacity-80"
                 aria-haspopup="menu"
                 aria-expanded={open}
               >
                 More
+                <ChevronDown
+                  className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")}
+                />
               </button>
 
               {open && (

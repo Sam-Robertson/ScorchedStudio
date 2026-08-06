@@ -2,6 +2,11 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { createBookingFromIntent } from "@/lib/create-booking-from-intent";
+import {
+  handleCheckoutSessionCompleted,
+  handleInvoicePaid,
+  handleSubscriptionSync,
+} from "@/lib/membership-webhooks";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -29,6 +34,23 @@ export async function POST(req: NextRequest) {
       console.error("WEBHOOK_CREATE_BOOKING_ERROR", result.error);
     }
     return Response.json({ ok: true });
+  }
+
+  try {
+    if (event.type === "checkout.session.completed") {
+      await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+    } else if (
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
+    ) {
+      const subscription = event.data.object as Stripe.Subscription;
+      await handleSubscriptionSync(subscription.id);
+    } else if (event.type === "invoice.paid") {
+      await handleInvoicePaid(event.data.object as Stripe.Invoice);
+    }
+  } catch (err) {
+    console.error("MEMBERSHIP_WEBHOOK_ERROR", event.type, err);
+    return Response.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
   return Response.json({ ok: true });
