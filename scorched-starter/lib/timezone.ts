@@ -16,3 +16,43 @@ export function formatDenverDate(iso: string): string {
     day: "numeric",
   }).format(new Date(iso));
 }
+
+// Today's calendar date in the studio's timezone — a report run at 11pm Denver
+// shouldn't be compared against "today" in UTC, which is already tomorrow.
+export function todayInDenver(): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: STUDIO_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  return { y: get("year"), m: get("month"), d: get("day") };
+}
+
+// "YYYY-MM" for the previous calendar month in Denver. Deliberately the
+// previous *calendar* month, not "the most recent month with data" — if an
+// upload is skipped, callers should see "no data for <month>" rather than
+// silently falling back to stale older data.
+export function previousMonthKey(): string {
+  const { y, m } = todayInDenver();
+  const prevMonth = m === 1 ? 12 : m - 1;
+  const prevYear = m === 1 ? y - 1 : y;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+}
+
+// Number of days in a "YYYY-MM" month (pure calendar math via Date.UTC, not
+// affected by browser/server local timezone).
+export function daysInMonthKey(monthKey: string): number {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+// Whole days between a "YYYY-MM-DD" date and today in Denver.
+export function daysSinceDenver(isoDate: string): number {
+  const [sy, sm, sd] = isoDate.split("-").map(Number);
+  const startUTC = Date.UTC(sy, sm - 1, sd);
+  const { y, m, d } = todayInDenver();
+  const todayUTC = Date.UTC(y, m - 1, d);
+  return Math.round((todayUTC - startUTC) / 86400000);
+}
