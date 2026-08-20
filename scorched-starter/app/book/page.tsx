@@ -899,10 +899,10 @@ function PaymentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <ExpressCheckoutElement
-        options={{ paymentMethods: { link: "never" } }}
+        options={{ paymentMethods: { link: "auto", applePay: "auto", googlePay: "auto" } }}
         onConfirm={confirmPayment}
       />
-      <PaymentElement options={{ paymentMethodOrder: ["card", "link"], wallets: { link: "never" } }} />
+      <PaymentElement options={{ paymentMethodOrder: ["card", "link"], wallets: { link: "auto" } }} />
       {cardError && <p className={`${vulfMono.className} text-xs text-red-500`}>{cardError}</p>}
       <button
         type="submit"
