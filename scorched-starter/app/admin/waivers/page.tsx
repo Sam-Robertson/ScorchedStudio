@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
+import { useAdminSession } from "@/lib/adminSession";
 import type { WaiverRecord, WaiverMinor } from "@/lib/supabase";
 
 /* ------------------------------------------------------------------ */
@@ -61,12 +62,14 @@ export default function AdminWaiversPage() {
 const PAGE_SIZE = 30;
 
 function WaiversDashboard({ token }: { token: string }) {
+  const { role } = useAdminSession();
   const [waivers, setWaivers] = useState<WaiverRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [locationFilter, setLocationFilter] = useState<"" | "orem" | "slc">("");
   const [sortField, setSortField] = useState<SortField>("signed_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<WaiverRecord | null>(null);
@@ -98,6 +101,7 @@ function WaiversDashboard({ token }: { token: string }) {
         if (q && !nameMatch && !emailMatch) return false;
         if (dateFrom && new Date(w.signed_at) < new Date(dateFrom)) return false;
         if (dateTo && new Date(w.signed_at) > new Date(dateTo + "T23:59:59")) return false;
+        if (locationFilter && w.location !== locationFilter) return false;
         return true;
       })
       .sort((a, b) => {
@@ -107,10 +111,10 @@ function WaiversDashboard({ token }: { token: string }) {
           ? String(av).localeCompare(String(bv))
           : String(bv).localeCompare(String(av));
       });
-  }, [waivers, search, dateFrom, dateTo, sortField, sortDir]);
+  }, [waivers, search, dateFrom, dateTo, sortField, sortDir, locationFilter]);
 
   // Reset to page 1 whenever filters or sort change
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, sortField, sortDir, locationFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -171,9 +175,20 @@ function WaiversDashboard({ token }: { token: string }) {
           <label className="text-xs text-neutral-500 whitespace-nowrap">To</label>
           <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
-        {(search || dateFrom || dateTo) && (
+        {role === "admin" && (
+          <select
+            className={`${inputCls} sm:w-auto`}
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
+          >
+            <option value="">All locations</option>
+            <option value="orem">Orem</option>
+            <option value="slc">Salt Lake City</option>
+          </select>
+        )}
+        {(search || dateFrom || dateTo || locationFilter) && (
           <button
-            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setPage(1); }}
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setLocationFilter(""); setPage(1); }}
             className="text-xs text-neutral-400 underline underline-offset-2 whitespace-nowrap hover:text-neutral-700"
           >
             Clear filters

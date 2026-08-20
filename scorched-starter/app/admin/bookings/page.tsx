@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
+import { useAdminSession } from "@/lib/adminSession";
 import type { BookingRecord } from "@/lib/supabase";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
 
@@ -63,11 +64,13 @@ type Filter = "upcoming" | "all";
 type ViewMode = "list" | "calendar";
 
 function BookingsDashboard({ token }: { token: string }) {
+  const { role } = useAdminSession();
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [locationFilter, setLocationFilter] = useState<"" | "orem" | "slc">("");
   const [view, setView] = useState<ViewMode>("calendar");
   const [calMonth, setCalMonth] = useState(() => {
     const now = new Date();
@@ -103,6 +106,7 @@ function BookingsDashboard({ token }: { token: string }) {
     return bookings.filter((b) => {
       if (b.status === "cancelled") return false;
       if (filter === "upcoming" && b.date < today) return false;
+      if (locationFilter && b.location !== locationFilter) return false;
       if (q) {
         const match =
           b.name.toLowerCase().includes(q) ||
@@ -112,7 +116,7 @@ function BookingsDashboard({ token }: { token: string }) {
       }
       return true;
     });
-  }, [bookings, search, filter, today]);
+  }, [bookings, search, filter, today, locationFilter]);
 
   const grouped = useMemo(() => {
     const map: Record<string, BookingRecord[]> = {};
@@ -191,6 +195,17 @@ function BookingsDashboard({ token }: { token: string }) {
               {f}
             </button>
           ))}
+          {role === "admin" && (
+            <select
+              className={`${vulfMono.className} rounded-lg border border-black/20 px-3 py-2 text-xs bg-white`}
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
+            >
+              <option value="">All locations</option>
+              <option value="orem">Orem</option>
+              <option value="slc">Salt Lake City</option>
+            </select>
+          )}
           <div className="flex rounded-lg border border-black/20 overflow-hidden">
             {(["list", "calendar"] as ViewMode[]).map((v) => (
               <button

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
+import { useAdminSession } from "@/lib/adminSession";
 import { Check, Inbox, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import type { EquipmentReportRecord } from "@/lib/supabase";
 
@@ -60,12 +61,14 @@ export default function AdminRequestsPage() {
 }
 
 function RequestsDashboard({ token }: { token: string }) {
+  const { role } = useAdminSession();
   const [reports, setReports] = useState<EquipmentReportRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<"" | "orem" | "slc">("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -132,8 +135,9 @@ function RequestsDashboard({ token }: { token: string }) {
     }
   }
 
-  const open = reports.filter((r) => r.status === "Open").sort(sortOpen);
-  const resolved = reports
+  const locationScoped = locationFilter ? reports.filter((r) => r.location === locationFilter) : reports;
+  const open = locationScoped.filter((r) => r.status === "Open").sort(sortOpen);
+  const resolved = locationScoped
     .filter((r) => r.status === "Resolved")
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
@@ -147,13 +151,26 @@ function RequestsDashboard({ token }: { token: string }) {
             Low inventory, broken equipment, and anything else staff need to flag.
           </p>
         </div>
-        <button
-          onClick={() => setFormOpen((v) => !v)}
-          className={`${vulfMono.className} flex items-center gap-1.5 rounded-xl bg-[#884A20] px-4 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90 flex-shrink-0`}
-        >
-          {formOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          {formOpen ? "CANCEL" : "REQUEST"}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {role === "admin" && (
+            <select
+              className={`${vulfMono.className} rounded-lg border border-black/15 px-3 py-2.5 text-xs bg-white`}
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
+            >
+              <option value="">All locations</option>
+              <option value="orem">Orem</option>
+              <option value="slc">Salt Lake City</option>
+            </select>
+          )}
+          <button
+            onClick={() => setFormOpen((v) => !v)}
+            className={`${vulfMono.className} flex items-center gap-1.5 rounded-xl bg-[#884A20] px-4 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90 flex-shrink-0`}
+          >
+            {formOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {formOpen ? "CANCEL" : "REQUEST"}
+          </button>
+        </div>
       </div>
 
       {error && (

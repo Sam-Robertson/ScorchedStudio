@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
+import { useAdminSession } from "@/lib/adminSession";
 import { CheckCheck, Download, Inbox, Printer, RotateCcw, Settings2 } from "lucide-react";
 import type { PrintJobRecord } from "@/lib/supabase";
 
@@ -141,16 +142,19 @@ export default function PrintQueuePage() {
 }
 
 function PrintQueueDashboard({ token }: { token: string }) {
+  const { role } = useAdminSession();
   const [jobs, setJobs] = useState<JobWithProduct[]>([]);
   const [recentlyPrinted, setRecentlyPrinted] = useState<JobWithProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [marking, setMarking] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<"" | "orem" | "slc">("");
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/admin/print-jobs", {
+    const query = locationFilter ? `?location=${locationFilter}` : "";
+    fetch(`/api/admin/print-jobs${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -161,7 +165,7 @@ function PrintQueueDashboard({ token }: { token: string }) {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, locationFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -216,6 +220,17 @@ function PrintQueueDashboard({ token }: { token: string }) {
           <h1 className="h2 font-bold">Print Queue</h1>
         </div>
         <div className="flex items-center gap-3">
+          {role === "admin" && (
+            <select
+              className={`${vulfMono.className} rounded-lg border border-black/15 px-3 py-1.5 text-xs bg-white`}
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
+            >
+              <option value="">All locations</option>
+              <option value="orem">Orem</option>
+              <option value="slc">Salt Lake City</option>
+            </select>
+          )}
           <Link
             href="/admin/products"
             className={`${vulfMono.className} flex items-center gap-1.5 text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50 transition-colors`}
