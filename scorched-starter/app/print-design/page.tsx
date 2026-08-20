@@ -56,6 +56,14 @@ export default function PrintDesignPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Per-kiosk URL, e.g. /print-design?location=slc — defaults to Orem so
+  // existing bookmarked kiosks with no query param keep working unchanged.
+  const [location, setLocation] = useState<"orem" | "slc">("orem");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("location") === "slc") setLocation("slc");
+  }, []);
+
   const selectedProduct = products.find((p) => p.id === selectedId) ?? null;
 
   useEffect(() => {
@@ -101,7 +109,7 @@ export default function PrintDesignPage() {
       const res = await fetch("/api/print-jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: selectedProduct.id, image_base64: preview }),
+        body: JSON.stringify({ product_id: selectedProduct.id, image_base64: preview, location }),
       });
       if (!res.ok) {
         const { error: msg } = await res.json();

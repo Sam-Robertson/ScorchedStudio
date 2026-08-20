@@ -2,14 +2,14 @@ import { getSupabase } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { product_id, image_base64 } = await req.json();
+    const { product_id, image_base64, location } = await req.json();
     if (!product_id || !image_base64) {
       return Response.json({ error: "Missing fields" }, { status: 400 });
     }
     const sb = getSupabase();
     const { data, error } = await sb
       .from("print_jobs")
-      .insert({ product_id, image_base64, status: "pending" })
+      .insert({ product_id, image_base64, status: "pending", location: location === "slc" ? "slc" : "orem" })
       .select("id")
       .single();
     if (error) return Response.json({ error: error.message }, { status: 500 });

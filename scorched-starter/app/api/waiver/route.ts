@@ -19,6 +19,7 @@ const schema = z.object({
   dateOfBirth: z.string().min(1, "Required"),
   signatureData: z.string().min(1, "Signature required"),
   minors: z.array(minorSchema).optional().default([]),
+  location: z.enum(["orem", "slc"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
       signature_data: data.signatureData,
       ip_address: ip,
       minors: data.minors.length > 0 ? data.minors : null,
+      location: data.location ?? "orem",
     });
 
     if (dbError) {

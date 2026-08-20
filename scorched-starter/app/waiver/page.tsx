@@ -1,7 +1,7 @@
 "use client";
 
 // app/waiver/page.tsx
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +37,14 @@ export default function WaiverPage() {
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [minors, setMinors] = useState<Minor[]>([]);
   const [minorErrors, setMinorErrors] = useState<string | null>(null);
+
+  // Per-kiosk URL, e.g. /waiver?location=slc — defaults to Orem so existing
+  // bookmarked kiosks with no query param keep working unchanged.
+  const [location, setLocation] = useState<"orem" | "slc">("orem");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("location") === "slc") setLocation("slc");
+  }, []);
 
   function addMinor() {
     setMinors((prev) => [...prev, { firstName: "", lastName: "", dateOfBirth: "" }]);
@@ -89,6 +97,7 @@ export default function WaiverPage() {
         dateOfBirth: values.dateOfBirth,
         signatureData,
         minors: minors.length > 0 ? minors : [],
+        location,
       }),
     });
 
