@@ -31,6 +31,7 @@ const IN_STUDIO_NAV = [
   { href: "/admin/waivers",     label: "Waivers",      icon: FileText },
   { href: "/admin/print-queue", label: "Print Queue",  icon: Printer },
   { href: "/admin/requests",    label: "Requests",     icon: AlertTriangle },
+  { href: "/admin/memberships", label: "Memberships",  icon: Users },
 ];
 
 const ADMIN_NAV = [
@@ -39,7 +40,6 @@ const ADMIN_NAV = [
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
-  { href: "/admin/memberships", label: "Memberships", icon: Users },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
 

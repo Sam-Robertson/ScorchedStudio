@@ -1,7 +1,7 @@
 // app/api/admin/memberships/[id]/redeem/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/admin-session";
+import { requireInStudio } from "@/lib/admin-session";
 import { redeemEntitlement } from "@/lib/memberships";
 
 const redeemSchema = z.object({
@@ -13,7 +13,7 @@ const redeemSchema = z.object({
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireAdmin(req)) {
+  if (!requireInStudio(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

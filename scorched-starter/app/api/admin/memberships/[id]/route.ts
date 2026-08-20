@@ -1,10 +1,10 @@
 // app/api/admin/memberships/[id]/route.ts
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/admin-session";
+import { requireInStudio } from "@/lib/admin-session";
 import { getMembershipById, getPlanByKey, getRedemptionsForMembership } from "@/lib/memberships";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireAdmin(req)) {
+  if (!requireInStudio(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
