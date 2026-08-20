@@ -96,6 +96,8 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
 
   const membership = await upsertMembershipShell({
     email: email.toLowerCase().trim(),
+    name: session.customer_details?.name ?? null,
+    phone: session.customer_details?.phone ?? null,
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,
     plan_key: planKey,

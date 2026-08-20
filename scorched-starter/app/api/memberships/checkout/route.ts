@@ -61,6 +61,13 @@ export async function POST(req: NextRequest) {
   // Checkout page collects the email itself.
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    // Explicit list so "card" (with Apple Pay / Google Pay riding along
+    // automatically as wallet options) is the default, not Link — Link stays
+    // available as a secondary option rather than the pre-selected method.
+    payment_method_types: ["card", "link"],
+    // Lets staff look members up by phone at the counter (app/admin/memberships) —
+    // name comes along for free from the card billing details Checkout already collects.
+    phone_number_collection: { enabled: true },
     line_items,
     subscription_data: {
       metadata: { plan_key: planKey, billing_interval: interval },

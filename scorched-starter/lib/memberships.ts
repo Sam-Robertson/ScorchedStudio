@@ -25,6 +25,8 @@ export type MembershipPlan = {
 export type MembershipRecord = {
   id: string;
   email: string;
+  name: string | null;
+  phone: string | null;
   stripe_customer_id: string;
   stripe_subscription_id: string;
   plan_key: PlanKey;
@@ -35,6 +37,19 @@ export type MembershipRecord = {
   wood_credit_remaining_cents: number;
   created_at: string;
   updated_at: string;
+};
+
+export type RedemptionType = "entrance" | "wood_credit";
+
+export type MembershipRedemptionRecord = {
+  id: string;
+  membership_id: string;
+  type: RedemptionType;
+  amount: number;
+  redeemed_by: string;
+  square_order_id: string | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export async function getActivePlans(): Promise<MembershipPlan[]> {
@@ -75,6 +90,8 @@ export async function getMembershipBySubscriptionId(
 // separately via grantLedgerEntry so retried webhooks can't double-grant.
 export async function upsertMembershipShell(input: {
   email: string;
+  name?: string | null;
+  phone?: string | null;
   stripe_customer_id: string;
   stripe_subscription_id: string;
   plan_key: PlanKey;
@@ -151,4 +168,82 @@ export async function grantMembershipPeriod(
     .update(update)
     .eq("id", membership.id);
   if (updateError) throw updateError;
+}
+
+// Staff-facing lookup by name, email, or phone — the search box on
+// /admin/memberships. Small member base, so a simple ilike-any-field scan is
+// fine; no need for a dedicated search index.
+export async function searchMemberships(query: string): Promise<MembershipRecord[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const { data, error } = await getSupabase()
+    .from("memberships")
+    .select("*")
+    .or(`email.ilike.%${q}%,name.ilike.%${q}%,phone.ilike.%${q}%`)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (error) throw error;
+  return data as MembershipRecord[];
+}
+
+export async function getMembershipById(id: string): Promise<MembershipRecord | null> {
+  const { data, error } = await getSupabase()
+    .from("memberships")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as MembershipRecord | null;
+}
+
+export async function getRedemptionsForMembership(membershipId: string): Promise<MembershipRedemptionRecord[]> {
+  const { data, error } = await getSupabase()
+    .from("membership_redemptions")
+    .select("*")
+    .eq("membership_id", membershipId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return data as MembershipRedemptionRecord[];
+}
+
+// Atomically decrements the membership's balance via the redeem_membership_entitlement
+// SQL function (see supabase-membership-redemptions-setup.sql) and, only if that
+// succeeded, writes the ledger row. Returns null if the redemption was blocked
+// (membership not active, or balance insufficient for the requested amount).
+export async function redeemEntitlement(
+  membershipId: string,
+  opts: { type: RedemptionType; amount: number; redeemedBy: string; squareOrderId?: string; notes?: string }
+): Promise<{ membership: MembershipRecord; redemption: MembershipRedemptionRecord } | null> {
+  const supabase = getSupabase();
+
+  const { data: updated, error: rpcError } = await supabase
+    .rpc("redeem_membership_entitlement", {
+      p_membership_id: membershipId,
+      p_type: opts.type,
+      p_amount: opts.amount,
+    })
+    .single();
+  if (rpcError) throw rpcError;
+  // Belt-and-suspenders: the SQL function returns SQL NULL when blocked (see
+  // supabase-membership-redemptions-setup.sql), which PostgREST sends as JSON
+  // null — but check a required field too, in case a future edit to the
+  // function reintroduces a "row of all-null fields" (truthy object) instead.
+  if (!updated || (updated as MembershipRecord).id == null) return null;
+
+  const { data: redemption, error: insertError } = await supabase
+    .from("membership_redemptions")
+    .insert({
+      membership_id: membershipId,
+      type: opts.type,
+      amount: opts.amount,
+      redeemed_by: opts.redeemedBy,
+      square_order_id: opts.squareOrderId || null,
+      notes: opts.notes || null,
+    })
+    .select()
+    .single();
+  if (insertError) throw insertError;
+
+  return { membership: updated as MembershipRecord, redemption: redemption as MembershipRedemptionRecord };
 }

@@ -19,6 +19,7 @@ import {
   LogOut,
   Menu,
   Printer,
+  Users,
   X,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ const ADMIN_NAV = [
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
+  { href: "/admin/memberships", label: "Memberships", icon: Users },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
 
