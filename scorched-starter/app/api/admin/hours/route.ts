@@ -1,12 +1,7 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { SESSION_LENGTH_MINUTES } from "@/lib/booking-utils";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -14,10 +9,11 @@ function toMinutes(hhmm: string): number {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    const location = new URL(req.url).searchParams.get("location") ?? "orem";
     const sb = getSupabase();
-    const { data, error } = await sb.from("business_hours").select("*").order("weekday");
+    const { data, error } = await sb.from("business_hours").select("*").eq("location", location).order("weekday");
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ hours: data });
   } catch {
@@ -26,9 +22,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const rows = await req.json();
+    const body = await req.json();
+    const location = body.location === "slc" ? "slc" : "orem";
+    const rows = body.hours;
     if (!Array.isArray(rows) || rows.length !== 7) {
       return Response.json({ error: "Must provide all 7 weekdays" }, { status: 400 });
     }
@@ -67,13 +65,14 @@ export async function PUT(req: NextRequest) {
       .from("business_hours")
       .upsert(
         rows.map((r) => ({
+          location,
           weekday: r.weekday,
           is_open: r.is_open,
           open_time: r.open_time,
           close_time: r.close_time,
           updated_at: new Date().toISOString(),
         })),
-        { onConflict: "weekday" }
+        { onConflict: "location,weekday" }
       )
       .select()
       .order("weekday");
