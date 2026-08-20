@@ -1,11 +1,6 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 // Marks a post Approved and permanently removes its media from storage.
 // The post record (title, caption, platform, schedule, etc.) is kept.
@@ -13,7 +8,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const { data: post } = await getSupabase()

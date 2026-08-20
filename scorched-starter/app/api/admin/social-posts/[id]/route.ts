@@ -1,12 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const patchSchema = z.object({
   title: z.string().min(1).optional(),
@@ -22,7 +17,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const raw = await req.json();
   const parsed = patchSchema.safeParse(raw);
@@ -44,7 +39,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const { data: post } = await getSupabase()
     .from("social_posts")

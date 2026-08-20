@@ -1,14 +1,9 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { createItem, getItemsWithStats } from "@/lib/inventory";
 
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const items = await getItemsWithStats();
     return Response.json({ items });
@@ -18,7 +13,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { name, sku, safety_buffer_units } = await req.json();
     if (!name) return Response.json({ error: "Name is required" }, { status: 400 });

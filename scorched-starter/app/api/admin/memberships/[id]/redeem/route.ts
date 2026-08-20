@@ -1,13 +1,8 @@
 // app/api/admin/memberships/[id]/redeem/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-session";
 import { redeemEntitlement } from "@/lib/memberships";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const redeemSchema = z.object({
   type: z.enum(["entrance", "wood_credit"]),
@@ -18,7 +13,7 @@ const redeemSchema = z.object({
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,23 +1,25 @@
 // app/api/admin/equipment-reports/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await getSupabase()
-    .from("equipment_reports")
-    .select("*")
-    .order("created_at", { ascending: false });
+  let query = getSupabase().from("equipment_reports").select("*").order("created_at", { ascending: false });
+
+  if (session.role === "location") {
+    query = query.eq("location", session.location);
+  } else {
+    const locationFilter = new URL(req.url).searchParams.get("location");
+    if (locationFilter) query = query.eq("location", locationFilter);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("ADMIN_EQUIPMENT_REPORTS_GET_ERROR", error);
@@ -34,7 +36,8 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,9 +47,13 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input" }, { status: 400 });
   }
 
+  // A staff-authenticated route, so location is stamped from the session —
+  // no manual picker needed. Admin submissions (rare) default to Orem.
+  const location = session.role === "location" ? session.location! : "orem";
+
   const { data: report, error } = await getSupabase()
     .from("equipment_reports")
-    .insert(parsed.data)
+    .insert({ ...parsed.data, location })
     .select()
     .single();
 

@@ -30,6 +30,7 @@ export type BookingRecord = {
   payment_method: "stripe" | "gift_card" | "get_out_pass" | "complimentary" | null;
   referral_source: string | null;
   referral_other: string | null;
+  location: "orem" | "slc";
   created_at: string;
 };
 
@@ -50,6 +51,7 @@ export type WaiverRecord = {
   signed_at: string;
   ip_address: string | null;
   minors: WaiverMinor[] | null;
+  location: "orem" | "slc";
 };
 
 export type TaskRecord = {
@@ -71,6 +73,7 @@ export type TaskRecord = {
 };
 
 export type BusinessHoursRecord = {
+  location: "orem" | "slc";
   weekday: number;
   is_open: boolean;
   open_time: string;
@@ -125,6 +128,7 @@ export type PrintJobRecord = {
   status: "pending" | "printed";
   created_at: string;
   printed_at: string | null;
+  location: "orem" | "slc";
 };
 
 export type EquipmentReportRecord = {
@@ -136,6 +140,7 @@ export type EquipmentReportRecord = {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  location: "orem" | "slc";
 };
 
 export type StaffRecord = {

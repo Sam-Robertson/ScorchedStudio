@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/adminAuth";
+import { AdminSessionProvider, type LocationKey, type Role } from "@/lib/adminSession";
 import clsx from "clsx";
 import {
   AlertTriangle,
@@ -33,7 +34,7 @@ const IN_STUDIO_NAV = [
 ];
 
 const ADMIN_NAV = [
-  { href: "/admin/hours",     label: "Hours",      icon: Clock },
+  { href: "/admin/locations", label: "Locations", icon: Clock },
   { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
@@ -41,6 +42,9 @@ const ADMIN_NAV = [
   { href: "/admin/memberships", label: "Memberships", icon: Users },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
+
+const IN_STUDIO_PATHS = IN_STUDIO_NAV.map((item) => item.href);
+const LOCATION_NAME: Record<LocationKey, string> = { orem: "Orem", slc: "Salt Lake City" };
 
 // ── Nav item ──────────────────────────────────────────────────────────────────
 
@@ -85,10 +89,14 @@ function NavItem({
 
 function SidebarContent({
   pathname,
+  role,
+  location,
   onLogout,
   onNavClick,
 }: {
   pathname: string | null;
+  role: Role;
+  location: LocationKey | null;
   onLogout: () => void;
   onNavClick?: () => void;
 }) {
@@ -100,7 +108,7 @@ function SidebarContent({
           Scorched Studio
         </p>
         <p className={clsx(vulfMono.className, "text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5")}>
-          Admin
+          {location ? LOCATION_NAME[location] : "Admin"}
         </p>
       </div>
 
@@ -115,16 +123,20 @@ function SidebarContent({
           ))}
         </div>
 
-        <div className="border-t border-black/8 mb-4" />
+        {role === "admin" && (
+          <>
+            <div className="border-t border-black/8 mb-4" />
 
-        <p className={clsx(vulfMono.className, "text-[9px] uppercase tracking-widest text-neutral-400 px-3 mb-1")}>
-          Admin
-        </p>
-        <div className="space-y-0.5">
-          {ADMIN_NAV.map((item) => (
-            <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
-          ))}
-        </div>
+            <p className={clsx(vulfMono.className, "text-[9px] uppercase tracking-widest text-neutral-400 px-3 mb-1")}>
+              Admin
+            </p>
+            <div className="space-y-0.5">
+              {ADMIN_NAV.map((item) => (
+                <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+              ))}
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Log out */}
@@ -148,22 +160,37 @@ function SidebarContent({
 
 function AdminShell({
   children,
+  role,
+  location,
   onLogout,
 }: {
   children: React.ReactNode;
+  role: Role;
+  location: LocationKey | null;
   onLogout: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Close drawer on route change
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
+  // Nav hides Admin-tier links for location accounts, but that's cosmetic —
+  // this catches direct navigation to an Admin-only URL. The real boundary
+  // is server-side (requireAdmin() in each API route); this is just so a
+  // location account doesn't land on a broken/empty admin-only page.
+  useEffect(() => {
+    if (role === "location" && pathname && !IN_STUDIO_PATHS.some((p) => pathname.startsWith(p))) {
+      router.replace("/admin/bookings");
+    }
+  }, [role, pathname, router]);
+
   return (
     <>
       {/* ── Desktop sidebar — fixed below the sticky public header (h-16 = 4rem) */}
       <aside className="hidden md:flex flex-col fixed top-16 left-0 h-[calc(100vh-4rem)] w-56 bg-white border-r border-black/10 z-30 overflow-hidden">
-        <SidebarContent pathname={pathname} onLogout={onLogout} />
+        <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} />
       </aside>
 
       {/* ── Mobile top bar */}
@@ -202,6 +229,8 @@ function AdminShell({
             <div className="flex-1 overflow-y-auto">
               <SidebarContent
                 pathname={pathname}
+                role={role}
+                location={location}
                 onLogout={onLogout}
                 onNavClick={() => setDrawerOpen(false)}
               />
@@ -226,6 +255,9 @@ const inputCls =
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [role, setRole] = useState<Role>("admin");
+  const [location, setLocation] = useState<LocationKey | null>(null);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [authError, setAuthError] = useState("");
@@ -233,8 +265,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const saved = getAdminToken();
-    if (saved) setAuthed(true);
-    setInitialized(true);
+    if (!saved) { setInitialized(true); return; }
+    // Validate against the server rather than trusting that a token is
+    // present — a token signed with a rotated secret, or one that's simply
+    // expired, must not render the shell only to 401 on every API call.
+    fetch("/api/admin/session", { headers: { Authorization: `Bearer ${saved}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((session) => {
+        if (session) {
+          setToken(saved);
+          setRole(session.role);
+          setLocation(session.location);
+          setAuthed(true);
+        } else {
+          clearAdminToken();
+        }
+      })
+      .catch(() => clearAdminToken())
+      .finally(() => setInitialized(true));
   }, []);
 
   async function handleLogin(e: React.FormEvent) {
@@ -251,8 +299,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       setAuthLoading(false);
       return;
     }
-    const { token } = await res.json();
-    setAdminToken(token, remember);
+    const session = await res.json();
+    setAdminToken(session.token, remember);
+    setToken(session.token);
+    setRole(session.role);
+    setLocation(session.location);
     setAuthed(true);
     setAuthLoading(false);
   }
@@ -260,6 +311,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   function handleLogout() {
     clearAdminToken();
     setAuthed(false);
+    setToken(null);
     setPassword("");
   }
 
@@ -303,5 +355,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  return <AdminShell onLogout={handleLogout}>{children}</AdminShell>;
+  return (
+    <AdminSessionProvider value={{ token: token!, role, location }}>
+      <AdminShell role={role} location={location} onLogout={handleLogout}>
+        {children}
+      </AdminShell>
+    </AdminSessionProvider>
+  );
 }

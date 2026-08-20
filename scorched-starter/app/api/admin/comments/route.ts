@@ -1,14 +1,9 @@
 // app/api/admin/comments/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { notifyNewComment, type Board } from "@/lib/board-notify";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const BOARD_TABLE: Record<Board, { table: string; titleColumn: string }> = {
   operations: { table: "tasks", titleColumn: "name" },
@@ -16,7 +11,7 @@ const BOARD_TABLE: Record<Board, { table: string; titleColumn: string }> = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,7 +70,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

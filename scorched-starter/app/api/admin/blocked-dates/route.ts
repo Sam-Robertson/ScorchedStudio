@@ -1,16 +1,11 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const sb = getSupabase();
     const { data, error } = await sb.from("blocked_dates").select("*").order("date");
@@ -22,7 +17,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { date, reason } = await req.json();
     if (typeof date !== "string" || !DATE_RE.test(date)) {

@@ -1,16 +1,27 @@
 // app/api/admin/waivers/route.ts
+import { NextRequest } from "next/server";
+import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 
-export async function GET(req: Request) {
-  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-  if (!token || token !== process.env.ADMIN_PASSWORD) {
+export async function GET(req: NextRequest) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await getSupabase()
+  let query = getSupabase()
     .from("waivers")
-    .select("id, first_name, last_name, email, phone, date_of_birth, signed_at, ip_address, minors")
+    .select("id, first_name, last_name, email, phone, date_of_birth, signed_at, ip_address, minors, location")
     .order("signed_at", { ascending: false });
+
+  if (session.role === "location") {
+    query = query.eq("location", session.location);
+  } else {
+    const locationFilter = new URL(req.url).searchParams.get("location");
+    if (locationFilter) query = query.eq("location", locationFilter);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("ADMIN_WAIVERS_ERROR", error);

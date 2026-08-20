@@ -1,15 +1,10 @@
 // app/api/admin/memberships/[id]/route.ts
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { getMembershipById, getPlanByKey, getRedemptionsForMembership } from "@/lib/memberships";
 
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
-
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,13 +1,8 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // must match the social-media bucket's file_size_limit
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 // Issues a signed Supabase Storage upload URL so the browser can upload the
 // file directly to storage, bypassing this server's request body limit.
@@ -15,7 +10,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const { fileName, fileType, fileSize } = await req.json();

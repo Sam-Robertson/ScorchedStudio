@@ -1,14 +1,9 @@
 // app/api/admin/bookings/[id]/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancel") }),
@@ -24,7 +19,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -38,14 +34,17 @@ export async function PATCH(
 
   // ── Cancel ───────────────────────────────────────────────────────────────────
   if (parsed.data.action === "cancel") {
-    const { error } = await getSupabase()
-      .from("bookings")
-      .update({ status: "cancelled" })
-      .eq("id", id);
+    let updateQuery = getSupabase().from("bookings").update({ status: "cancelled" }).eq("id", id);
+    if (session.role === "location") updateQuery = updateQuery.eq("location", session.location!);
+
+    const { data, error } = await updateQuery.select().maybeSingle();
 
     if (error) {
       console.error("ADMIN_CANCEL_BOOKING_ERROR", error);
       return Response.json({ error: "Failed to cancel booking" }, { status: 500 });
+    }
+    if (!data) {
+      return Response.json({ error: "Booking not found" }, { status: 404 });
     }
 
     return Response.json({ ok: true });
@@ -59,7 +58,23 @@ export async function PATCH(
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }
 
-  const validSlots = await getSlotsForDate(date);
+  // A location-tier session may only update its own bookings — look the row
+  // up first so we know which location's slots/capacity to check against.
+  const { data: current, error: fetchError } = await getSupabase()
+    .from("bookings")
+    .select("location")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) {
+    console.error("ADMIN_UPDATE_BOOKING_FETCH_ERROR", fetchError);
+    return Response.json({ error: "Failed to update booking." }, { status: 500 });
+  }
+  if (!current || (session.role === "location" && current.location !== session.location)) {
+    return Response.json({ error: "Booking not found" }, { status: 404 });
+  }
+  const location = current.location as "orem" | "slc";
+
+  const validSlots = await getSlotsForDate(date, location);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }
@@ -71,6 +86,7 @@ export async function PATCH(
     .eq("date", date)
     .eq("time_slot", time_slot)
     .eq("status", "confirmed")
+    .eq("location", location)
     .neq("id", id);
 
   const totalBooked = (existing ?? []).reduce((sum, r) => sum + r.party_size, 0);

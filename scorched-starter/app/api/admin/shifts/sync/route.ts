@@ -4,13 +4,8 @@
 // demand: initial load, or gap recovery if a webhook was ever missed.
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-session";
 import { backfillScheduledShifts, syncTeamMembers } from "@/lib/square-shifts-sync";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -36,7 +31,7 @@ const syncSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

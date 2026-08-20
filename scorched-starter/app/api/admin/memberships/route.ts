@@ -1,15 +1,10 @@
 // app/api/admin/memberships/route.ts
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/admin-session";
 import { searchMemberships } from "@/lib/memberships";
 
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) {
+  if (!requireAdmin(req)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

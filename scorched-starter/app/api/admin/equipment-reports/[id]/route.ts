@@ -1,13 +1,8 @@
 // app/api/admin/equipment-reports/[id]/route.ts
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
-
-function isAuthed(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === process.env.ADMIN_PASSWORD;
-}
 
 const patchSchema = z.object({
   category: z.enum(["Low Inventory", "Broken", "Other"]).optional(),
@@ -20,7 +15,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -38,16 +34,17 @@ export async function PATCH(
   if (parsed.data.status === "Resolved") updates.resolved_at = new Date().toISOString();
   if (parsed.data.status === "Open") updates.resolved_at = null;
 
-  const { data: report, error } = await getSupabase()
-    .from("equipment_reports")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
+  let query = getSupabase().from("equipment_reports").update(updates).eq("id", id);
+  if (session.role === "location") query = query.eq("location", session.location);
+
+  const { data: report, error } = await query.select().maybeSingle();
 
   if (error) {
     console.error("ADMIN_EQUIPMENT_REPORTS_PATCH_ERROR", error);
     return Response.json({ error: "Failed to update report." }, { status: 500 });
+  }
+  if (!report) {
+    return Response.json({ error: "Report not found" }, { status: 404 });
   }
 
   return Response.json(report);
@@ -57,17 +54,24 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthed(req)) {
+  const session = requireInStudio(req);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
 
-  const { error } = await getSupabase().from("equipment_reports").delete().eq("id", id);
+  let query = getSupabase().from("equipment_reports").delete().eq("id", id);
+  if (session.role === "location") query = query.eq("location", session.location);
+
+  const { data, error } = await query.select().maybeSingle();
 
   if (error) {
     console.error("ADMIN_EQUIPMENT_REPORTS_DELETE_ERROR", error);
     return Response.json({ error: "Failed to delete report." }, { status: 500 });
+  }
+  if (!data) {
+    return Response.json({ error: "Report not found" }, { status: 404 });
   }
 
   return new Response(null, { status: 204 });
