@@ -1,6 +1,8 @@
 // lib/booking-utils.ts — server-only (imports getSupabase); do not import from "use client" files
 import { getSupabase } from "@/lib/supabase";
 
+export type LocationKey = "orem" | "slc";
+
 export const MAX_CAPACITY = 20;
 export const MAX_PARTY_SIZE = 15;
 export const PRICE_PER_PERSON = 15;
@@ -31,17 +33,26 @@ const FALLBACK_HOURS: DayHours[] = [
 
 const HOURS_CACHE_TTL_MS = 60_000;
 
-let hoursCache: { data: DayHours[]; expiresAt: number } | null = null;
+// null means "this location genuinely has no hours configured yet" (closed
+// every day) — distinct from a real fetch error, which still fails open to
+// FALLBACK_HOURS. Conflating the two would silently apply Orem's schedule to
+// a brand-new location (e.g. SLC before its hours are set), which is wrong
+// in the other direction: better to show no availability than someone
+// else's hours.
+const hoursCache = new Map<LocationKey, { data: DayHours[] | null; expiresAt: number }>();
 
-async function getBusinessHours(): Promise<DayHours[]> {
-  if (hoursCache && hoursCache.expiresAt > Date.now()) return hoursCache.data;
+async function getBusinessHours(location: LocationKey): Promise<DayHours[] | null> {
+  const cached = hoursCache.get(location);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
   try {
     const { data, error } = await getSupabase()
       .from("business_hours")
-      .select("weekday, is_open, open_time, close_time");
-    if (error || !data || data.length === 0) throw error ?? new Error("business_hours is empty");
-    hoursCache = { data: data as DayHours[], expiresAt: Date.now() + HOURS_CACHE_TTL_MS };
-    return hoursCache.data;
+      .select("weekday, is_open, open_time, close_time")
+      .eq("location", location);
+    if (error) throw error;
+    const result = !data || data.length === 0 ? null : (data as DayHours[]);
+    hoursCache.set(location, { data: result, expiresAt: Date.now() + HOURS_CACHE_TTL_MS });
+    return result;
   } catch (e) {
     console.error("Failed to load business_hours, using fallback schedule:", e);
     return FALLBACK_HOURS;
@@ -87,7 +98,9 @@ export function generateSlots(openTime: string, closeTime: string, intervalMin: 
   return slots;
 }
 
-export async function getSlotsForDate(dateStr: string): Promise<string[]> {
+// `location` defaults to "orem" so callers that haven't been updated yet
+// keep today's single-location behavior exactly.
+export async function getSlotsForDate(dateStr: string, location: LocationKey = "orem"): Promise<string[]> {
   const blocked = await getBlockedDates();
   if (blocked.has(dateStr)) return [];
 
@@ -95,7 +108,9 @@ export async function getSlotsForDate(dateStr: string): Promise<string[]> {
   const d = new Date(dateStr + "T12:00:00");
   const weekday = d.getDay(); // 0=Sun..6=Sat
 
-  const hours = await getBusinessHours();
+  const hours = await getBusinessHours(location);
+  if (hours === null) return []; // no hours configured for this location yet — closed
+
   const dayHours = hours.find((h) => h.weekday === weekday) ?? FALLBACK_HOURS[weekday];
   if (!dayHours.is_open) return [];
 

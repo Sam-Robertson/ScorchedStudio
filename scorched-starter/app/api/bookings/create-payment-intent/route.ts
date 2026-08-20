@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE, PRICE_PER_PERSON_CENTS } from "@/lib/booking-utils";
+import { getLocationByKey } from "@/lib/locations";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -16,6 +17,7 @@ const schema = z.object({
   phone: z.string().optional(),
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
+  location: z.enum(["orem", "slc"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -26,13 +28,16 @@ export async function POST(req: NextRequest) {
   }
 
   const { date, time_slot, party_size, name, email, phone, referral_source, referral_other } = parsed.data;
+  const location = parsed.data.location ?? "orem";
+  const locationRecord = await getLocationByKey(location);
+  const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
 
   const today = new Date().toISOString().split("T")[0];
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }
 
-  const validSlots = await getSlotsForDate(date);
+  const validSlots = await getSlotsForDate(date, location);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }
@@ -43,10 +48,11 @@ export async function POST(req: NextRequest) {
     .select("party_size")
     .eq("date", date)
     .eq("time_slot", time_slot)
+    .eq("location", location)
     .eq("status", "confirmed");
 
   const totalBooked = (existing ?? []).reduce((sum, r) => sum + r.party_size, 0);
-  const remaining = MAX_CAPACITY - totalBooked;
+  const remaining = capacity - totalBooked;
 
   if (party_size > remaining) {
     const available = Math.max(0, remaining);
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: party_size * PRICE_PER_PERSON_CENTS,
     currency: "usd",
-    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "" },
+    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "", location },
     receipt_email: email,
     description: `Scorched Studio – ${party_size} ${party_size === 1 ? "person" : "people"} on ${date} at ${time_slot}`,
   });

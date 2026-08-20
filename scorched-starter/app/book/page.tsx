@@ -40,7 +40,10 @@ type SimpleBooking = {
   payment_method: string | null;
   status: string;
   amount_paid: number;
+  location: "orem" | "slc";
 };
+
+type LocationOption = { key: "orem" | "slc"; name: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +109,22 @@ export default function BookPage() {
     if (params.get("tab") === "manage") setTab("manage");
   }, []);
 
+  // ── Locations ────────────────────────────────────────────────────────────────
+  const [bookableLocations, setBookableLocations] = useState<LocationOption[]>([{ key: "orem", name: "Orem" }]);
+  const [location, setLocation] = useState<"orem" | "slc">("orem");
+
+  useEffect(() => {
+    fetch("/api/locations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows: LocationOption[] | null) => {
+        if (rows && rows.length > 0) {
+          setBookableLocations(rows);
+          setLocation(rows[0].key);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // ── Book tab state ──────────────────────────────────────────────────────────
   const [bookStep, setBookStep] = useState<BookStep>(1);
   const [bookCalMonth, setBookCalMonth] = useState(() => {
@@ -162,24 +181,31 @@ export default function BookPage() {
   useEffect(() => {
     if (tab !== "book") return;
     const monthStr = `${bookCalMonth.getFullYear()}-${String(bookCalMonth.getMonth() + 1).padStart(2, "0")}`;
-    fetch(`/api/bookings/availability?month=${monthStr}`)
+    fetch(`/api/bookings/availability?month=${monthStr}&location=${location}`)
       .then((r) => (r.ok ? r.json() : { fullDates: [], closedDates: [] }))
       .then((data) => {
         setBookFullDates(new Set(data.fullDates ?? []));
         setBookClosedDates(new Set(data.closedDates ?? []));
       })
       .catch(() => {});
-  }, [bookCalMonth, tab]);
+  }, [bookCalMonth, tab, location]);
 
   useEffect(() => {
     if (!selectedDate || tab !== "book") return;
     setBookSlotsLoading(true);
     setBookSlots([]);
-    fetch(`/api/bookings/availability?date=${selectedDate}`)
+    fetch(`/api/bookings/availability?date=${selectedDate}&location=${location}`)
       .then((r) => (r.ok ? r.json() : { slots: [] }))
       .then((data) => { setBookSlots(data.slots ?? []); setBookSlotsLoading(false); })
       .catch(() => setBookSlotsLoading(false));
-  }, [selectedDate, tab]);
+  }, [selectedDate, tab, location]);
+
+  // Different location = different calendar; clear any in-progress date/time pick.
+  function handleLocationChange(key: "orem" | "slc") {
+    setLocation(key);
+    setSelectedDate("");
+    setSelectedSlot("");
+  }
 
   // ── Manage tab effects ──────────────────────────────────────────────────────
 
@@ -187,25 +213,27 @@ export default function BookPage() {
     if (manageScreen !== "editing") return;
     const monthStr = `${editCalMonth.getFullYear()}-${String(editCalMonth.getMonth() + 1).padStart(2, "0")}`;
     const excludeId = editingBooking?.id ?? "";
-    fetch(`/api/bookings/availability?month=${monthStr}&exclude_id=${excludeId}`)
+    const editLocation = editingBooking?.location ?? "orem";
+    fetch(`/api/bookings/availability?month=${monthStr}&exclude_id=${excludeId}&location=${editLocation}`)
       .then((r) => (r.ok ? r.json() : { fullDates: [], closedDates: [] }))
       .then((data) => {
         setEditFullDates(new Set(data.fullDates ?? []));
         setEditClosedDates(new Set(data.closedDates ?? []));
       })
       .catch(() => {});
-  }, [editCalMonth, manageScreen, editingBooking?.id]);
+  }, [editCalMonth, manageScreen, editingBooking?.id, editingBooking?.location]);
 
   useEffect(() => {
     if (!newDate || manageScreen !== "editing") return;
     setEditSlotsLoading(true);
     setEditSlots([]);
     const excludeId = editingBooking?.id ?? "";
-    fetch(`/api/bookings/availability?date=${newDate}&exclude_id=${excludeId}`)
+    const editLocation = editingBooking?.location ?? "orem";
+    fetch(`/api/bookings/availability?date=${newDate}&exclude_id=${excludeId}&location=${editLocation}`)
       .then((r) => (r.ok ? r.json() : { slots: [] }))
       .then((data) => { setEditSlots(data.slots ?? []); setEditSlotsLoading(false); })
       .catch(() => setEditSlotsLoading(false));
-  }, [newDate, manageScreen, editingBooking?.id]);
+  }, [newDate, manageScreen, editingBooking?.id, editingBooking?.location]);
 
   // ── Book tab handlers ───────────────────────────────────────────────────────
 
@@ -240,7 +268,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined, location }),
       });
       const data = await res.json();
       if (!res.ok) { setPayError(data.error || "Something went wrong."); setPayLoading(false); return; }
@@ -262,7 +290,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined, location }),
       });
       const data = await res.json();
       if (!res.ok) { setReserveError(data.error || "Something went wrong."); setReserveLoading(false); return; }
@@ -416,6 +444,9 @@ export default function BookPage() {
           <>
             {bookStep === 1 && (
               <BookStep1
+                locations={bookableLocations}
+                location={location}
+                onLocationChange={handleLocationChange}
                 calMonth={bookCalMonth}
                 setCalMonth={setBookCalMonth}
                 fullDates={bookFullDates}
@@ -623,7 +654,8 @@ function SlotGrid({ slots, selectedSlot, onSelect }: {
 
 // ── Book Step 1 ───────────────────────────────────────────────────────────────
 
-function BookStep1({ calMonth, setCalMonth, fullDates, closedDates, selectedDate, onDateClick, slots, slotsLoading, selectedSlot, setSelectedSlot, onContinue }: {
+function BookStep1({ locations, location, onLocationChange, calMonth, setCalMonth, fullDates, closedDates, selectedDate, onDateClick, slots, slotsLoading, selectedSlot, setSelectedSlot, onContinue }: {
+  locations: LocationOption[]; location: "orem" | "slc"; onLocationChange: (key: "orem" | "slc") => void;
   calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>; closedDates: Set<string>;
   selectedDate: string; onDateClick: (d: string) => void;
   slots: SlotInfo[]; slotsLoading: boolean;
@@ -631,6 +663,28 @@ function BookStep1({ calMonth, setCalMonth, fullDates, closedDates, selectedDate
 }) {
   return (
     <div className="space-y-6">
+      {locations.length > 1 && (
+        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
+          <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-4`}>Choose a location</p>
+          <div className="flex gap-2">
+            {locations.map((loc) => (
+              <button
+                key={loc.key}
+                type="button"
+                onClick={() => onLocationChange(loc.key)}
+                className={`${vulfMono.className} flex-1 rounded-xl border py-3 text-sm font-medium transition-colors ${
+                  location === loc.key
+                    ? "border-[#884A20] bg-[#884A20] text-white"
+                    : "border-black/15 text-neutral-600 hover:bg-neutral-50"
+                }`}
+              >
+                {loc.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
         <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-5`}>Select a date</p>
         <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} closedDates={closedDates} selectedDate={selectedDate} onDateClick={onDateClick} />

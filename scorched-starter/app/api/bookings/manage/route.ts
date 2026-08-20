@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await getSupabase()
     .from("bookings")
-    .select("id, name, date, time_slot, party_size, payment_method, status, amount_paid")
+    .select("id, name, date, time_slot, party_size, payment_method, status, amount_paid, location")
     .eq("email", email)
     .eq("status", "confirmed")
     .gte("date", today)

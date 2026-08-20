@@ -5,6 +5,7 @@
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { getSupabase } from "@/lib/supabase";
+import { getLocationByKey } from "@/lib/locations";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -41,6 +42,7 @@ export async function createBookingFromIntent(
 
   // 3. Insert booking
   const { name, email, phone, date, time_slot, party_size, referral_source, referral_other } = intent.metadata ?? {};
+  const location = intent.metadata?.location === "slc" ? "slc" : "orem";
 
   if (!name || !email || !date || !time_slot || !party_size) {
     console.error("CREATE_BOOKING_MISSING_METADATA", intent.metadata);
@@ -62,6 +64,7 @@ export async function createBookingFromIntent(
       payment_method: "stripe",
       referral_source: referral_source || null,
       referral_other: referral_other || null,
+      location,
     })
     .select()
     .single();
@@ -78,6 +81,7 @@ export async function createBookingFromIntent(
   const total = (intent.amount / 100).toFixed(2);
   const partySizeNum = Number(party_size);
   const firstName = name.split(" ")[0];
+  const locationRecord = await getLocationByKey(location);
 
   await resend.emails.send({
     from: "Scorched Studio <bookings@scorchedstudio.com>",
@@ -108,7 +112,7 @@ export async function createBookingFromIntent(
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #888; font-size: 13px;">Location</td>
-            <td style="padding: 8px 0; font-size: 13px;">218 E University Pkwy, Orem, UT 84058</td>
+            <td style="padding: 8px 0; font-size: 13px;">${locationRecord?.address ?? locationRecord?.name ?? "Scorched Studio"}</td>
           </tr>
         </table>
         <div style="background: #F7F6F3; border-radius: 12px; padding: 16px; margin-bottom: 24px;">

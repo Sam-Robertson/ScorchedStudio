@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
+import { getLocationByKey } from "@/lib/locations";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -49,7 +50,7 @@ export async function GET(
 
   const { data: booking, error } = await getSupabase()
     .from("bookings")
-    .select("id, name, email, date, time_slot, party_size, status, payment_method, amount_paid")
+    .select("id, name, email, date, time_slot, party_size, status, payment_method, amount_paid, location")
     .eq("id", id)
     .single();
 
@@ -181,7 +182,11 @@ export async function PATCH(
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }
 
-  const validSlots = await getSlotsForDate(date);
+  const location = (booking.location as "orem" | "slc") ?? "orem";
+  const locationRecord = await getLocationByKey(location);
+  const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
+
+  const validSlots = await getSlotsForDate(date, location);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }
@@ -192,11 +197,12 @@ export async function PATCH(
     .select("party_size")
     .eq("date", date)
     .eq("time_slot", time_slot)
+    .eq("location", location)
     .eq("status", "confirmed")
     .neq("id", id);
 
   const totalBooked = (existing ?? []).reduce((sum, r) => sum + r.party_size, 0);
-  const remaining = MAX_CAPACITY - totalBooked;
+  const remaining = capacity - totalBooked;
 
   if (party_size > remaining) {
     const available = Math.max(0, remaining);
@@ -252,7 +258,7 @@ export async function PATCH(
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #888; font-size: 13px;">Location</td>
-            <td style="padding: 8px 0; font-size: 13px;">218 E University Pkwy, Orem, UT 84058</td>
+            <td style="padding: 8px 0; font-size: 13px;">${locationRecord?.address ?? locationRecord?.name ?? "Scorched Studio"}</td>
           </tr>
         </table>
         <p style="color: #555; font-size: 14px;">

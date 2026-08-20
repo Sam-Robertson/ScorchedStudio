@@ -1,22 +1,35 @@
 // app/api/bookings/availability/route.ts
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
-import { getSlotsForDate, MAX_CAPACITY } from "@/lib/booking-utils";
+import { getSlotsForDate, MAX_CAPACITY, type LocationKey } from "@/lib/booking-utils";
+import { getLocationByKey } from "@/lib/locations";
+
+async function capacityFor(location: LocationKey): Promise<number> {
+  try {
+    const loc = await getLocationByKey(location);
+    return loc?.capacity ?? MAX_CAPACITY;
+  } catch {
+    return MAX_CAPACITY;
+  }
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
   const month = searchParams.get("month");
+  const location: LocationKey = searchParams.get("location") === "slc" ? "slc" : "orem";
 
   if (date) {
-    const slots = await getSlotsForDate(date);
+    const slots = await getSlotsForDate(date, location);
     if (slots.length === 0) return Response.json({ slots: [] });
 
+    const capacity = await capacityFor(location);
     const excludeId = searchParams.get("exclude_id");
     let query = getSupabase()
       .from("bookings")
       .select("time_slot, party_size")
       .eq("date", date)
+      .eq("location", location)
       .eq("status", "confirmed");
     if (excludeId) query = query.neq("id", excludeId);
     const { data } = await query;
@@ -29,7 +42,7 @@ export async function GET(req: NextRequest) {
     return Response.json({
       slots: slots.map((time) => {
         const booked = bookedBySlot[time] ?? 0;
-        const available = MAX_CAPACITY - booked;
+        const available = capacity - booked;
         return { time, available: Math.max(0, available), isFull: available <= 0 };
       }),
     });
@@ -45,11 +58,14 @@ export async function GET(req: NextRequest) {
     const lastDay = new Date(year, mon, 0).getDate();
     const endDate = `${year}-${String(mon).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
+    const capacity = await capacityFor(location);
+
     const { data } = await getSupabase()
       .from("bookings")
       .select("date, time_slot, party_size")
       .gte("date", startDate)
       .lte("date", endDate)
+      .eq("location", location)
       .eq("status", "confirmed");
 
     // Group: date → slot → total booked
@@ -66,13 +82,13 @@ export async function GET(req: NextRequest) {
     await Promise.all(
       Array.from({ length: lastDay }, (_, i) => i + 1).map(async (day) => {
         const dateStr = `${year}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const slots = await getSlotsForDate(dateStr);
+        const slots = await getSlotsForDate(dateStr, location);
         if (slots.length === 0) {
           closedDates.push(dateStr);
           return;
         }
         const slotMap = map[dateStr] ?? {};
-        if (slots.every((s) => (slotMap[s] ?? 0) >= MAX_CAPACITY)) {
+        if (slots.every((s) => (slotMap[s] ?? 0) >= capacity)) {
           fullDates.push(dateStr);
         }
       })

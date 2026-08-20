@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
 import { getSupabase } from "@/lib/supabase";
+import { getLocationByKey } from "@/lib/locations";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -17,6 +18,7 @@ const schema = z.object({
   payment_method: z.enum(["gift_card", "get_out_pass"]).nullable().optional(),
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
+  location: z.enum(["orem", "slc"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -27,13 +29,16 @@ export async function POST(req: NextRequest) {
   }
 
   const { date, time_slot, party_size, name, email, phone, payment_method, referral_source, referral_other } = parsed.data;
+  const location = parsed.data.location ?? "orem";
+  const locationRecord = await getLocationByKey(location);
+  const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
 
   const today = new Date().toISOString().split("T")[0];
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }
 
-  const validSlots = await getSlotsForDate(date);
+  const validSlots = await getSlotsForDate(date, location);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
   }
@@ -44,10 +49,11 @@ export async function POST(req: NextRequest) {
     .select("party_size")
     .eq("date", date)
     .eq("time_slot", time_slot)
+    .eq("location", location)
     .eq("status", "confirmed");
 
   const totalBooked = (existing ?? []).reduce((sum, r) => sum + r.party_size, 0);
-  const remaining = MAX_CAPACITY - totalBooked;
+  const remaining = capacity - totalBooked;
 
   if (remaining <= 0) {
     return Response.json(
@@ -80,6 +86,7 @@ export async function POST(req: NextRequest) {
       payment_method: payment_method ?? null,
       referral_source: referral_source || null,
       referral_other: referral_other || null,
+      location,
     })
     .select("id")
     .single();
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #888; font-size: 13px;">Location</td>
-            <td style="padding: 8px 0; font-size: 13px;">218 E University Pkwy, Orem, UT 84058</td>
+            <td style="padding: 8px 0; font-size: 13px;">${locationRecord?.address ?? locationRecord?.name ?? "Scorched Studio"}</td>
           </tr>
         </table>
 
