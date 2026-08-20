@@ -31,7 +31,9 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "entityId is required" }, { status: 400 });
   }
 
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
     .from("comments")
     .select("*")
     .eq("board", board)
@@ -43,7 +45,26 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Failed to fetch comments" }, { status: 500 });
   }
 
-  return Response.json(data);
+  const commentIds = data.map((c) => c.id);
+  let reactions: { id: string; comment_id: string; author: string; emoji: string; created_at: string }[] = [];
+  if (commentIds.length > 0) {
+    const { data: reactionRows, error: reactionError } = await supabase
+      .from("comment_reactions")
+      .select("*")
+      .in("comment_id", commentIds);
+    if (reactionError) {
+      console.error("ADMIN_COMMENTS_REACTIONS_GET_ERROR", reactionError);
+    } else {
+      reactions = reactionRows;
+    }
+  }
+
+  const withReactions = data.map((comment) => ({
+    ...comment,
+    reactions: reactions.filter((r) => r.comment_id === comment.id),
+  }));
+
+  return Response.json(withReactions);
 }
 
 const createSchema = z.object({
@@ -88,5 +109,5 @@ export async function POST(req: NextRequest) {
     console.error("ADMIN_COMMENTS_NOTIFY_ERROR", err);
   }
 
-  return Response.json(comment, { status: 201 });
+  return Response.json({ ...comment, reactions: [] }, { status: 201 });
 }

@@ -173,6 +173,15 @@ export type CommentRecord = {
   author: string;
   body: string;
   created_at: string;
+  reactions: CommentReactionRecord[];
+};
+
+export type CommentReactionRecord = {
+  id: string;
+  comment_id: string;
+  author: string;
+  emoji: string;
+  created_at: string;
 };
 
 export type SocialPostRecord = {

@@ -627,6 +627,7 @@ function DetailPanel({
   post,
   token,
   isAdmin,
+  currentUser,
   onClose,
   onEdit,
   onDelete,
@@ -635,6 +636,7 @@ function DetailPanel({
   post: SocialPostRecord;
   token: string;
   isAdmin: boolean;
+  currentUser: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -645,6 +647,7 @@ function DetailPanel({
   const [noteSaving, setNoteSaving] = useState(false);
   const [commentAs, setCommentAs] = useState(SOCIAL_NOTE_AUTHORS[0]);
   const [comments, setComments] = useState<CommentRecord[]>([]);
+  const [pendingReactions, setPendingReactions] = useState<Set<string>>(new Set());
 
   const statusStyle = STATUS_STYLE[post.status];
   const noteEntries = splitNotes(post.notes);
@@ -672,6 +675,37 @@ function DetailPanel({
       const comment = await res.json();
       setComments((prev) => [...prev, comment]);
       setNewNote("");
+    }
+  }
+
+  async function toggleReaction(commentId: string, emoji = "👍") {
+    if (pendingReactions.has(commentId)) return;
+    setPendingReactions((prev) => new Set(prev).add(commentId));
+    try {
+      const res = await fetch("/api/admin/comment-reactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment_id: commentId, author: currentUser, emoji }),
+      });
+      if (!res.ok) return;
+      const { removed } = await res.json();
+      setComments((prev) =>
+        prev.map((c) => {
+          if (c.id !== commentId) return c;
+          return {
+            ...c,
+            reactions: removed
+              ? c.reactions.filter((r) => !(r.author === currentUser && r.emoji === emoji))
+              : [...c.reactions, { id: `${commentId}-${currentUser}-${emoji}`, comment_id: commentId, author: currentUser, emoji, created_at: new Date().toISOString() }],
+          };
+        })
+      );
+    } finally {
+      setPendingReactions((prev) => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
     }
   }
 
@@ -776,16 +810,33 @@ function DetailPanel({
                     </p>
                   </div>
                 ))}
-                {comments.map((comment) => (
-                  <div key={comment.id} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
-                    <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
-                      {comment.author} · {fmtCommentDate(comment.created_at)}
-                    </p>
-                    <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
-                      {comment.body}
-                    </p>
-                  </div>
-                ))}
+                {comments.map((comment) => {
+                  const reactedByMe = comment.reactions.some((r) => r.author === currentUser && r.emoji === "👍");
+                  const reactors = comment.reactions.filter((r) => r.emoji === "👍").map((r) => r.author);
+                  return (
+                    <div key={comment.id} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
+                      <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
+                        {comment.author} · {fmtCommentDate(comment.created_at)}
+                      </p>
+                      <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                        {comment.body}
+                      </p>
+                      <button
+                        onClick={() => toggleReaction(comment.id)}
+                        disabled={pendingReactions.has(comment.id)}
+                        title={reactors.length ? reactors.join(", ") : "Mark as seen"}
+                        className={`mt-2 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                          reactedByMe
+                            ? "bg-[#519A70]/10 border-[#519A70]/30 text-[#519A70]"
+                            : "bg-white border-black/10 text-neutral-400 hover:text-neutral-600 hover:border-black/20"
+                        }`}
+                      >
+                        <span>👍</span>
+                        {reactors.length > 0 && <span>{reactors.length}</span>}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -1426,6 +1477,7 @@ function SocialDashboard({
           post={detail}
           token={token}
           isAdmin={isAdmin}
+          currentUser={currentUser}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setModal({ mode: "edit", post: detail });
