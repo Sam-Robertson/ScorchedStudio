@@ -613,7 +613,6 @@ function BookingModal({
 const PAYMENT_METHODS = [
   { value: "stripe", label: "Stripe (paid online)" },
   { value: "gift_card", label: "Gift card (pay in-studio)" },
-  { value: "get_out_pass", label: "Get Out Pass" },
   { value: "complimentary", label: "Complimentary" },
 ] as const;
 
@@ -636,7 +635,7 @@ function NewBookingModal({
   const [date, setDate] = useState(today);
   const [slot, setSlot] = useState("");
   const [partySize, setPartySize] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "gift_card" | "get_out_pass" | "complimentary">("complimentary");
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "gift_card" | "complimentary">("complimentary");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

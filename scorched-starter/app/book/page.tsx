@@ -27,7 +27,7 @@ type Tab = "book" | "manage";
 type BookStep = 1 | 2 | 3;
 type ManageScreen = "lookup" | "list" | "editing";
 type EditStep = 1 | 2 | 3;
-type PaymentMethod = "gift_card" | "get_out_pass" | null;
+type PaymentMethod = "gift_card" | null;
 
 type SlotInfo = { time: string; available: number; isFull: boolean };
 
@@ -803,9 +803,9 @@ function BookStep3({
   onBack: () => void; onInitiatePayment: () => void; onPaySuccess: (id: string) => void; onReserve: () => void;
 }) {
   const total = 15 * partySize;
-  const payBlocked = paymentMethod === "gift_card" || paymentMethod === "get_out_pass";
+  const payBlocked = paymentMethod === "gift_card";
 
-  function toggleMethod(method: "gift_card" | "get_out_pass") {
+  function toggleMethod(method: "gift_card") {
     setPaymentMethod(paymentMethod === method ? null : method);
   }
 
@@ -842,13 +842,6 @@ function BookStep3({
               <p className={`${vulfMono.className} text-xs text-amber-800`}><strong>Note:</strong> Please bring your gift card when you arrive. The $15 per-person studio fee will be collected in-studio.</p>
             </div>
           )}
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "get_out_pass"} onChange={() => toggleMethod("get_out_pass")} disabled={isLoading} />
-            <div>
-              <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m using a Get Out Pass</span>
-              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — bring your pass when you arrive</p>
-            </div>
-          </label>
         </div>
       )}
 

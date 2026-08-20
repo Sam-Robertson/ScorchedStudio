@@ -41,7 +41,7 @@ const createSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time_slot: z.string().min(1),
   party_size: z.number().int().min(1).max(MAX_PARTY_SIZE),
-  payment_method: z.enum(["stripe", "gift_card", "get_out_pass", "complimentary"]),
+  payment_method: z.enum(["stripe", "gift_card", "complimentary"]),
   location: z.enum(["orem", "slc"]).optional(),
 });
 

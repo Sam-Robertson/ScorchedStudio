@@ -15,7 +15,7 @@ const schema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   phone: z.string().optional(),
-  payment_method: z.enum(["gift_card", "get_out_pass"]).nullable().optional(),
+  payment_method: z.enum(["gift_card"]).nullable().optional(),
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
   location: z.enum(["orem", "slc"]).optional(),
@@ -108,12 +108,6 @@ export async function POST(req: NextRequest) {
       ? `<div style="background: #FEF9C3; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
            <p style="font-size: 13px; color: #713F12; margin: 0;">
              <strong>Gift card reminder:</strong> Please bring your gift card to pay the $15 per-person studio fee in-studio when you arrive.
-           </p>
-         </div>`
-      : payment_method === "get_out_pass"
-      ? `<div style="background: #F0FDF4; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
-           <p style="font-size: 13px; color: #14532D; margin: 0;">
-             <strong>Get Out Pass:</strong> Bring your pass when you arrive. No entry fee needed!
            </p>
          </div>`
       : "";
