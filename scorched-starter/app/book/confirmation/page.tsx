@@ -91,7 +91,7 @@ function ConfirmationLayout({
             </div>
             <p className="eyebrow text-brand">You&apos;re all set</p>
             <h1 className="h2 font-bold">{total ? "Booking Confirmed" : "Spot Reserved"}</h1>
-            <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2`}>
+            <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2 break-words`}>
               A confirmation email has been sent to {email}
             </p>
           </div>

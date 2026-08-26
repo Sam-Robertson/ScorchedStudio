@@ -48,7 +48,7 @@ export default async function CourseSuccessPage({
             <p className="eyebrow text-brand">You&apos;re all set</p>
             <h1 className="h2 font-bold">Enrollment Confirmed</h1>
             {email && (
-              <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2`}>
+              <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2 break-words`}>
                 We&apos;ve sent the full session schedule to {email}
               </p>
             )}

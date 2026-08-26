@@ -60,7 +60,7 @@ export default async function MembershipSuccessPage({
             <p className="eyebrow text-brand">You&apos;re all set</p>
             <h1 className="h2 font-bold">Membership Confirmed</h1>
             {email && (
-              <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2`}>
+              <p className={`${vulfMono.className} text-neutral-500 text-sm mt-2 break-words`}>
                 Stripe has sent a payment receipt to {email}
               </p>
             )}

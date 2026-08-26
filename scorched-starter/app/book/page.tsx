@@ -1003,11 +1003,11 @@ function BookingList({ email, bookings, confirmCancelId, setConfirmCancelId, can
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className={`${vulfMono.className} text-sm text-neutral-500`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className={`${vulfMono.className} text-sm text-neutral-500 break-words min-w-0`}>
           Upcoming bookings for <span className="text-neutral-800 font-medium">{email}</span>
         </p>
-        <button onClick={onBack} className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
+        <button onClick={onBack} className={`${vulfMono.className} shrink-0 text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
           Different email
         </button>
       </div>

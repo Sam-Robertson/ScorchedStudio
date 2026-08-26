@@ -47,11 +47,11 @@ export default async function AccountPage() {
     <main className="pb-20">
       <section className="pt-12 md:pt-16">
         <Container className="max-w-2xl">
-          <div className="flex items-start justify-between mb-8">
-            <div>
+          <div className="flex items-start justify-between gap-4 mb-8">
+            <div className="min-w-0">
               <p className="eyebrow text-brand">Account</p>
               <h1 className="h2 font-bold">My Account</h1>
-              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>{session.email}</p>
+              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1 break-words`}>{session.email}</p>
             </div>
             <LogoutButton />
           </div>

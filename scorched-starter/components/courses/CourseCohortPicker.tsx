@@ -93,7 +93,7 @@ export default function CourseCohortPicker({
     return (
       <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
         <p className="font-semibold text-neutral-900 mb-1">You&apos;re on the waitlist</p>
-        <p className={`${vulfMono.className} text-sm text-neutral-500`}>
+        <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
           We&apos;ll email you at {email} if a seat opens up in the {selected?.label} cohort.
         </p>
       </div>

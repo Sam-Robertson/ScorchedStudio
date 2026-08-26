@@ -153,15 +153,19 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
 
   return (
     <div className="hidden md:block">
-      {/* A wider, tighter-padded wrapper than the shared Container (which
-          caps at max-w-7xl and adds generous edge padding meant for body
-          copy) — the nav reads as cramped in the middle if it's squeezed
-          into that narrower box, so the logo and Book Now sit close to the
-          true viewport edges instead. */}
-      <div className="max-w-[1600px] mx-auto px-6 lg:px-10">
+      {/* Fully explicit spacing — no flex-1/justify-between leftover-space
+          math anywhere in here, since that scales unpredictably with
+          viewport width. Every gap is a fixed value: "medium" (gap-10)
+          between logo/items-group/CTA, "small" (gap-6) between the nav
+          items themselves, and the block as a whole is centered inside
+          the same max-w-7xl/container-px grid the rest of the site uses
+          (see components/ui/Container.tsx), so the logo and Book Now
+          button line up with where every other page's content starts
+          and ends. */}
+      <div className="flex justify-center max-w-7xl mx-auto container-px w-full">
         <nav
           className={clsx(
-            "flex h-16 items-center",
+            "flex h-16 items-center gap-10",
             vulfMono.className
           )}
           aria-label="Primary"
@@ -177,11 +181,8 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             />
           </Link>
 
-          {/* Nav links — flex-1 + justify-between so the items themselves
-              spread across the full middle width (with breathing room
-              between each one) instead of clustering into one tight block
-              with all the slack pushed out to the two edges. */}
-          <div className="flex-1 flex items-center justify-between px-10">
+          {/* Nav links — small, uniform gap between each item */}
+          <div className="flex items-center gap-6">
             <Link
               href="/"
               className={clsx(
@@ -259,7 +260,7 @@ function MobileHeader({ locationLinks }: { locationLinks: { href: string; label:
 
   const mobileNav = [
     { href: "/", label: "Home" },
-    ...locationLinks,
+    { href: "/locations", label: "Studio Locations" },
     ...REST_OF_MOBILE_NAV,
   ];
 

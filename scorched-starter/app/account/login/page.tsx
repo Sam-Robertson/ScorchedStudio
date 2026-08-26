@@ -58,7 +58,7 @@ function AccountLoginForm() {
           {sent ? (
             <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
               <p className="font-semibold text-neutral-900 mb-1">Check your email</p>
-              <p className={`${vulfMono.className} text-sm text-neutral-500`}>
+              <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
                 We sent a login link to {email}. It expires in 15 minutes.
               </p>
             </div>
