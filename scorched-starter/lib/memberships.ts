@@ -236,7 +236,7 @@ export async function getRedemptionsForMembership(membershipId: string): Promise
 // (membership not active, or balance insufficient for the requested amount).
 export async function redeemEntitlement(
   membershipId: string,
-  opts: { type: RedemptionType; amount: number; redeemedBy: string; squareOrderId?: string; notes?: string }
+  opts: { type: RedemptionType; amount: number; notes?: string }
 ): Promise<{ membership: MembershipRecord; redemption: MembershipRedemptionRecord } | null> {
   const supabase = getSupabase();
 
@@ -260,8 +260,7 @@ export async function redeemEntitlement(
       membership_id: membershipId,
       type: opts.type,
       amount: opts.amount,
-      redeemed_by: opts.redeemedBy,
-      square_order_id: opts.squareOrderId || null,
+      redeemed_by: "",
       notes: opts.notes || null,
     })
     .select()

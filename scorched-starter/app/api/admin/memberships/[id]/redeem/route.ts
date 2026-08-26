@@ -7,8 +7,6 @@ import { redeemEntitlement } from "@/lib/memberships";
 const redeemSchema = z.object({
   type: z.enum(["entrance", "wood_credit"]),
   amount: z.number().int().positive(),
-  redeemed_by: z.string().min(1),
-  square_order_id: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -28,14 +26,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await redeemEntitlement(id, {
       type: parsed.data.type,
       amount: parsed.data.amount,
-      redeemedBy: parsed.data.redeemed_by,
-      squareOrderId: parsed.data.square_order_id,
       notes: parsed.data.notes,
     });
 
     if (!result) {
       return Response.json(
-        { error: "Redemption blocked — membership isn't active or the balance is too low." },
+        { error: "Redemption blocked: membership isn't active or the balance is too low." },
         { status: 409 }
       );
     }

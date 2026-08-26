@@ -30,8 +30,6 @@ const STATUS_LABEL: Record<MembershipStatus, string> = {
   incomplete: "Incomplete",
 };
 
-const STAFF_NAME_KEY = "membershipStaffName";
-
 function fmtCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -179,20 +177,13 @@ function MembershipDetailModal({
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [redeemedBy, setRedeemedBy] = useState("");
-  const [squareOrderId, setSquareOrderId] = useState("");
   const [notes, setNotes] = useState("");
 
   const [entranceCount, setEntranceCount] = useState(1);
   const [entranceSaving, setEntranceSaving] = useState(false);
 
-  const [creditSubtotal, setCreditSubtotal] = useState("");
   const [creditAmount, setCreditAmount] = useState("");
   const [creditSaving, setCreditSaving] = useState(false);
-
-  useEffect(() => {
-    setRedeemedBy(localStorage.getItem(STAFF_NAME_KEY) || "");
-  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -212,11 +203,6 @@ function MembershipDetailModal({
 
   async function redeem(type: "entrance" | "wood_credit", amount: number) {
     setActionError(null);
-    if (!redeemedBy.trim()) {
-      setActionError("Enter who's redeeming this before continuing.");
-      return;
-    }
-    localStorage.setItem(STAFF_NAME_KEY, redeemedBy.trim());
 
     const res = await fetch(`/api/admin/memberships/${membershipId}/redeem`, {
       method: "POST",
@@ -224,8 +210,6 @@ function MembershipDetailModal({
       body: JSON.stringify({
         type,
         amount,
-        redeemed_by: redeemedBy.trim(),
-        square_order_id: squareOrderId.trim() || undefined,
         notes: notes.trim() || undefined,
       }),
     });
@@ -236,7 +220,6 @@ function MembershipDetailModal({
       return;
     }
 
-    setSquareOrderId("");
     setNotes("");
     load();
   }
@@ -258,18 +241,9 @@ function MembershipDetailModal({
     await redeem("wood_credit", Math.round(dollars * 100));
     setCreditSaving(false);
     setCreditAmount("");
-    setCreditSubtotal("");
   }
 
-  // Credit covers the subtotal at face value first — the discount only kicks
-  // in on whatever's left once credit runs out, not the other way around.
-  const subtotalCents = Math.round((Number(creditSubtotal) || 0) * 100);
   const discountPct = plan?.wood_discount_pct ?? 0;
-  const suggestedCreditCents = membership
-    ? Math.min(membership.wood_credit_remaining_cents, subtotalCents)
-    : 0;
-  const remainderAfterCreditCents = subtotalCents - suggestedCreditCents;
-  const amountDueCents = Math.round(remainderAfterCreditCents * (1 - discountPct / 100));
 
   const inactive = membership?.status !== "active";
 
@@ -352,57 +326,22 @@ function MembershipDetailModal({
                 </div>
                 {discountPct > 0 && (
                   <p className="text-xs text-neutral-500 mb-3">
-                    {plan.name} members get {discountPct}% off wood & projects once their credit runs out —
-                    draw wood credit against the subtotal at full price first, then apply the discount to
-                    whatever&apos;s left.
+                    {plan.name} members get {discountPct}% off wood & projects once their credit runs out.
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div>
-                    <label className="block text-[11px] text-neutral-500 mb-1">Subtotal (optional)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      className={inputCls}
-                      placeholder="0.00"
-                      value={creditSubtotal}
-                      onChange={(e) => setCreditSubtotal(e.target.value)}
-                      disabled={inactive}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-neutral-500 mb-1">Credit to apply ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      className={inputCls}
-                      placeholder="0.00"
-                      value={creditAmount}
-                      onChange={(e) => setCreditAmount(e.target.value)}
-                      disabled={inactive}
-                    />
-                  </div>
+                <div className="mb-2">
+                  <label className="block text-[11px] text-neutral-500 mb-1">Credit to apply ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    className={inputCls}
+                    placeholder="0.00"
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    disabled={inactive}
+                  />
                 </div>
-                {subtotalCents > 0 && (
-                  <p className="text-xs text-neutral-500 mb-2">
-                    Suggested credit:{" "}
-                    <button
-                      type="button"
-                      onClick={() => setCreditAmount((suggestedCreditCents / 100).toFixed(2))}
-                      className="underline underline-offset-2 hover:text-neutral-800"
-                    >
-                      {fmtCents(suggestedCreditCents)}
-                    </button>
-                    {remainderAfterCreditCents > 0 && discountPct > 0 && (
-                      <> — remaining {fmtCents(remainderAfterCreditCents)} at {discountPct}% off — amount due: {fmtCents(amountDueCents)}</>
-                    )}
-                    {remainderAfterCreditCents > 0 && discountPct === 0 && (
-                      <> — remaining amount due: {fmtCents(remainderAfterCreditCents)}</>
-                    )}
-                  </p>
-                )}
                 <button
                   onClick={handleApplyCredit}
                   disabled={inactive || creditSaving}
@@ -412,16 +351,6 @@ function MembershipDetailModal({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] text-neutral-500 mb-1">Redeemed by</label>
-                  <input className={inputCls} value={redeemedBy} onChange={(e) => setRedeemedBy(e.target.value)} placeholder="Staff name" disabled={inactive} />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-neutral-500 mb-1">Square order ID (optional)</label>
-                  <input className={inputCls} value={squareOrderId} onChange={(e) => setSquareOrderId(e.target.value)} disabled={inactive} />
-                </div>
-              </div>
               <div>
                 <label className="block text-[11px] text-neutral-500 mb-1">Notes (optional)</label>
                 <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={inactive} />
@@ -439,11 +368,13 @@ function MembershipDetailModal({
                           </span>
                           <span className="text-neutral-400">{new Date(r.created_at).toLocaleString()}</span>
                         </div>
-                        <p className="text-neutral-500 mt-0.5">
-                          by {r.redeemed_by}
-                          {r.square_order_id ? ` · Square ${r.square_order_id}` : ""}
-                          {r.notes ? ` · ${r.notes}` : ""}
-                        </p>
+                        {(r.redeemed_by || r.square_order_id || r.notes) && (
+                          <p className="text-neutral-500 mt-0.5">
+                            {[r.redeemed_by && `by ${r.redeemed_by}`, r.square_order_id && `Square ${r.square_order_id}`, r.notes]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -80,7 +80,7 @@ function NewsletterForm() {
         <button
           type="submit"
           disabled={status === 'loading'}
-          className={`${vulfMono.className} shrink-0 rounded-lg bg-white px-4 py-2 text-xs font-semibold tracking-[0.1em] text-green hover:opacity-90 disabled:opacity-60`}
+          className={`${vulfMono.className} shrink-0 rounded-lg bg-white px-4 py-2 text-xs font-semibold tracking-[0.1em] text-[#519A70] hover:opacity-90 disabled:opacity-60`}
         >
           {status === 'loading' ? '…' : 'JOIN'}
         </button>
