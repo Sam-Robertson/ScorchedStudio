@@ -1,14 +1,90 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Bold, Check, Heading2, List, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { JobOpeningRecord } from "@/lib/supabase";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
+
+const toolbarButtonCls =
+  "flex items-center justify-center w-7 h-7 rounded-md border border-black/15 bg-white text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800";
+
+// Minimal markdown authoring toolbar for the description field — bold,
+// section headers, and bullet lists, rendered on the public /careers page
+// via lib/markdown.ts (the same remark/remark-html pipeline blog posts use).
+function MarkdownTextarea({
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+
+  function wrapSelection(before: string, after: string, placeholderText: string) {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const hadSelection = start !== end;
+    const selected = hadSelection ? value.slice(start, end) : placeholderText;
+    const next = value.slice(0, start) + before + selected + after + value.slice(end);
+    onChange(next);
+    const selStart = start + before.length;
+    const selEnd = selStart + selected.length;
+    requestAnimationFrame(() => el.setSelectionRange(selStart, selEnd));
+  }
+
+  function prefixLine(prefix: string) {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    const next = value.slice(0, lineStart) + prefix + value.slice(lineStart);
+    onChange(next);
+    const cursorPos = start + prefix.length;
+    requestAnimationFrame(() => el.setSelectionRange(cursorPos, cursorPos));
+  }
+
+  // onMouseDown + preventDefault (not onClick alone) keeps focus in the
+  // textarea the whole time a toolbar button is pressed — without it, the
+  // button steals focus first, so selectionStart/selectionEnd are stale and,
+  // worse, a later Enter keystroke re-activates the still-focused button
+  // instead of typing a newline.
+  const stopFocusSteal = (e: React.MouseEvent) => e.preventDefault();
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-1.5">
+        <button type="button" onMouseDown={stopFocusSteal} onClick={() => wrapSelection("**", "**", "bold text")} className={toolbarButtonCls} title="Bold">
+          <Bold className="w-3.5 h-3.5" />
+        </button>
+        <button type="button" onMouseDown={stopFocusSteal} onClick={() => prefixLine("## ")} className={toolbarButtonCls} title="Section header">
+          <Heading2 className="w-3.5 h-3.5" />
+        </button>
+        <button type="button" onMouseDown={stopFocusSteal} onClick={() => prefixLine("- ")} className={toolbarButtonCls} title="Bullet list">
+          <List className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <textarea
+        ref={ref}
+        className={`${inputCls} min-h-[100px] font-mono text-xs`}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+      />
+    </div>
+  );
+}
 
 export default function AdminCareersPage() {
   const router = useRouter();
@@ -28,10 +104,11 @@ type EditState = {
   title: string;
   location: string;
   employment_type: string;
+  pay: string;
   description: string;
 };
 
-const EMPTY_EDIT: EditState = { title: "", location: "", employment_type: "", description: "" };
+const EMPTY_EDIT: EditState = { title: "", location: "", employment_type: "", pay: "", description: "" };
 
 function CareersDashboard({ token }: { token: string }) {
   const authHeaders = { Authorization: `Bearer ${token}` };
@@ -67,6 +144,7 @@ function CareersDashboard({ token }: { token: string }) {
       title: job.title,
       location: job.location ?? "",
       employment_type: job.employment_type ?? "",
+      pay: job.pay ?? "",
       description: job.description,
     });
   }
@@ -182,7 +260,7 @@ function CareersDashboard({ token }: { token: string }) {
                 required
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Location (optional)</label>
                 <input
@@ -201,14 +279,22 @@ function CareersDashboard({ token }: { token: string }) {
                   onChange={(e) => setNewJob((s) => ({ ...s, employment_type: e.target.value }))}
                 />
               </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Pay (optional)</label>
+                <input
+                  className={inputCls}
+                  placeholder="e.g. $15-18/hr"
+                  value={newJob.pay}
+                  onChange={(e) => setNewJob((s) => ({ ...s, pay: e.target.value }))}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Description</label>
-              <textarea
-                className={`${inputCls} min-h-[100px]`}
+              <MarkdownTextarea
                 placeholder="What the role involves…"
                 value={newJob.description}
-                onChange={(e) => setNewJob((s) => ({ ...s, description: e.target.value }))}
+                onChange={(v) => setNewJob((s) => ({ ...s, description: v }))}
                 required
               />
             </div>
@@ -262,7 +348,7 @@ function CareersDashboard({ token }: { token: string }) {
                         onChange={(e) => setEditState((s) => ({ ...s, title: e.target.value }))}
                       />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs text-neutral-500 mb-1">Location</label>
                         <input
@@ -279,13 +365,21 @@ function CareersDashboard({ token }: { token: string }) {
                           onChange={(e) => setEditState((s) => ({ ...s, employment_type: e.target.value }))}
                         />
                       </div>
+                      <div>
+                        <label className="block text-xs text-neutral-500 mb-1">Pay</label>
+                        <input
+                          className={inputCls}
+                          placeholder="e.g. $15-18/hr"
+                          value={editState.pay}
+                          onChange={(e) => setEditState((s) => ({ ...s, pay: e.target.value }))}
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs text-neutral-500 mb-1">Description</label>
-                      <textarea
-                        className={`${inputCls} min-h-[100px]`}
+                      <MarkdownTextarea
                         value={editState.description}
-                        onChange={(e) => setEditState((s) => ({ ...s, description: e.target.value }))}
+                        onChange={(v) => setEditState((s) => ({ ...s, description: v }))}
                       />
                     </div>
                     <div className="flex gap-3">
@@ -322,7 +416,7 @@ function CareersDashboard({ token }: { token: string }) {
                         </span>
                       </div>
                       <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
-                        {[job.location, job.employment_type].filter(Boolean).join(" · ") || "—"}
+                        {[job.location, job.employment_type, job.pay].filter(Boolean).join(" · ") || "—"}
                       </p>
                       <p className="text-xs text-neutral-400 mt-1 whitespace-pre-line">{job.description}</p>
                     </div>

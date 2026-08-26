@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const { title, location, employment_type, description, is_published } = await req.json();
+    const { title, location, employment_type, pay, description, is_published } = await req.json();
     if (!title || !description) {
       return Response.json({ error: "Title and description are required" }, { status: 400 });
     }
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         location: location?.trim() || null,
         employment_type: employment_type?.trim() || null,
+        pay: pay?.trim() || null,
         description: description.trim(),
         is_published: is_published ?? true,
       })

@@ -14,6 +14,7 @@ export async function PATCH(
     if (body.title !== undefined)           patch.title           = body.title.trim();
     if (body.location !== undefined)        patch.location        = body.location?.trim() || null;
     if (body.employment_type !== undefined) patch.employment_type = body.employment_type?.trim() || null;
+    if (body.pay !== undefined)             patch.pay             = body.pay?.trim() || null;
     if (body.description !== undefined)     patch.description     = body.description.trim();
     if (body.is_published !== undefined)    patch.is_published    = body.is_published;
 

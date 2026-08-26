@@ -101,6 +101,7 @@ export type JobOpeningRecord = {
   title: string;
   location: string | null;
   employment_type: string | null;
+  pay: string | null;
   description: string;
   is_published: boolean;
   created_at: string;

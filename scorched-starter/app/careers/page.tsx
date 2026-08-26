@@ -2,6 +2,7 @@
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
+import { markdownToHtml } from "@/lib/markdown";
 import type { JobOpeningRecord } from "@/lib/supabase";
 
 export const metadata = {
@@ -33,6 +34,7 @@ async function getPublishedJobOpenings(): Promise<JobOpeningRecord[]> {
 
 export default async function CareersPage() {
   const openings = await getPublishedJobOpenings();
+  const descriptionHtml = await Promise.all(openings.map((job) => markdownToHtml(job.description)));
 
   return (
     <main className="pb-20">
@@ -50,11 +52,11 @@ export default async function CareersPage() {
         <Container className="max-w-2xl">
           {openings.length === 0 ? (
             <p className="text-center text-sm text-neutral-400 italic">
-              No open positions right now — check back soon.
+              No open positions right now, check back soon.
             </p>
           ) : (
             <div className="space-y-4">
-              {openings.map((job) => (
+              {openings.map((job, i) => (
                 <div key={job.id} className="rounded-2xl border border-black/10 bg-white p-6">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <h2 className="h3 font-bold">{job.title}</h2>
@@ -69,9 +71,17 @@ export default async function CareersPage() {
                           {job.employment_type}
                         </span>
                       )}
+                      {job.pay && (
+                        <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase px-2 py-1 rounded-full bg-[#519A70]/15 text-[#519A70]`}>
+                          {job.pay}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <p className="mt-3 text-sm text-neutral-600 whitespace-pre-line">{job.description}</p>
+                  <div
+                    className="prose prose-neutral prose-sm max-w-none mt-3"
+                    dangerouslySetInnerHTML={{ __html: descriptionHtml[i] }}
+                  />
                   <a
                     href="/contact"
                     className="inline-block mt-4 text-sm font-semibold text-brand underline underline-offset-4 hover:opacity-80"
