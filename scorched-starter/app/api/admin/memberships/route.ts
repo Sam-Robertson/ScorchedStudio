@@ -1,7 +1,7 @@
 // app/api/admin/memberships/route.ts
 import { NextRequest } from "next/server";
 import { requireInStudio } from "@/lib/admin-session";
-import { searchMemberships } from "@/lib/memberships";
+import { listMemberships, searchMemberships } from "@/lib/memberships";
 
 export async function GET(req: NextRequest) {
   if (!requireInStudio(req)) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q") ?? "";
 
   try {
-    const memberships = await searchMemberships(q);
+    const memberships = q ? await searchMemberships(q) : await listMemberships();
     return Response.json(memberships);
   } catch (err) {
     console.error("ADMIN_MEMBERSHIPS_SEARCH_ERROR", err);

@@ -84,6 +84,18 @@ export async function getMembershipBySubscriptionId(
   return data as MembershipRecord | null;
 }
 
+// Customer-facing /account dashboard — all memberships tied to a verified
+// email, not just the most recent one.
+export async function getMembershipsByEmail(email: string): Promise<MembershipRecord[]> {
+  const { data, error } = await getSupabase()
+    .from("memberships")
+    .select("*")
+    .eq("email", email)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as MembershipRecord[];
+}
+
 // Creates the membership row on first checkout, or updates status/period/plan
 // fields on a retried event. Never touches entrances_remaining or
 // wood_credit_remaining_cents here — those are ledger-managed, granted
@@ -182,6 +194,17 @@ export async function searchMemberships(query: string): Promise<MembershipRecord
     .or(`email.ilike.%${q}%,name.ilike.%${q}%,phone.ilike.%${q}%`)
     .order("created_at", { ascending: false })
     .limit(25);
+  if (error) throw error;
+  return data as MembershipRecord[];
+}
+
+// Full roster for /admin/memberships — loaded once, filtered/paginated
+// client-side, same as the other In Studio list pages (e.g. waivers).
+export async function listMemberships(): Promise<MembershipRecord[]> {
+  const { data, error } = await getSupabase()
+    .from("memberships")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return data as MembershipRecord[];
 }

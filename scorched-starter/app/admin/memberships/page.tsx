@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
@@ -50,27 +50,39 @@ export default function AdminMembershipsPage() {
   return <MembershipsDashboard token={token} />;
 }
 
+const PAGE_SIZE = 30;
+
 function MembershipsDashboard({ token }: { token: string }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MembershipRecord[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [memberships, setMemberships] = useState<MembershipRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const q = query.trim();
-    if (!q) { setResults([]); return; }
-    setSearching(true);
-    const handle = setTimeout(() => {
-      fetch(`/api/admin/memberships?q=${encodeURIComponent(q)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((r) => (r.ok ? r.json() : []))
-        .then(setResults)
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [query, token]);
+    fetch("/api/admin/memberships", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+      .then((data) => { setMemberships(data); setLoading(false); })
+      .catch((e) => { setError(String(e)); setLoading(false); });
+  }, [token]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return memberships;
+    return memberships.filter((m) =>
+      (m.name ?? "").toLowerCase().includes(q) ||
+      m.email.toLowerCase().includes(q) ||
+      (m.phone ?? "").toLowerCase().includes(q)
+    );
+  }, [memberships, query]);
+
+  useEffect(() => { setPage(1); }, [query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <section className="container-px py-12 sm:py-16 max-w-3xl mx-auto">
@@ -90,14 +102,17 @@ function MembershipsDashboard({ token }: { token: string }) {
         />
       </div>
 
-      {searching && <p className={`${vulfMono.className} text-xs text-neutral-400`}>Searching…</p>}
+      {loading && <p className={`${vulfMono.className} text-xs text-neutral-400`}>Loading…</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {!searching && query.trim() && results.length === 0 && (
-        <p className="text-sm text-neutral-400 italic">No members found.</p>
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-sm text-neutral-400 italic">
+          {query.trim() ? "No members found." : "No memberships yet."}
+        </p>
       )}
 
       <div className="space-y-2">
-        {results.map((m) => (
+        {paginated.map((m) => (
           <button
             key={m.id}
             onClick={() => setSelectedId(m.id)}
@@ -113,6 +128,30 @@ function MembershipsDashboard({ token }: { token: string }) {
           </button>
         ))}
       </div>
+
+      {!loading && !error && totalPages > 1 && (
+        <div className={`${vulfMono.className} flex items-center justify-between mt-4 text-sm`}>
+          <p className="text-xs text-neutral-400">
+            {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
 
       {selectedId && (
         <MembershipDetailModal
