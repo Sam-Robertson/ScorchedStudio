@@ -153,82 +153,78 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
 
   return (
     <div className="hidden md:block">
-      {/* Fully explicit spacing — no flex-1/justify-between leftover-space
-          math anywhere in here, since that scales unpredictably with
-          viewport width. Every gap is a fixed value: "medium" (gap-10)
-          between logo/items-group/CTA, "small" (gap-6) between the nav
-          items themselves, and the block as a whole is centered inside
-          the same max-w-7xl/container-px grid the rest of the site uses
-          (see components/ui/Container.tsx), so the logo and Book Now
-          button line up with where every other page's content starts
-          and ends. */}
-      <div className="flex justify-center max-w-7xl mx-auto container-px w-full">
-        <nav
-          className={clsx(
-            "flex h-16 items-center gap-10",
-            vulfMono.className
-          )}
-          aria-label="Primary"
-        >
-          {/* Logo */}
-          <Link href="/" className="shrink-0" aria-label="Home">
-            <Image
-              src="/illustrations/Logo.svg"
-              alt="Scorched Studio"
-              width={170}
-              height={170}
-              priority
-            />
-          </Link>
+      {/* Logo and Book Now are pinned to a small, fixed padding from the
+          true screen edge via justify-between on the full-width bar —
+          not centered in a max-width wrapper, since centering only ever
+          pushes them toward the middle on wide screens. The nav-items
+          cluster sits in the middle with its own fixed small gap (gap-6)
+          between items; how far it sits from the logo/CTA is whatever's
+          left over, which is fine since only the edges need to be close. */}
+      <nav
+        className={clsx(
+          "flex h-16 items-center justify-between px-8",
+          vulfMono.className
+        )}
+        aria-label="Primary"
+      >
+        {/* Logo */}
+        <Link href="/" className="shrink-0" aria-label="Home">
+          <Image
+            src="/illustrations/Logo.svg"
+            alt="Scorched Studio"
+            width={170}
+            height={170}
+            priority
+          />
+        </Link>
 
-          {/* Nav links — small, uniform gap between each item */}
-          <div className="flex items-center gap-6">
-            <Link
-              href="/"
-              className={clsx(
-                "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
-                isActive("/") && "underline underline-offset-4"
-              )}
-            >
-              Home
-            </Link>
-
-            <NavDropdown label="Studio Locations" links={locationLinks} isActive={isActive} />
-
-            <NavDropdown label="Memberships" links={membershipLinks} isActive={isActive} />
-
-            <Link
-              href="/group-events"
-              className={clsx(
-                "whitespace-nowrap text-[15px] leading-[1.1] [word-spacing:-3px] transition-opacity hover:opacity-80",
-                isActive("/group-events") && "underline underline-offset-4"
-              )}
-            >
-              Group Events
-            </Link>
-
-            <Link
-              href="/courses"
-              className={clsx(
-                "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
-                isActive("/courses") && "underline underline-offset-4"
-              )}
-            >
-              Courses
-            </Link>
-
-            <NavDropdown label="More" links={moreLinks} isActive={isActive} />
-          </div>
-
-          {/* CTA */}
+        {/* Nav links — small, uniform gap between each item */}
+        <div className="flex items-center gap-6">
           <Link
-            href="/book"
-            className="shrink-0 inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
+            href="/"
+            className={clsx(
+              "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
+              isActive("/") && "underline underline-offset-4"
+            )}
           >
-            BOOK&nbsp;NOW
+            Home
           </Link>
-        </nav>
-      </div>
+
+          <NavDropdown label="Studio Locations" links={locationLinks} isActive={isActive} />
+
+          <NavDropdown label="Memberships" links={membershipLinks} isActive={isActive} />
+
+          <Link
+            href="/group-events"
+            className={clsx(
+              "whitespace-nowrap text-[15px] leading-[1.1] [word-spacing:-3px] transition-opacity hover:opacity-80",
+              isActive("/group-events") && "underline underline-offset-4"
+            )}
+          >
+            Group Events
+          </Link>
+
+          <Link
+            href="/courses"
+            className={clsx(
+              "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
+              isActive("/courses") && "underline underline-offset-4"
+            )}
+          >
+            Courses
+          </Link>
+
+          <NavDropdown label="More" links={moreLinks} isActive={isActive} />
+        </div>
+
+        {/* CTA */}
+        <Link
+          href="/book"
+          className="shrink-0 inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
+        >
+          BOOK&nbsp;NOW
+        </Link>
+      </nav>
     </div>
   );
 }
