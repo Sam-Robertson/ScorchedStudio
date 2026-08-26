@@ -95,12 +95,12 @@ function NavDropdown({
       <button
         ref={triggerRef}
         onClick={() => setOpen((s) => !s)}
-        className="flex items-center gap-1 whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80"
+        className="flex items-center gap-0.5 whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         {label}
-        <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
+        <ChevronDown className={clsx("w-3.5 h-3.5 -ml-0.5 transition-transform", open && "rotate-180")} />
       </button>
 
       {open && (
@@ -153,10 +153,15 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
 
   return (
     <div className="hidden md:block">
-      <Container>
+      {/* A wider, tighter-padded wrapper than the shared Container (which
+          caps at max-w-7xl and adds generous edge padding meant for body
+          copy) — the nav reads as cramped in the middle if it's squeezed
+          into that narrower box, so the logo and Book Now sit close to the
+          true viewport edges instead. */}
+      <div className="max-w-[1600px] mx-auto px-6 lg:px-10">
         <nav
           className={clsx(
-            "flex h-16 items-center justify-between",
+            "flex h-16 items-center",
             vulfMono.className
           )}
           aria-label="Primary"
@@ -172,10 +177,11 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             />
           </Link>
 
-          {/* Nav links — a plain (non-flex-1) group, so justify-between on
-              the parent nav gives it mathematically equal gaps from the
-              logo and from the CTA, regardless of viewport width. */}
-          <div className="flex items-center gap-8">
+          {/* Nav links — flex-1 + justify-between so the items themselves
+              spread across the full middle width (with breathing room
+              between each one) instead of clustering into one tight block
+              with all the slack pushed out to the two edges. */}
+          <div className="flex-1 flex items-center justify-between px-10">
             <Link
               href="/"
               className={clsx(
@@ -221,7 +227,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             BOOK&nbsp;NOW
           </Link>
         </nav>
-      </Container>
+      </div>
     </div>
   );
 }
