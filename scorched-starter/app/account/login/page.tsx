@@ -23,6 +23,7 @@ function AccountLoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +35,7 @@ function AccountLoginForm() {
       const res = await fetch("/api/account/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -80,6 +81,15 @@ function AccountLoginForm() {
                 required
               />
             </div>
+            <label className="flex items-center gap-2 text-sm text-neutral-600 select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="rounded border-black/20"
+              />
+              Remember me
+            </label>
             <button
               type="submit"
               disabled={loading}

@@ -46,7 +46,7 @@ export default function CancelMembershipButton({ membershipId }: { membershipId:
           <button
             onClick={handleConfirm}
             disabled={submitting}
-            className="rounded-lg bg-red-600 text-white text-xs font-semibold px-3 py-2 hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-[#a3706f] text-white text-xs font-semibold px-3 py-2 hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? "Canceling…" : "Yes, cancel"}
           </button>
@@ -65,7 +65,7 @@ export default function CancelMembershipButton({ membershipId }: { membershipId:
   return (
     <button
       onClick={() => setState("confirming")}
-      className="text-xs text-red-600 underline underline-offset-2 hover:opacity-80"
+      className="text-xs text-[#a3706f] underline underline-offset-2 hover:opacity-80"
     >
       Cancel membership
     </button>
