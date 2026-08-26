@@ -172,8 +172,9 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             />
           </Link>
 
-          {/* Center Nav */}
-          <div className="flex-1 flex justify-center items-center gap-12 mx-10">
+          {/* Nav + CTA, grouped so the button always sits a fixed distance
+              from "More" instead of drifting with leftover flex space */}
+          <div className="flex-1 flex justify-end items-center gap-10 ml-10">
             <Link
               href="/"
               className={clsx(
@@ -209,13 +210,10 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             </Link>
 
             <NavDropdown label="More" links={moreLinks} isActive={isActive} />
-          </div>
 
-          {/* CTA */}
-          <div className="shrink-0 flex items-center">
             <Link
               href="/book"
-              className="inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
+              className="inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity ml-2"
             >
               BOOK&nbsp;NOW
             </Link>
