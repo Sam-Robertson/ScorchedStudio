@@ -10,6 +10,8 @@ const patchSchema = z.object({
   max_party_size: z.number().int().positive().optional(),
   name: z.string().min(1).optional(),
   address: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  opening_estimate: z.string().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ key: string }> }) {

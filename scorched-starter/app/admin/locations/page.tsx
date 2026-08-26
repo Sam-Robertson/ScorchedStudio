@@ -16,6 +16,8 @@ type LocationRow = {
   capacity: number;
   max_party_size: number;
   address: string | null;
+  phone: string | null;
+  opening_estimate: string | null;
   has_password: boolean;
 };
 
@@ -62,6 +64,8 @@ function LocationsDashboard({ token }: { token: string }) {
 
   const [capacityDraft, setCapacityDraft] = useState({ capacity: "", max_party_size: "" });
   const [savingCapacity, setSavingCapacity] = useState(false);
+  const [contactDraft, setContactDraft] = useState({ address: "", phone: "", opening_estimate: "" });
+  const [savingContact, setSavingContact] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [settingPassword, setSettingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
@@ -118,6 +122,11 @@ function LocationsDashboard({ token }: { token: string }) {
   useEffect(() => {
     if (current) {
       setCapacityDraft({ capacity: String(current.capacity), max_party_size: String(current.max_party_size) });
+      setContactDraft({
+        address: current.address ?? "",
+        phone: current.phone ?? "",
+        opening_estimate: current.opening_estimate ?? "",
+      });
       setPasswordMessage(null);
       setNewPassword("");
     }
@@ -182,6 +191,30 @@ function LocationsDashboard({ token }: { token: string }) {
       setLocationError(e instanceof Error ? e.message : "Failed to update");
     } finally {
       setSavingCapacity(false);
+    }
+  }
+
+  async function saveContact() {
+    if (!current) return;
+    setSavingContact(true);
+    setLocationError(null);
+    try {
+      const res = await fetch(`/api/admin/locations/${current.key}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          address: contactDraft.address || null,
+          phone: contactDraft.phone || null,
+          opening_estimate: contactDraft.opening_estimate || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to update");
+      setLocations((prev) => prev.map((l) => (l.key === current.key ? data : l)));
+    } catch (e) {
+      setLocationError(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setSavingContact(false);
     }
   }
 
@@ -315,7 +348,9 @@ function LocationsDashboard({ token }: { token: string }) {
             <div className="rounded-2xl border border-black/10 bg-white p-5">
               <p className={`${vulfMono.className} font-bold text-sm mb-1`}>Public Booking</p>
               <p className={`${vulfMono.className} text-xs text-neutral-400 mb-4`}>
-                Whether this location appears as a choice on the public booking page.
+                Whether this location appears as a choice on the public booking page — also
+                controls whether it shows real info or a &quot;Coming Soon&quot; banner on the
+                public Studio Locations page.
               </p>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -361,6 +396,55 @@ function LocationsDashboard({ token }: { token: string }) {
                 className={`${vulfMono.className} rounded-lg bg-[#519A70] px-4 py-2.5 text-xs tracking-[0.1em] text-white font-semibold hover:opacity-90 disabled:opacity-40`}
               >
                 {savingCapacity ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Contact info ─────────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-black/10 bg-white p-5">
+            <p className={`${vulfMono.className} font-bold text-sm mb-1`}>Contact Info</p>
+            <p className={`${vulfMono.className} text-xs text-neutral-400 mb-4`}>
+              Shown on the public Studio Locations page.
+            </p>
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex-1 min-w-[220px]">
+                <label className="block text-xs text-neutral-500 mb-1">Address</label>
+                <input
+                  type="text"
+                  placeholder="218 E University Pkwy, Orem, UT 84058"
+                  className={`${inputCls} w-full`}
+                  value={contactDraft.address}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, address: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  placeholder="(801) 361-9066"
+                  className={`${inputCls} w-48`}
+                  value={contactDraft.phone}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, phone: e.target.value }))}
+                />
+              </div>
+              {!current.is_bookable && (
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">Expected opening</label>
+                  <input
+                    type="text"
+                    placeholder="October 2026"
+                    className={`${inputCls} w-40`}
+                    value={contactDraft.opening_estimate}
+                    onChange={(e) => setContactDraft((s) => ({ ...s, opening_estimate: e.target.value }))}
+                  />
+                </div>
+              )}
+              <button
+                onClick={saveContact}
+                disabled={savingContact}
+                className={`${vulfMono.className} rounded-lg bg-[#519A70] px-4 py-2.5 text-xs tracking-[0.1em] text-white font-semibold hover:opacity-90 disabled:opacity-40`}
+              >
+                {savingContact ? "Saving…" : "Save"}
               </button>
             </div>
           </div>

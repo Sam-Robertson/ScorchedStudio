@@ -11,9 +11,42 @@ export type LocationRecord = {
   capacity: number;
   max_party_size: number;
   address: string | null;
+  phone: string | null;
+  opening_estimate: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type PublicDayHours = {
+  weekday: number;
+  is_open: boolean;
+  open_time: string;
+  close_time: string;
+};
+
+export const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// "18:00:00" -> "6:00 PM"
+export function formatClockTime(hhmmss: string): string {
+  const [h, m] = hhmmss.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+// Read-only, for the public /locations page. Unlike booking-utils' hours
+// lookup, this never fails open with a fallback schedule — if a location
+// has no hours configured, the page should show nothing, not someone
+// else's hours.
+export async function getPublicBusinessHours(key: string): Promise<PublicDayHours[]> {
+  const { data, error } = await getSupabase()
+    .from("business_hours")
+    .select("weekday, is_open, open_time, close_time")
+    .eq("location", key)
+    .order("weekday");
+  if (error) throw error;
+  return (data ?? []) as PublicDayHours[];
+}
 
 export async function getLocations(): Promise<LocationRecord[]> {
   const { data, error } = await getSupabase().from("locations").select("*").order("key");
@@ -57,7 +90,7 @@ export async function setLocationPassword(key: string, password: string): Promis
 
 export async function updateLocation(
   key: string,
-  patch: Partial<Pick<LocationRecord, "is_bookable" | "capacity" | "max_party_size" | "name" | "address">>
+  patch: Partial<Pick<LocationRecord, "is_bookable" | "capacity" | "max_party_size" | "name" | "address" | "phone" | "opening_estimate">>
 ): Promise<LocationRecord> {
   const { data, error } = await getSupabase()
     .from("locations")

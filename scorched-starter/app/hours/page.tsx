@@ -1,14 +1,8 @@
 // app/hours/page.tsx
-import Pricing from "@/components/sections/Pricing";
-import Hours from "@/components/sections/Hours";
+// "Hours & Pricing" moved to /locations (per-location hours/pricing/phone,
+// with a coming-soon state for unopened locations). Redirect old links.
+import { redirect } from "next/navigation";
 
 export default function HoursAndPricingPage() {
-  return (
-    <main className="pb-16">
-      <div className="my-8 md:my-10">
-        <Pricing />
-      </div>
-      <Hours />
-    </main>
-  );
+  redirect("/locations");
 }
