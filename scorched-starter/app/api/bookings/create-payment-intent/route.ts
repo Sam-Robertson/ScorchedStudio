@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: party_size * PRICE_PER_PERSON_CENTS,
     currency: "usd",
+    payment_method_types: ["card"],
     metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "", location },
     receipt_email: email,
     description: `Scorched Studio – ${party_size} ${party_size === 1 ? "person" : "people"} on ${date} at ${time_slot}`,
