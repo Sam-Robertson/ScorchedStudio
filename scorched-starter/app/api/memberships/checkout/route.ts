@@ -63,11 +63,13 @@ export async function POST(req: NextRequest) {
   // Checkout page collects the email itself.
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    // Card only (Apple Pay / Google Pay still ride along as wallet options
-    // within "card") — Link removed entirely, not just demoted, per product
-    // decision after Link kept appearing as the default despite being listed
-    // second.
-    payment_method_types: ["card"],
+    // No payment_method_types override — Stripe mirrors whatever's enabled
+    // in the Dashboard (Settings > Payment methods). Link was previously
+    // excluded here via a hardcoded ["card"], but that also silently
+    // excluded every other enabled method (e.g. Cash App Pay) and would
+    // exclude any future one too. Link is now disabled account-wide in the
+    // Dashboard instead, which is the only way to get "everything enabled
+    // except Link" without a code change per method.
     // Lets staff look members up by phone at the counter (app/admin/memberships).
     phone_number_collection: { enabled: true },
     line_items,
