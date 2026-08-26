@@ -1,7 +1,7 @@
 "use client";
 
 // app/account/login/page.tsx
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
@@ -9,6 +9,14 @@ import { vulfMono } from "@/app/fonts";
 const inputCls = "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
 
 export default function AccountLoginPage() {
+  return (
+    <Suspense>
+      <AccountLoginForm />
+    </Suspense>
+  );
+}
+
+function AccountLoginForm() {
   const searchParams = useSearchParams();
   const expired = searchParams.get("error") === "expired";
 

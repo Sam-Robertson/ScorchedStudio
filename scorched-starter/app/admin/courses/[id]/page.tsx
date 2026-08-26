@@ -8,7 +8,7 @@ import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import type { CohortRecord, CourseRecord } from "@/lib/courses";
-import { CourseModal, type CourseModalMode } from "@/app/admin/courses/page";
+import { CourseModal, type CourseModalMode } from "@/components/admin/CourseModal";
 import CohortDetailModal from "@/components/admin/CohortDetailModal";
 
 const inputCls = "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
