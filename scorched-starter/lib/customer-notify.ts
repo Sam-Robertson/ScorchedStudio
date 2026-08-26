@@ -10,7 +10,11 @@ import { signLoginToken } from "@/lib/customer-session";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendLoginEmail(email: string) {
+// redirectTo is not part of the signed token — it only controls where a
+// successful login lands the customer, never their identity — so
+// /api/account/verify is responsible for validating it's a safe local path
+// before using it (no open-redirect via an attacker-supplied value).
+export async function sendLoginEmail(email: string, redirectTo?: string) {
   if (!process.env.CONTACT_FROM) {
     console.error("CUSTOMER_LOGIN_EMAIL_MISSING_CONTACT_FROM");
     return;
@@ -18,7 +22,8 @@ export async function sendLoginEmail(email: string) {
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
   const token = signLoginToken(email);
-  const link = `${baseUrl}/api/account/verify?token=${encodeURIComponent(token)}`;
+  let link = `${baseUrl}/api/account/verify?token=${encodeURIComponent(token)}`;
+  if (redirectTo) link += `&redirect=${encodeURIComponent(redirectTo)}`;
 
   const { error } = await resend.emails.send({
     from: "Scorched Studio <accounts@scorchedstudio.com>",

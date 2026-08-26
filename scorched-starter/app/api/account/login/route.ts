@@ -3,7 +3,15 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { sendLoginEmail } from "@/lib/customer-notify";
 
-const schema = z.object({ email: z.string().email() });
+// redirectTo must be a relative path (starts with "/", not "//") — enforced
+// here so a caller can't turn this into an open redirect via the emailed link.
+const schema = z.object({
+  email: z.string().email(),
+  redirectTo: z
+    .string()
+    .regex(/^\/(?!\/)/)
+    .optional(),
+});
 
 export async function POST(req: NextRequest) {
   const raw = await req.json();
@@ -15,7 +23,7 @@ export async function POST(req: NextRequest) {
   const email = parsed.data.email.toLowerCase().trim();
 
   try {
-    await sendLoginEmail(email);
+    await sendLoginEmail(email, parsed.data.redirectTo);
   } catch (err) {
     console.error("ACCOUNT_LOGIN_SEND_ERROR", err);
     // Don't reveal send failures either — same "always looks the same"

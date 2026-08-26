@@ -80,23 +80,23 @@ export async function handleCourseCheckoutCompleted(session: Stripe.Checkout.Ses
     await resend.emails.send({
       from: "Scorched Studio <courses@scorchedstudio.com>",
       to: email,
-      subject: `${course.name} — that cohort just filled up`,
+      subject: `${course.name}: that cohort just filled up`,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; color: #3A3A3A;">
-          <h1 style="font-size: 22px; margin-bottom: 8px;">Sorry, ${name.split(" ")[0]} — that seat just went</h1>
+          <h1 style="font-size: 22px; margin-bottom: 8px;">Sorry, ${name.split(" ")[0]}, that seat just went</h1>
           <p style="color: #555; margin-bottom: 16px;">
             Someone else completed checkout for the last seat in the <strong>${cohort.label}</strong> cohort of
             <strong>${course.name}</strong> right around the same time as you.
           </p>
           <p style="color: #555; font-size: 14px; margin-bottom: 16px;">
             A full refund of <strong>$${(amountPaidCents / 100).toFixed(2)}</strong> has been issued to your
-            original payment method — it typically appears within 5–10 business days.
+            original payment method. It typically appears within 5-10 business days.
           </p>
           <p style="color: #555; font-size: 14px;">
             We've added you to the waitlist for this cohort and will reach out if a seat opens up.
           </p>
-          <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Please do not reply to this email — it is not monitored.</p>
-          <p style="color: #555; font-size: 14px; margin-top: 12px;">— The Scorched Studio Team</p>
+          <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Please do not reply to this email, it is not monitored.</p>
+          <p style="color: #555; font-size: 14px; margin-top: 12px;">The Scorched Studio Team</p>
         </div>
       `,
     }).catch((err) => console.error("COURSE_OVERSELL_EMAIL_ERROR", session.id, err));
@@ -121,16 +121,16 @@ export async function handleCourseCheckoutCompleted(session: Stripe.Checkout.Ses
       <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; color: #3A3A3A;">
         <h1 style="font-size: 22px; margin-bottom: 8px;">You're in, ${name.split(" ")[0]}!</h1>
         <p style="color: #555; margin-bottom: 20px;">
-          You're enrolled in <strong>${course.name}</strong> — <strong>${cohort.label}</strong> cohort.
+          You're enrolled in the <strong>${cohort.label}</strong> cohort of <strong>${course.name}</strong>.
         </p>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">${sessionRows}</table>
         <p style="color: #555; font-size: 14px;">Total paid: <strong>$${(amountPaidCents / 100).toFixed(2)}</strong></p>
         <p style="color: #555; font-size: 14px; margin-top: 16px;">
-          Each person needs to sign a waiver before their first session —
-          <a href="https://scorchedstudio.com/waiver" style="color: #884A20;">sign here</a> if you haven't already.
+          Each person needs to sign a waiver before their first session.
+          <a href="https://scorchedstudio.com/waiver" style="color: #884A20;">Sign here</a> if you haven't already.
         </p>
-        <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Please do not reply to this email — it is not monitored.</p>
-        <p style="color: #555; font-size: 14px; margin-top: 12px;">— The Scorched Studio Team</p>
+        <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Please do not reply to this email, it is not monitored.</p>
+        <p style="color: #555; font-size: 14px; margin-top: 12px;">The Scorched Studio Team</p>
       </div>
     `,
   }).catch((err) => console.error("COURSE_CONFIRMATION_EMAIL_ERROR", session.id, err));

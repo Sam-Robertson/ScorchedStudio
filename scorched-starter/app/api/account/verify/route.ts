@@ -13,7 +13,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${baseUrl}/account/login?error=expired`);
   }
 
-  const response = NextResponse.redirect(`${baseUrl}/account`);
+  // Only a same-site relative path is allowed here — this value came back
+  // through an unsigned query param, so treat it as untrusted input rather
+  // than letting it redirect off-site.
+  const redirectParam = req.nextUrl.searchParams.get("redirect");
+  const destination = redirectParam && /^\/(?!\/)/.test(redirectParam) ? redirectParam : "/account";
+
+  const response = NextResponse.redirect(`${baseUrl}${destination}`);
   response.cookies.set(CUSTOMER_SESSION_COOKIE, signCustomerSessionToken(email), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

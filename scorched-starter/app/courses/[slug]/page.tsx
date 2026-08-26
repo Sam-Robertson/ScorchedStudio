@@ -1,4 +1,5 @@
 // app/courses/[slug]/page.tsx
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
@@ -8,6 +9,7 @@ import {
   getCourseBySlug,
   getSessionsForCohort,
 } from "@/lib/courses";
+import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
 import CourseCohortPicker from "@/components/courses/CourseCohortPicker";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,9 @@ export default async function CourseDetailPage({
   const { cohort: initialCohortId } = await searchParams;
   const course = await getCourseBySlug(slug);
   if (!course || course.status !== "active") notFound();
+
+  const sessionToken = (await cookies()).get(CUSTOMER_SESSION_COOKIE)?.value;
+  const customerSession = sessionToken ? verifyCustomerSessionToken(sessionToken) : null;
 
   const cohorts = (await getCohortsForCourse(course.id)).filter((c) => c.status !== "cancelled");
   const [sessionsByCohort, availability] = await Promise.all([
@@ -57,12 +62,12 @@ export default async function CourseDetailPage({
       <section className="py-6">
         <Container className="max-w-3xl">
           <h2 className="h3 font-bold mb-4">Curriculum</h2>
-          <div className="space-y-3 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
             {course.curriculum.map((week) => (
-              <div key={week.week} className="rounded-2xl border border-black/10 bg-white p-5">
-                <p className={`${vulfMono.className} text-xs text-neutral-400 mb-1`}>WEEK {week.week}</p>
-                <h3 className="font-semibold text-neutral-900 mb-2">{week.title}</h3>
-                <ul className={`${vulfMono.className} text-sm text-neutral-600 list-disc list-inside space-y-1`}>
+              <div key={week.week} className="rounded-xl border border-black/10 bg-white p-3">
+                <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-0.5`}>WEEK {week.week}</p>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1.5">{week.title}</h3>
+                <ul className={`${vulfMono.className} text-xs text-neutral-600 list-disc list-inside space-y-0.5`}>
                   {week.topics.map((topic, i) => (
                     <li key={i}>{topic}</li>
                   ))}
@@ -74,7 +79,11 @@ export default async function CourseDetailPage({
           {cohortsWithDetail.length === 0 ? (
             <p className={`${vulfMono.className} text-neutral-400`}>No upcoming cohorts are scheduled right now.</p>
           ) : (
-            <CourseCohortPicker cohorts={cohortsWithDetail} initialCohortId={initialCohortId} />
+            <CourseCohortPicker
+              cohorts={cohortsWithDetail}
+              initialCohortId={initialCohortId}
+              accountEmail={customerSession?.email ?? null}
+            />
           )}
         </Container>
       </section>

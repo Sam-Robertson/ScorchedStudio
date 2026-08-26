@@ -3,23 +3,30 @@ import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { getCohortAvailability, getCohortWithCourse } from "@/lib/courses";
+import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const schema = z.object({
   cohort_id: z.string().uuid(),
   name: z.string().min(1),
-  email: z.string().email(),
   phone: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
+  const token = req.cookies.get(CUSTOMER_SESSION_COOKIE)?.value;
+  const customerSession = token ? verifyCustomerSessionToken(token) : null;
+  if (!customerSession) {
+    return Response.json({ error: "Please log in to enroll in a course.", requiresLogin: true }, { status: 401 });
+  }
+  const email = customerSession.email;
+
   const raw = await req.json();
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     return Response.json({ error: "Invalid input", issues: parsed.error.flatten() }, { status: 400 });
   }
-  const { cohort_id, name, email, phone } = parsed.data;
+  const { cohort_id, name, phone } = parsed.data;
 
   const found = await getCohortWithCourse(cohort_id);
   if (!found) {
@@ -46,12 +53,13 @@ export async function POST(req: NextRequest) {
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
+    payment_method_types: ["card"],
     customer_email: email,
     line_items: [
       {
         price_data: {
           currency: "usd",
-          product_data: { name: `${course.name} — ${cohort.label} cohort` },
+          product_data: { name: `${course.name}, ${cohort.label} cohort` },
           unit_amount: cohort.price_cents,
         },
         quantity: 1,

@@ -37,7 +37,7 @@ export default async function CoursesPage() {
         <Container>
           {courses.length === 0 ? (
             <p className={`${vulfMono.className} text-center text-neutral-400`}>
-              No courses are open right now — check back soon.
+              No courses are open right now, check back soon.
             </p>
           ) : (
             <div className="mx-auto max-w-4xl grid grid-cols-1 gap-6 md:grid-cols-2">

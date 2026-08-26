@@ -17,18 +17,100 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// Shown in place of the enroll/waitlist form until the visitor has a
+// verified account — the checkout and waitlist routes require the same
+// session server-side, so this is a UX convenience, not the real gate.
+function LoginGate({ cohortLabel }: { cohortLabel: string }) {
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/account/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginEmail,
+          redirectTo: window.location.pathname + window.location.search,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
+        <p className="font-semibold text-neutral-900 mb-1">Check your email</p>
+        <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
+          We sent a login link to {loginEmail}. Click it, then come back to this page to finish enrolling.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
+      <div>
+        <h3 className="font-semibold text-neutral-900 mb-1">Log in to enroll in {cohortLabel}</h3>
+        <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+          Courses require an account so you can manage your enrollment later. Enter your email and
+          we&apos;ll send you a login link, no password needed.
+        </p>
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div>
+        <label className={labelCls}>Email</label>
+        <input
+          type="email"
+          className={inputCls}
+          value={loginEmail}
+          onChange={(e) => setLoginEmail(e.target.value)}
+          required
+          autoFocus
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
+      >
+        {loading ? "Sending…" : "Email me a login link"}
+      </button>
+    </form>
+  );
+}
+
 export default function CourseCohortPicker({
   cohorts,
   initialCohortId,
+  accountEmail,
 }: {
   cohorts: CohortWithDetail[];
   initialCohortId?: string;
+  accountEmail: string | null;
 }) {
   const preselected = initialCohortId && cohorts.some((c) => c.id === initialCohortId) ? initialCohortId : null;
   const [selectedId, setSelectedId] = useState<string | null>(preselected ?? cohorts[0]?.id ?? null);
   const [fullOverride, setFullOverride] = useState<Record<string, boolean>>({});
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +124,8 @@ export default function CourseCohortPicker({
     if (!selected) return;
     setError(null);
 
-    if (!name.trim() || !email.trim()) {
-      setError("Name and email are required.");
+    if (!name.trim()) {
+      setError("Name is required.");
       return;
     }
 
@@ -53,7 +135,7 @@ export default function CourseCohortPicker({
         const res = await fetch("/api/courses/waitlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cohort_id: selected.id, name, email, phone: phone || undefined }),
+          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -65,12 +147,12 @@ export default function CourseCohortPicker({
         const res = await fetch("/api/courses/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cohort_id: selected.id, name, email, phone: phone || undefined }),
+          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.url) {
           if (data.full) {
-            // Someone else filled the last seat while this page was open —
+            // Someone else filled the last seat while this page was open,
             // switch this cohort to waitlist mode instead of just erroring.
             setFullOverride((prev) => ({ ...prev, [selected.id]: true }));
             setError("This cohort just filled up. You can join the waitlist below instead.");
@@ -94,7 +176,7 @@ export default function CourseCohortPicker({
       <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
         <p className="font-semibold text-neutral-900 mb-1">You&apos;re on the waitlist</p>
         <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
-          We&apos;ll email you at {email} if a seat opens up in the {selected?.label} cohort.
+          We&apos;ll email you at {accountEmail} if a seat opens up in the {selected?.label} cohort.
         </p>
       </div>
     );
@@ -140,7 +222,9 @@ export default function CourseCohortPicker({
         })}
       </div>
 
-      {selected && (
+      {selected && !accountEmail && <LoginGate cohortLabel={selected.label} />}
+
+      {selected && accountEmail && (
         <form onSubmit={handleSubmit} className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
           <h3 className="font-semibold text-neutral-900">
             {isFull ? `Join the waitlist for ${selected.label}` : `Enroll in ${selected.label}`}
@@ -154,7 +238,9 @@ export default function CourseCohortPicker({
           </div>
           <div>
             <label className={labelCls}>Email</label>
-            <input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <p className={`${vulfMono.className} text-sm text-neutral-500 break-words px-4 py-3 rounded-lg bg-neutral-50 border border-black/10`}>
+              {accountEmail}
+            </p>
           </div>
           <div>
             <label className={labelCls}>Phone (optional)</label>
