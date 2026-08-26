@@ -28,6 +28,104 @@ const inputCls =
 const labelCls = "block text-sm font-medium mb-1";
 const errorCls = "text-sm text-red-600 mt-1";
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
+
+// Native <input type="date"> delegates its UI to the OS. On iOS that's a
+// fast spinner, but Android renders a plain scrollable year list, making it
+// painful to reach a birth year decades back. Splitting year into a typed
+// number field (not a dropdown) removes the scrolling entirely on any
+// platform.
+function DateOfBirthInput({
+  value,
+  onChange,
+}: {
+  value: string; // "YYYY-MM-DD" or ""
+  onChange: (iso: string) => void;
+}) {
+  const initial = value ? value.split("-") : ["", "", ""];
+  const [year, setYear] = useState(initial[0] || "");
+  const [month, setMonth] = useState(initial[1] ? String(Number(initial[1])) : "");
+  const [day, setDay] = useState(initial[2] ? String(Number(initial[2])) : "");
+
+  function emit(nextYear: string, nextMonth: string, nextDay: string) {
+    const y = Number(nextYear);
+    const m = Number(nextMonth);
+    const d = Number(nextDay);
+    if (nextYear.length === 4 && nextMonth && nextDay && d >= 1 && d <= daysInMonth(y, m)) {
+      onChange(`${nextYear}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    } else {
+      onChange("");
+    }
+  }
+
+  function handleMonth(v: string) {
+    const maxDay = year && v ? daysInMonth(Number(year), Number(v)) : 31;
+    const clampedDay = day && Number(day) > maxDay ? String(maxDay) : day;
+    setMonth(v);
+    setDay(clampedDay);
+    emit(year, v, clampedDay);
+  }
+
+  function handleDay(v: string) {
+    setDay(v);
+    emit(year, month, v);
+  }
+
+  function handleYear(v: string) {
+    const digits = v.replace(/\D/g, "").slice(0, 4);
+    setYear(digits);
+    emit(digits, month, day);
+  }
+
+  const dayCount = month && year ? daysInMonth(Number(year), Number(month)) : 31;
+  const days = Array.from({ length: dayCount }, (_, i) => i + 1);
+
+  return (
+    <div className="flex gap-2">
+      <select
+        className={`${inputCls} w-auto`}
+        value={month}
+        onChange={(e) => handleMonth(e.target.value)}
+        aria-label="Birth month"
+      >
+        <option value="">Month</option>
+        {MONTHS.map((name, i) => (
+          <option key={name} value={i + 1}>{name}</option>
+        ))}
+      </select>
+      <select
+        className={`${inputCls} w-auto`}
+        value={day}
+        onChange={(e) => handleDay(e.target.value)}
+        aria-label="Birth day"
+      >
+        <option value="">Day</option>
+        {days.map((d) => (
+          <option key={d} value={d}>{d}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={4}
+        placeholder="Year"
+        className={`${inputCls} w-24`}
+        value={year}
+        onChange={(e) => handleYear(e.target.value)}
+        aria-label="Birth year"
+      />
+    </div>
+  );
+}
+
 export default function WaiverPage() {
   const sigRef = useRef<SignatureCanvasRef>(null);
   const [sigError, setSigError] = useState<string | null>(null);
@@ -62,8 +160,12 @@ export default function WaiverPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  const dateOfBirth = watch("dateOfBirth");
 
   const clearSigError = useCallback(() => setSigError(null), []);
 
@@ -221,7 +323,10 @@ export default function WaiverPage() {
         {/* DOB */}
         <div className="max-w-xs">
           <label className={labelCls}>Date of Birth</label>
-          <input type="date" className={inputCls} {...register("dateOfBirth")} />
+          <DateOfBirthInput
+            value={dateOfBirth ?? ""}
+            onChange={(iso) => setValue("dateOfBirth", iso, { shouldValidate: true, shouldDirty: true })}
+          />
           {errors.dateOfBirth && <p className={errorCls}>{errors.dateOfBirth.message}</p>}
         </div>
 
@@ -285,11 +390,9 @@ export default function WaiverPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Date of Birth</label>
-                      <input
-                        type="date"
-                        className="w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40"
+                      <DateOfBirthInput
                         value={minor.dateOfBirth}
-                        onChange={(e) => updateMinor(i, "dateOfBirth", e.target.value)}
+                        onChange={(iso) => updateMinor(i, "dateOfBirth", iso)}
                       />
                     </div>
                   </div>
