@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import Container from "@/components/ui/Container";
-import { Flame, Percent, Wallet, X } from "lucide-react";
+import { Flame, Percent, Wallet } from "lucide-react";
 import type { BillingInterval, MembershipPlan } from "@/lib/memberships";
 import { trackInitiateCheckout } from "@/lib/fbq";
 
@@ -17,21 +17,41 @@ function formatCents(cents: number): string {
 export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [pendingPlan, setPendingPlan] = useState<MembershipPlan | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startCheckout(plan: MembershipPlan, firstName: string, lastName: string) {
+  function selectPlan(plan: MembershipPlan) {
+    setError(null);
+    setPendingPlan(plan);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pendingPlan) return;
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("First and last name are required.");
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
 
-    const valueCents = interval === "monthly" ? plan.price_monthly_cents : plan.price_annual_cents;
-    trackInitiateCheckout({ planKey: plan.key, interval, valueCents });
+    const valueCents =
+      interval === "monthly" ? pendingPlan.price_monthly_cents : pendingPlan.price_annual_cents;
+    trackInitiateCheckout({ planKey: pendingPlan.key, interval, valueCents });
 
     try {
       const res = await fetch("/api/memberships/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planKey: plan.key, interval, firstName, lastName }),
+        body: JSON.stringify({
+          planKey: pendingPlan.key,
+          interval,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -65,114 +85,71 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
           </div>
         </div>
 
-        {error && (
-          <p className={`${vulfMono.className} text-center text-sm text-red-600 mb-4`}>{error}</p>
-        )}
-
         <div className="mx-auto max-w-4xl grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
           {plans.map((plan) => (
             <TierCard
               key={plan.key}
               plan={plan}
               interval={interval}
-              onCheckout={() => setPendingPlan(plan)}
+              active={pendingPlan?.key === plan.key}
+              onCheckout={() => selectPlan(plan)}
             />
           ))}
         </div>
+
+        {pendingPlan && (
+          <form
+            onSubmit={handleSubmit}
+            className="mx-auto max-w-4xl mt-8 rounded-2xl border border-black/10 bg-white p-6 space-y-4"
+          >
+            <h3 className="font-semibold text-neutral-900">Join {pendingPlan.name}</h3>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">First name</label>
+                <input
+                  className={inputCls}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Last name</label>
+                <input
+                  className={inputCls}
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
+            >
+              {submitting ? "Starting checkout…" : "Continue to payment"}
+            </button>
+          </form>
+        )}
       </Container>
-
-      {pendingPlan && (
-        <NameModal
-          plan={pendingPlan}
-          submitting={submitting}
-          onCancel={() => setPendingPlan(null)}
-          onSubmit={(firstName, lastName) => startCheckout(pendingPlan, firstName, lastName)}
-        />
-      )}
     </section>
-  );
-}
-
-function NameModal({
-  plan,
-  submitting,
-  onCancel,
-  onSubmit,
-}: {
-  plan: MembershipPlan;
-  submitting: boolean;
-  onCancel: () => void;
-  onSubmit: (firstName: string, lastName: string) => void;
-}) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) return;
-    onSubmit(firstName.trim(), lastName.trim());
-  }
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-      onMouseDown={(e) => e.target === e.currentTarget && !submitting && onCancel()}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="eyebrow text-brand">Join {plan.name}</p>
-            <h2 className="h3 font-bold">What&apos;s your name?</h2>
-          </div>
-          <button
-            onClick={onCancel}
-            disabled={submitting}
-            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">First name</label>
-            <input
-              className={inputCls}
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Last name</label>
-            <input
-              className={inputCls}
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
-          >
-            {submitting ? "Starting checkout…" : "Continue to payment"}
-          </button>
-        </form>
-      </div>
-    </div>
   );
 }
 
 function TierCard({
   plan,
   interval,
+  active,
   onCheckout,
 }: {
   plan: MembershipPlan;
   interval: BillingInterval;
+  active: boolean;
   onCheckout: () => void;
 }) {
   const monthlyEquivalentCents =
@@ -181,7 +158,11 @@ function TierCard({
     interval === "monthly" ? !!plan.stripe_price_monthly : !!plan.stripe_price_annual;
 
   return (
-    <div className="rounded-3xl border border-green bg-white p-6 shadow-sm flex flex-col">
+    <div
+      className={`rounded-3xl border bg-white p-6 shadow-sm flex flex-col ${
+        active ? "border-brand ring-1 ring-brand" : "border-green"
+      }`}
+    >
       <h2 className="h3 font-bold">{plan.name}</h2>
       {/* min-h reserves room for the longer of the two taglines (4 lines at
           14px/1.5 leading) so the price row below lines up across cards
