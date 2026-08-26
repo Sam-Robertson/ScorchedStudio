@@ -95,7 +95,7 @@ function NavDropdown({
       <button
         ref={triggerRef}
         onClick={() => setOpen((s) => !s)}
-        className="flex items-center gap-0.5 whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80"
+        className="flex items-center gap-0.5 whitespace-nowrap text-[15px] leading-[1.1] [word-spacing:-3px] transition-opacity hover:opacity-80"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -200,7 +200,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             <Link
               href="/group-events"
               className={clsx(
-                "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
+                "whitespace-nowrap text-[15px] leading-[1.1] [word-spacing:-3px] transition-opacity hover:opacity-80",
                 isActive("/group-events") && "underline underline-offset-4"
               )}
             >
