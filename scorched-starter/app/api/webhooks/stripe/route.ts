@@ -7,6 +7,7 @@ import {
   handleInvoicePaid,
   handleSubscriptionSync,
 } from "@/lib/membership-webhooks";
+import { handleCourseCheckoutCompleted } from "@/lib/course-webhooks";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -38,7 +39,12 @@ export async function POST(req: NextRequest) {
 
   try {
     if (event.type === "checkout.session.completed") {
-      await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+      const session = event.data.object as Stripe.Checkout.Session;
+      // Two independent one-time-purchase flows share this event type —
+      // each handler bails immediately if the session isn't theirs (mode
+      // mismatch, or no cohort_id metadata), so it's safe to call both.
+      await handleCheckoutSessionCompleted(session);
+      await handleCourseCheckoutCompleted(session);
     } else if (
       event.type === "customer.subscription.updated" ||
       event.type === "customer.subscription.deleted"
