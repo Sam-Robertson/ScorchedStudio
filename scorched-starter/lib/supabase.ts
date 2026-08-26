@@ -96,6 +96,17 @@ export type ProductRecord = {
   active: boolean;
 };
 
+export type JobOpeningRecord = {
+  id: string;
+  title: string;
+  location: string | null;
+  employment_type: string | null;
+  description: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type EventRecord = {
   id: string;
   title: string;
