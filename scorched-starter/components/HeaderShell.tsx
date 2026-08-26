@@ -162,7 +162,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
           left over, which is fine since only the edges need to be close. */}
       <nav
         className={clsx(
-          "flex h-16 items-center justify-between px-8",
+          "flex h-16 items-center justify-between px-28",
           vulfMono.className
         )}
         aria-label="Primary"
@@ -179,7 +179,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
         </Link>
 
         {/* Nav links — small, uniform gap between each item */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-8">
           <Link
             href="/"
             className={clsx(
