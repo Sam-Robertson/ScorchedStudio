@@ -46,7 +46,7 @@ export default function HeaderShell({ locations }: { locations: LocationRecord[]
   return (
     <header className="sticky top-0 z-50 bg-cream/95 backdrop-blur supports-[backdrop-filter]:bg-cream/85 border-b border-black/10">
       <DesktopHeader locationLinks={locationLinks} />
-      <MobileHeader locationLinks={locationLinks} />
+      <MobileHeader />
     </header>
   );
 }
@@ -180,16 +180,6 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
 
         {/* Nav links — small, uniform gap between each item */}
         <div className="flex items-center gap-8">
-          <Link
-            href="/"
-            className={clsx(
-              "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
-              isActive("/") && "underline underline-offset-4"
-            )}
-          >
-            Home
-          </Link>
-
           <NavDropdown label="Studio Locations" links={locationLinks} isActive={isActive} />
 
           <NavDropdown label="Memberships" links={membershipLinks} isActive={isActive} />
@@ -230,7 +220,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
 }
 
 /* -------------------- MOBILE -------------------- */
-function MobileHeader({ locationLinks }: { locationLinks: { href: string; label: string }[] }) {
+function MobileHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -255,7 +245,6 @@ function MobileHeader({ locationLinks }: { locationLinks: { href: string; label:
   }, [open]);
 
   const mobileNav = [
-    { href: "/", label: "Home" },
     { href: "/locations", label: "Studio Locations" },
     ...REST_OF_MOBILE_NAV,
   ];
