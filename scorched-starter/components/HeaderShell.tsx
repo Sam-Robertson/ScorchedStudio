@@ -156,7 +156,7 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
       <Container>
         <nav
           className={clsx(
-            "flex h-16 items-center",
+            "flex h-16 items-center justify-between",
             vulfMono.className
           )}
           aria-label="Primary"
@@ -166,15 +166,16 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             <Image
               src="/illustrations/Logo.svg"
               alt="Scorched Studio"
-              width={225}
-              height={225}
+              width={170}
+              height={170}
               priority
             />
           </Link>
 
-          {/* Nav + CTA, grouped so the button always sits a fixed distance
-              from "More" instead of drifting with leftover flex space */}
-          <div className="flex-1 flex justify-end items-center gap-10 ml-10">
+          {/* Nav links — a plain (non-flex-1) group, so justify-between on
+              the parent nav gives it mathematically equal gaps from the
+              logo and from the CTA, regardless of viewport width. */}
+          <div className="flex items-center gap-8">
             <Link
               href="/"
               className={clsx(
@@ -210,14 +211,15 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
             </Link>
 
             <NavDropdown label="More" links={moreLinks} isActive={isActive} />
-
-            <Link
-              href="/book"
-              className="inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity ml-2"
-            >
-              BOOK&nbsp;NOW
-            </Link>
           </div>
+
+          {/* CTA */}
+          <Link
+            href="/book"
+            className="shrink-0 inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
+          >
+            BOOK&nbsp;NOW
+          </Link>
         </nav>
       </Container>
     </div>
