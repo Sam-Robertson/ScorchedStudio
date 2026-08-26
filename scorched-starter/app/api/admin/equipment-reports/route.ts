@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
+import { notifyNewEquipmentReport } from "@/lib/equipment-report-notify";
 
 export async function GET(req: NextRequest) {
   const session = requireInStudio(req);
@@ -60,6 +61,12 @@ export async function POST(req: NextRequest) {
   if (error) {
     console.error("ADMIN_EQUIPMENT_REPORTS_CREATE_ERROR", error);
     return Response.json({ error: "Failed to create report." }, { status: 500 });
+  }
+
+  try {
+    await notifyNewEquipmentReport({ ...parsed.data, priority: parsed.data.priority ?? null, location });
+  } catch (err) {
+    console.error("ADMIN_EQUIPMENT_REPORTS_NOTIFY_ERROR", err);
   }
 
   return Response.json(report, { status: 201 });
