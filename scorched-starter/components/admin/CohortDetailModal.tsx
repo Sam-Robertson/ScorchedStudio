@@ -269,7 +269,7 @@ export default function CohortDetailModal({
                       <p className="text-xs text-neutral-400 italic">No sessions scheduled yet.</p>
                     )}
                   </div>
-                  <form onSubmit={handleAddSession} className="grid grid-cols-5 gap-2 items-end">
+                  <form onSubmit={handleAddSession} className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
                     <div>
                       <label className="block text-[10px] text-neutral-500 mb-1">#</label>
                       <input type="number" min={1} className={inputCls} value={newSession.session_number} onChange={(e) => setNewSession((s) => ({ ...s, session_number: e.target.value }))} required />

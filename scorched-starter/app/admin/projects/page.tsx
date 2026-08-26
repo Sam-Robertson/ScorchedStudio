@@ -299,7 +299,7 @@ function TaskModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>
                 START DATE
