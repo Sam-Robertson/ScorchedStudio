@@ -10,6 +10,8 @@ const schema = z.object({
   planKey: z.enum(["ember", "blaze"]),
   interval: z.enum(["monthly", "annual"]),
   addOn: z.boolean().optional(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
 });
 
 export async function POST(req: NextRequest) {
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid input", issues: parsed.error.flatten() }, { status: 400 });
   }
-  const { planKey, interval, addOn } = parsed.data;
+  const { planKey, interval, addOn, firstName, lastName } = parsed.data;
 
   const plan = await getPlanByKey(planKey);
   if (!plan || !plan.active) {
@@ -68,31 +70,24 @@ export async function POST(req: NextRequest) {
     payment_method_types: ["card"],
     // Lets staff look members up by phone at the counter (app/admin/memberships).
     phone_number_collection: { enabled: true },
-    // Members are identified by name first, email as a fallback — the card's
-    // own billing-name field is optional in Checkout and often just gets
-    // whatever's printed on the card, so these are separate required fields
-    // instead. Combined into a single "name" string in the webhook
-    // (lib/membership-webhooks.ts) rather than adding first/last columns,
-    // since nothing else in the app needs them apart.
-    custom_fields: [
-      {
-        key: "first_name",
-        label: { type: "custom", custom: "First name" },
-        type: "text",
-        optional: false,
-      },
-      {
-        key: "last_name",
-        label: { type: "custom", custom: "Last name" },
-        type: "text",
-        optional: false,
-      },
-    ],
     line_items,
     subscription_data: {
       metadata: { plan_key: planKey, billing_interval: interval },
     },
-    metadata: { plan_key: planKey, billing_interval: interval, add_on: String(!!addOn) },
+    // Members are identified by name first, email as a fallback — collected
+    // on our own site (components/memberships/MembershipTiers.tsx) rather
+    // than Stripe's own billing-name field, which is optional in Checkout
+    // and often just whatever's printed on the card. Combined into a single
+    // "name" string in the webhook (lib/membership-webhooks.ts) rather than
+    // adding first/last columns, since nothing else in the app needs them
+    // apart.
+    metadata: {
+      plan_key: planKey,
+      billing_interval: interval,
+      add_on: String(!!addOn),
+      first_name: firstName,
+      last_name: lastName,
+    },
     success_url: `${baseUrl}/memberships/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/memberships`,
   });

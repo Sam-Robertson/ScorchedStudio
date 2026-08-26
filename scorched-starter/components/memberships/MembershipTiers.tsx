@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import Container from "@/components/ui/Container";
-import { Flame, Percent, Wallet } from "lucide-react";
+import { Flame, Percent, Wallet, X } from "lucide-react";
 import type { BillingInterval, MembershipPlan } from "@/lib/memberships";
 import { trackInitiateCheckout } from "@/lib/fbq";
+
+const inputCls =
+  "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -13,12 +16,13 @@ function formatCents(cents: number): string {
 
 export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<MembershipPlan | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startCheckout(plan: MembershipPlan) {
+  async function startCheckout(plan: MembershipPlan, firstName: string, lastName: string) {
     setError(null);
-    setLoadingKey(plan.key);
+    setSubmitting(true);
 
     const valueCents = interval === "monthly" ? plan.price_monthly_cents : plan.price_annual_cents;
     trackInitiateCheckout({ planKey: plan.key, interval, valueCents });
@@ -27,18 +31,18 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
       const res = await fetch("/api/memberships/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planKey: plan.key, interval }),
+        body: JSON.stringify({ planKey: plan.key, interval, firstName, lastName }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
         setError(data.error || "Something went wrong starting checkout. Please try again.");
-        setLoadingKey(null);
+        setSubmitting(false);
         return;
       }
       window.location.href = data.url;
     } catch {
       setError("Something went wrong starting checkout. Please try again.");
-      setLoadingKey(null);
+      setSubmitting(false);
     }
   }
 
@@ -71,25 +75,104 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
               key={plan.key}
               plan={plan}
               interval={interval}
-              loading={loadingKey === plan.key}
-              onCheckout={() => startCheckout(plan)}
+              onCheckout={() => setPendingPlan(plan)}
             />
           ))}
         </div>
       </Container>
+
+      {pendingPlan && (
+        <NameModal
+          plan={pendingPlan}
+          submitting={submitting}
+          onCancel={() => setPendingPlan(null)}
+          onSubmit={(firstName, lastName) => startCheckout(pendingPlan, firstName, lastName)}
+        />
+      )}
     </section>
+  );
+}
+
+function NameModal({
+  plan,
+  submitting,
+  onCancel,
+  onSubmit,
+}: {
+  plan: MembershipPlan;
+  submitting: boolean;
+  onCancel: () => void;
+  onSubmit: (firstName: string, lastName: string) => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!firstName.trim() || !lastName.trim()) return;
+    onSubmit(firstName.trim(), lastName.trim());
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      onMouseDown={(e) => e.target === e.currentTarget && !submitting && onCancel()}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="eyebrow text-brand">Join {plan.name}</p>
+            <h2 className="h3 font-bold">What&apos;s your name?</h2>
+          </div>
+          <button
+            onClick={onCancel}
+            disabled={submitting}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">First name</label>
+            <input
+              className={inputCls}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Last name</label>
+            <input
+              className={inputCls}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
+          >
+            {submitting ? "Starting checkout…" : "Continue to payment"}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
 function TierCard({
   plan,
   interval,
-  loading,
   onCheckout,
 }: {
   plan: MembershipPlan;
   interval: BillingInterval;
-  loading: boolean;
   onCheckout: () => void;
 }) {
   const monthlyEquivalentCents =
@@ -138,10 +221,10 @@ function TierCard({
 
       <button
         onClick={onCheckout}
-        disabled={loading || !canCheckout}
+        disabled={!canCheckout}
         className="mt-6 w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
       >
-        {!canCheckout ? "Coming soon" : loading ? "Starting checkout..." : `Join ${plan.name}`}
+        {!canCheckout ? "Coming soon" : `Join ${plan.name}`}
       </button>
     </div>
   );
