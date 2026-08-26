@@ -53,12 +53,12 @@ function NewsletterForm() {
   }
 
   if (status === 'done') {
-    return <p className="text-sm text-white/80">You&apos;re on the list — thanks!</p>;
+    return <p className="text-sm text-white/80">You&apos;re on the list. Thanks!</p>;
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
-      <p className="text-sm text-white/70">Deals, new products, and studio news — no spam.</p>
+      <p className="text-sm text-white/70">Deals, new products, and studio news. No spam.</p>
       <div className="flex gap-2">
         <input
           type="email"
@@ -85,7 +85,7 @@ function NewsletterForm() {
           {status === 'loading' ? '…' : 'JOIN'}
         </button>
       </div>
-      {status === 'error' && <p className="text-xs text-white/70">Something went wrong — try again.</p>}
+      {status === 'error' && <p className="text-xs text-white/70">Something went wrong. Try again.</p>}
     </form>
   );
 }
@@ -101,7 +101,7 @@ export default function FooterShell({ locations }: { locations: LocationRecord[]
           <div>
             <h3 className={headingCls}>Scorched Studio</h3>
             <p className="text-sm text-white/70 max-w-xs">
-              A wood-burning studio for anyone — no experience needed. Come make something you&apos;ll actually use.
+              A wood-burning studio for anyone, no experience needed.
             </p>
             <div className="flex items-center gap-4 mt-4">
               {socialLinks.map(({ href, label, Icon }) => (

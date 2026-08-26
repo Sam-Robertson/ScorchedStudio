@@ -30,6 +30,7 @@ const REST_OF_MOBILE_NAV = [
   { href: "/account/login", label: "Membership Sign In" },
   { href: "/memberships", label: "Memberships" },
   { href: "/group-events", label: "Group Events" },
+  { href: "/courses", label: "Courses" },
   { href: "/print-design", label: "Print Design" },
   { href: "/scorched-vip", label: "Scorched VIP" },
   { href: "/waiver", label: "Waiver" },
@@ -195,6 +196,16 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
               )}
             >
               Group Events
+            </Link>
+
+            <Link
+              href="/courses"
+              className={clsx(
+                "whitespace-nowrap text-[15px] leading-[1.1] transition-opacity hover:opacity-80",
+                isActive("/courses") && "underline underline-offset-4"
+              )}
+            >
+              Courses
             </Link>
 
             <NavDropdown label="More" links={moreLinks} isActive={isActive} />
