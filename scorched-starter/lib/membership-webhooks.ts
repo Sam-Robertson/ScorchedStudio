@@ -49,6 +49,19 @@ function idOf(ref: string | { id: string } | null | undefined): string | null {
   return typeof ref === "string" ? ref : ref.id;
 }
 
+// Required first_name/last_name custom fields (app/api/memberships/checkout/
+// route.ts) collected instead of relying on Checkout's own optional
+// billing-name field. Combined into one string since nothing else in the app
+// needs the two parts separately.
+function nameFromCustomFields(session: Stripe.Checkout.Session): string | null {
+  const byKey = Object.fromEntries(
+    (session.custom_fields ?? []).map((f) => [f.key, f.type === "text" ? f.text?.value : null])
+  );
+  const first = byKey.first_name?.trim();
+  const last = byKey.last_name?.trim();
+  return first || last ? [first, last].filter(Boolean).join(" ") : null;
+}
+
 // entrances_per_period and wood_credit_cents are defined per MONTH. Stripe only
 // fires one invoice.paid a year for an annual subscription, so there's only one
 // moment a year to grant anything — an annual member gets a full year's worth in
@@ -96,7 +109,7 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
 
   const membership = await upsertMembershipShell({
     email: email.toLowerCase().trim(),
-    name: session.customer_details?.name ?? null,
+    name: nameFromCustomFields(session) ?? session.customer_details?.name ?? null,
     phone: session.customer_details?.phone ?? null,
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,

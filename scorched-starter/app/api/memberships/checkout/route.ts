@@ -65,9 +65,28 @@ export async function POST(req: NextRequest) {
     // automatically as wallet options) is the default, not Link — Link stays
     // available as a secondary option rather than the pre-selected method.
     payment_method_types: ["card", "link"],
-    // Lets staff look members up by phone at the counter (app/admin/memberships) —
-    // name comes along for free from the card billing details Checkout already collects.
+    // Lets staff look members up by phone at the counter (app/admin/memberships).
     phone_number_collection: { enabled: true },
+    // Members are identified by name first, email as a fallback — the card's
+    // own billing-name field is optional in Checkout and often just gets
+    // whatever's printed on the card, so these are separate required fields
+    // instead. Combined into a single "name" string in the webhook
+    // (lib/membership-webhooks.ts) rather than adding first/last columns,
+    // since nothing else in the app needs them apart.
+    custom_fields: [
+      {
+        key: "first_name",
+        label: { type: "custom", custom: "First name" },
+        type: "text",
+        optional: false,
+      },
+      {
+        key: "last_name",
+        label: { type: "custom", custom: "Last name" },
+        type: "text",
+        optional: false,
+      },
+    ],
     line_items,
     subscription_data: {
       metadata: { plan_key: planKey, billing_interval: interval },
