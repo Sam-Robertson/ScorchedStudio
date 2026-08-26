@@ -62,7 +62,7 @@ export default async function CourseDetailPage({
       <section className="py-6">
         <Container className="max-w-3xl">
           <h2 className="h3 font-bold mb-4">Curriculum</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-10">
             {course.curriculum.map((week) => (
               <div key={week.week} className="rounded-xl border border-black/10 bg-white p-3">
                 <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-0.5`}>WEEK {week.week}</p>
