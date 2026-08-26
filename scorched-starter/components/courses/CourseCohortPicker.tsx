@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { CohortAvailability, CohortSessionRecord, CohortRecord } from "@/lib/courses";
 import { formatSessionDate, formatSessionTime } from "@/lib/courses";
@@ -21,80 +23,35 @@ function formatCents(cents: number): string {
 // verified account — the checkout and waitlist routes require the same
 // session server-side, so this is a UX convenience, not the real gate.
 function LoginGate({ cohortLabel }: { cohortLabel: string }) {
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/account/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginEmail,
-          redirectTo: window.location.pathname + window.location.search,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Something went wrong. Please try again.");
-        return;
-      }
-      setSent(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (sent) {
-    return (
-      <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
-        <p className="font-semibold text-neutral-900 mb-1">Check your email</p>
-        <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
-          We sent a login link to {loginEmail}. Click it, then come back to this page to finish enrolling.
-        </p>
-      </div>
-    );
-  }
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentUrl = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const redirect = encodeURIComponent(currentUrl);
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
+    <div className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
       <div>
         <h3 className="font-semibold text-neutral-900 mb-1">Log in to enroll in {cohortLabel}</h3>
         <p className={`${vulfMono.className} text-xs text-neutral-500`}>
-          Courses require an account so you can manage your enrollment later. Enter your email and
-          we&apos;ll send you a login link, no password needed.
+          Courses require an account so you can manage your enrollment later.
         </p>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div>
-        <label className={labelCls}>Email</label>
-        <input
-          type="email"
-          className={inputCls}
-          value={loginEmail}
-          onChange={(e) => setLoginEmail(e.target.value)}
-          required
-          autoFocus
-        />
+      <div className="flex gap-3">
+        <Link
+          href={`/account/login?redirect=${redirect}`}
+          className="flex-1 text-center rounded-xl bg-brand text-white py-3 font-semibold hover:opacity-90 transition-opacity"
+        >
+          Log In
+        </Link>
+        <Link
+          href={`/account/signup?redirect=${redirect}`}
+          className="flex-1 text-center rounded-xl border border-black/20 text-neutral-900 py-3 font-semibold hover:bg-black/5 transition-colors"
+        >
+          Create Account
+        </Link>
       </div>
-
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
-      >
-        {loading ? "Sending…" : "Email me a login link"}
-      </button>
-    </form>
+    </div>
   );
 }
 

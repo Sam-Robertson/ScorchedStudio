@@ -1,6 +1,6 @@
 "use client";
 
-// app/account/login/page.tsx
+// app/account/signup/page.tsx
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,30 +8,37 @@ import Container from "@/components/ui/Container";
 
 const inputCls = "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
 
-export default function AccountLoginPage() {
+export default function AccountSignupPage() {
   return (
     <Suspense>
-      <AccountLoginForm />
+      <AccountSignupForm />
     </Suspense>
   );
 }
 
-function AccountLoginForm() {
+function AccountSignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch("/api/account/login", {
+      const res = await fetch("/api/account/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -55,7 +62,7 @@ function AccountLoginForm() {
       <section className="pt-12 md:pt-16">
         <Container className="max-w-sm">
           <p className="eyebrow text-center text-brand">Account</p>
-          <h1 className="h2 text-center font-bold mt-2 mb-8">Log In</h1>
+          <h1 className="h2 text-center font-bold mt-2 mb-8">Create Account</h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -78,6 +85,18 @@ function AccountLoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={8}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Confirm password</label>
+              <input
+                type="password"
+                className={inputCls}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
               />
             </div>
             <button
@@ -85,24 +104,18 @@ function AccountLoginForm() {
               disabled={loading}
               className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
             >
-              {loading ? "Logging in…" : "Log In"}
+              {loading ? "Creating account…" : "Create Account"}
             </button>
           </form>
 
-          <div className="flex items-center justify-between mt-4 text-sm">
+          <p className="text-sm text-center mt-4">
             <Link
-              href={redirectTo ? `/account/forgot-password?redirect=${encodeURIComponent(redirectTo)}` : "/account/forgot-password"}
-              className="text-neutral-500 underline underline-offset-2 hover:text-neutral-700"
-            >
-              Forgot password?
-            </Link>
-            <Link
-              href={redirectTo ? `/account/signup?redirect=${encodeURIComponent(redirectTo)}` : "/account/signup"}
+              href={redirectTo ? `/account/login?redirect=${encodeURIComponent(redirectTo)}` : "/account/login"}
               className="text-[#884A20] underline underline-offset-2 hover:opacity-70"
             >
-              Create an account
+              Already have an account? Log in
             </Link>
-          </div>
+          </p>
         </Container>
       </section>
     </main>
