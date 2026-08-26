@@ -154,15 +154,16 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
   return (
     <div className="hidden md:block">
       {/* Logo and Book Now are pinned to a small, fixed padding from the
-          true screen edge via justify-between on the full-width bar —
-          not centered in a max-width wrapper, since centering only ever
-          pushes them toward the middle on wide screens. The nav-items
-          cluster sits in the middle with its own fixed small gap (gap-6)
-          between items; how far it sits from the logo/CTA is whatever's
-          left over, which is fine since only the edges need to be close. */}
+          true screen edge (px-28) via a 3-column grid, not centered in a
+          max-width wrapper — centering only ever pushes them toward the
+          middle on wide screens. The grid's own gap is the FIXED, small
+          logo-to-items and items-to-CTA distance; the items row then
+          spreads to fill its middle column with justify-between, so any
+          leftover width becomes extra breathing room between items
+          instead of extra distance between the items and the logo/CTA. */}
       <nav
         className={clsx(
-          "flex h-16 items-center justify-between px-28",
+          "grid grid-cols-[auto_1fr_auto] items-center gap-10 h-16 px-28",
           vulfMono.className
         )}
         aria-label="Primary"
@@ -178,8 +179,11 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
           />
         </Link>
 
-        {/* Nav links — small, uniform gap between each item */}
-        <div className="flex items-center gap-8">
+        {/* Nav links — centered in the middle column with their own small
+            fixed gap, not stretched to fill it (stretching would dump the
+            entire leftover width into these gaps instead of the intended
+            "little more" bump). */}
+        <div className="flex items-center gap-14 justify-self-center">
           <NavDropdown label="Studio Locations" links={locationLinks} isActive={isActive} />
 
           <NavDropdown label="Memberships" links={membershipLinks} isActive={isActive} />

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
-import { Bold, Check, Heading2, List, Pencil, Plus, Trash2, X } from "lucide-react";
-import type { JobOpeningRecord } from "@/lib/supabase";
+import { Bold, Bookmark, Check, Heading2, List, Pencil, Plus, Trash2, X } from "lucide-react";
+import type { JobOpeningRecord, JobTemplateRecord } from "@/lib/supabase";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -123,6 +123,11 @@ function CareersDashboard({ token }: { token: string }) {
   const [newJob, setNewJob] = useState<EditState>(EMPTY_EDIT);
   const [adding, setAdding] = useState(false);
 
+  const [templates, setTemplates] = useState<JobTemplateRecord[]>([]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
   const load = useCallback(() => {
     setLoading(true);
     fetch("/api/admin/careers", { headers: authHeaders })
@@ -136,7 +141,62 @@ function CareersDashboard({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadTemplates = useCallback(() => {
+    fetch("/api/admin/careers/templates", { headers: authHeaders })
+      .then((r) => r.json())
+      .then(({ templates: t, error: err }) => {
+        if (err) throw new Error(err);
+        setTemplates(t ?? []);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => { load(); loadTemplates(); }, [load, loadTemplates]);
+
+  function applyTemplate(template: JobTemplateRecord) {
+    setNewJob({
+      title: template.title,
+      location: template.location ?? "",
+      employment_type: template.employment_type ?? "",
+      pay: template.pay ?? "",
+      description: template.description,
+    });
+  }
+
+  async function saveAsTemplate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!templateName.trim()) return;
+    setSavingTemplate(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/careers/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ name: templateName, ...newJob }),
+      });
+      const { template, error: err } = await res.json();
+      if (err) throw new Error(err);
+      setTemplates((prev) => [...prev, template].sort((a, b) => a.name.localeCompare(b.name)));
+      setTemplateName("");
+      setShowSaveTemplate(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save template");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function removeTemplate(id: string) {
+    try {
+      const res = await fetch(`/api/admin/careers/templates/${id}`, { method: "DELETE", headers: authHeaders });
+      const { error: err } = await res.json();
+      if (err) throw new Error(err);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete template");
+    }
+  }
 
   function startEdit(job: JobOpeningRecord) {
     setEditingId(job.id);
@@ -249,6 +309,37 @@ function CareersDashboard({ token }: { token: string }) {
       {showAdd && (
         <div className="rounded-2xl border border-[#884A20]/30 bg-[#F6E4E1]/40 p-5 sm:p-6 mb-6">
           <p className={`${vulfMono.className} font-bold text-sm mb-4`}>New Opening</p>
+
+          {templates.length > 0 && (
+            <div className="mb-4">
+              <p className="block text-xs text-neutral-500 mb-1.5">Start from a template</p>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-1 rounded-full border border-black/15 bg-white pl-3 pr-1.5 py-1"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate(t)}
+                      className={`${vulfMono.className} text-xs text-neutral-700 hover:text-[#884A20]`}
+                    >
+                      {t.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeTemplate(t.id)}
+                      aria-label={`Delete template ${t.name}`}
+                      className="p-1 rounded-full text-neutral-300 hover:text-red-500 hover:bg-red-50"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form onSubmit={addJob} className="space-y-4">
             <div>
               <label className="block text-xs text-neutral-500 mb-1">Title</label>
@@ -315,8 +406,36 @@ function CareersDashboard({ token }: { token: string }) {
                 <X className="w-3.5 h-3.5" />
                 CANCEL
               </button>
+              <button
+                type="button"
+                onClick={() => setShowSaveTemplate((s) => !s)}
+                className={`${vulfMono.className} flex items-center gap-1.5 rounded-xl border border-black/20 bg-white px-5 py-2.5 text-xs tracking-[0.15em] text-neutral-600 font-semibold hover:bg-neutral-50 ml-auto`}
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                SAVE AS TEMPLATE
+              </button>
             </div>
           </form>
+
+          {showSaveTemplate && (
+            <form onSubmit={saveAsTemplate} className="flex gap-2 mt-3 pt-3 border-t border-[#884A20]/20">
+              <input
+                className={inputCls}
+                placeholder="Template name, e.g. Studio Associate"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={savingTemplate}
+                className={`${vulfMono.className} flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-[#884A20] px-4 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90 disabled:opacity-60`}
+              >
+                {savingTemplate ? "SAVING…" : "SAVE"}
+              </button>
+            </form>
+          )}
         </div>
       )}
 

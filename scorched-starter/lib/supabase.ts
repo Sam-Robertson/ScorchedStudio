@@ -108,6 +108,17 @@ export type JobOpeningRecord = {
   updated_at: string;
 };
 
+export type JobTemplateRecord = {
+  id: string;
+  name: string;
+  title: string;
+  location: string | null;
+  employment_type: string | null;
+  pay: string | null;
+  description: string;
+  created_at: string;
+};
+
 export type EventRecord = {
   id: string;
   title: string;
