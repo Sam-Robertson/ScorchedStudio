@@ -13,7 +13,10 @@ function squareBaseUrl() {
     : "https://connect.squareup.com";
 }
 
-async function squareFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+// Exported for lib/square-revenue.ts (Orders/Payments/Refunds/Gift Cards) —
+// a different Square API surface than this file's Labor/Team wrapper, but
+// the same auth/versioning/error-shape plumbing.
+export async function squareFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = process.env.SQUARE_ACCESS_TOKEN;
   if (!token) throw new Error("Missing SQUARE_ACCESS_TOKEN");
 

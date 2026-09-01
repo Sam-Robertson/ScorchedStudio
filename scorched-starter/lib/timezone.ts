@@ -48,6 +48,40 @@ export function daysInMonthKey(monthKey: string): number {
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
+// Which Denver calendar date a UTC instant falls on, e.g. "2026-08-25T03:06Z"
+// (9:06pm Mountain the evening before) -> "2026-08-24", not "2026-08-25".
+// Square timestamps are always UTC; bucketing daily revenue by raw UTC date
+// would misattribute every evening sale to the next day.
+export function denverDateKey(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: STUDIO_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+// The UTC instant range [start, end) that covers one full Denver calendar
+// day, for passing to APIs (like Square's) that take UTC begin/end times.
+// Computed from the actual Denver UTC offset on that date rather than a
+// fixed -6/-7, so it's correct across the DST boundary.
+export function denverDayRangeUTC(dateStr: string): { startUTC: string; endUTC: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const noonProbe = new Date(Date.UTC(y, m - 1, d, 12)); // safely inside the same local day year-round
+  const offsetName = new Intl.DateTimeFormat("en-US", {
+    timeZone: STUDIO_TIMEZONE,
+    timeZoneName: "shortOffset",
+  })
+    .formatToParts(noonProbe)
+    .find((p) => p.type === "timeZoneName")!.value; // e.g. "GMT-6"
+  const offsetHours = parseInt(offsetName.replace("GMT", ""), 10);
+  const startUTC = new Date(Date.UTC(y, m - 1, d, -offsetHours, 0, 0));
+  const endUTC = new Date(Date.UTC(y, m - 1, d + 1, -offsetHours, 0, 0));
+  return { startUTC: startUTC.toISOString(), endUTC: endUTC.toISOString() };
+}
+
 // Whole days between a "YYYY-MM-DD" date and today in Denver.
 export function daysSinceDenver(isoDate: string): number {
   const [sy, sm, sd] = isoDate.split("-").map(Number);

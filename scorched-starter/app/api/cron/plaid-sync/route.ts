@@ -5,11 +5,23 @@
 // item: pulls new/changed transactions via /transactions/sync, upserts
 // bank_transactions, and runs the categorization rules engine on anything
 // newly posted (non-pending) and unreviewed.
+//
+// Also posts yesterday's Square revenue settlement (see
+// lib/accounting/revenue-job.ts) in the same invocation, rather than
+// registering a third Vercel Cron entry — Hobby plans cap the cron count,
+// and this project already uses both of its slots (this one + daily-report).
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { getDecryptedAccessToken, syncTransactions, type PlaidTransaction } from "@/lib/plaid";
 import { classify, type CategorizationRule, type MatchableTransaction } from "@/lib/accounting/rules";
 import { buildLinesForBankRule } from "@/lib/accounting/posting";
+import { postSquareRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
+import { todayInDenver } from "@/lib/timezone";
+
+function yesterdayInDenver(): string {
+  const { y, m, d } = todayInDenver();
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+}
 
 type BankAccountRow = { id: string; plaid_account_id: string; ledger_account_id: string; default_location_id: string | null };
 
@@ -189,7 +201,18 @@ export async function GET(req: NextRequest) {
 
     const classifyResult = await classifyUnreviewed(sb);
 
-    return Response.json({ synced: results, ...classifyResult });
+    const revenueDate = yesterdayInDenver();
+    const revenueResults: Record<string, unknown> = {};
+    for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
+      try {
+        revenueResults[locationKey] = await postSquareRevenueForDay(squareLocationId, locationKey, revenueDate);
+      } catch (err) {
+        console.error("SQUARE_REVENUE_CRON_ERROR", locationKey, err);
+        revenueResults[locationKey] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    return Response.json({ synced: results, ...classifyResult, revenue: { date: revenueDate, results: revenueResults } });
   } catch (err) {
     console.error("PLAID_SYNC_ERROR", err);
     return Response.json({ error: err instanceof Error ? err.message : "Sync failed" }, { status: 500 });
