@@ -10,6 +10,9 @@ import BankAccountsTab from "./BankAccountsTab";
 import InboxTab from "./InboxTab";
 import RulesTab from "./RulesTab";
 import ReconcileTab from "./ReconcileTab";
+import ReportsTab from "./ReportsTab";
+import ProjectionsTab from "./ProjectionsTab";
+import TaxExportTab from "./TaxExportTab";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -55,7 +58,7 @@ export default function AdminAccountingPage() {
   return <AccountingDashboard token={token} />;
 }
 
-type Tab = "journal" | "accounts" | "periods" | "bank-accounts" | "inbox" | "rules" | "reconcile";
+type Tab = "journal" | "accounts" | "periods" | "bank-accounts" | "inbox" | "rules" | "reconcile" | "reports" | "projections" | "tax-export";
 
 const TAB_LABEL: Record<Tab, string> = {
   journal: "Journal",
@@ -65,6 +68,9 @@ const TAB_LABEL: Record<Tab, string> = {
   inbox: "Inbox",
   rules: "Rules",
   reconcile: "Reconcile",
+  reports: "Reports",
+  projections: "Projections",
+  "tax-export": "Tax Export",
 };
 
 function AccountingDashboard({ token }: { token: string }) {
@@ -109,6 +115,9 @@ function AccountingDashboard({ token }: { token: string }) {
       {tab === "inbox" && <InboxTab token={token} accounts={accounts} />}
       {tab === "rules" && <RulesTab token={token} accounts={accounts} />}
       {tab === "reconcile" && <ReconcileTab token={token} />}
+      {tab === "reports" && <ReportsTab token={token} />}
+      {tab === "projections" && <ProjectionsTab token={token} />}
+      {tab === "tax-export" && <TaxExportTab token={token} />}
     </section>
   );
 }
