@@ -6,16 +6,16 @@
 // bank_transactions, and runs the categorization rules engine on anything
 // newly posted (non-pending) and unreviewed.
 //
-// Also posts yesterday's Square revenue settlement (see
+// Also posts yesterday's Square and Stripe revenue settlements (see
 // lib/accounting/revenue-job.ts) in the same invocation, rather than
-// registering a third Vercel Cron entry — Hobby plans cap the cron count,
+// registering more Vercel Cron entries — Hobby plans cap the cron count,
 // and this project already uses both of its slots (this one + daily-report).
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { getDecryptedAccessToken, syncTransactions, type PlaidTransaction } from "@/lib/plaid";
 import { classify, type CategorizationRule, type MatchableTransaction } from "@/lib/accounting/rules";
 import { buildLinesForBankRule } from "@/lib/accounting/posting";
-import { postSquareRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
+import { postSquareRevenueForDay, postStripeRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
 import { todayInDenver } from "@/lib/timezone";
 
 function yesterdayInDenver(): string {
@@ -205,11 +205,17 @@ export async function GET(req: NextRequest) {
     const revenueResults: Record<string, unknown> = {};
     for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
       try {
-        revenueResults[locationKey] = await postSquareRevenueForDay(squareLocationId, locationKey, revenueDate);
+        revenueResults[`square:${locationKey}`] = await postSquareRevenueForDay(squareLocationId, locationKey, revenueDate);
       } catch (err) {
         console.error("SQUARE_REVENUE_CRON_ERROR", locationKey, err);
-        revenueResults[locationKey] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+        revenueResults[`square:${locationKey}`] = { status: "error", message: err instanceof Error ? err.message : String(err) };
       }
+    }
+    try {
+      revenueResults.stripe = await postStripeRevenueForDay(revenueDate);
+    } catch (err) {
+      console.error("STRIPE_REVENUE_CRON_ERROR", err);
+      revenueResults.stripe = { status: "error", message: err instanceof Error ? err.message : String(err) };
     }
 
     return Response.json({ synced: results, ...classifyResult, revenue: { date: revenueDate, results: revenueResults } });
