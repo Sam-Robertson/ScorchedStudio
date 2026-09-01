@@ -19,6 +19,7 @@ import {
   FileText,
   GraduationCap,
   KanbanSquare,
+  Landmark,
   LogOut,
   Menu,
   Printer,
@@ -37,8 +38,9 @@ const IN_STUDIO_NAV = [
 ];
 
 const ADMIN_NAV = [
-  { href: "/admin/locations", label: "Locations", icon: Clock },
-  { href: "/admin/reporting", label: "Reporting",  icon: BarChart2 },
+  { href: "/admin/locations",  label: "Locations",  icon: Clock },
+  { href: "/admin/accounting", label: "Accounting", icon: Landmark },
+  { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2 },
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
