@@ -231,6 +231,10 @@ INSERT INTO accounts (code, name, type, is_cash, is_contra) VALUES
   ('2010', 'Amex Blue Business Plus',      'liability', false, false),
   ('2020', 'Amex Blue Business Cash',      'liability', false, false),
   ('2030', 'U.S. Bank Card 1370',          'liability', false, false),
+  -- Not in the spec's original chart — discovered when linking U.S. Bank
+  -- via Plaid, which surfaced a second card under the same login. Confirmed
+  -- with the user it's an active business card (2026-09-01).
+  ('2040', 'U.S. Bank Card 1386',          'liability', false, false),
   ('2100', 'Sales Tax Payable',            'liability', false, false),
   ('2200', 'Deferred Revenue (Gift Cards)','liability', false, false),
   ('2300', 'Payroll Clearing',             'liability', false, false),
