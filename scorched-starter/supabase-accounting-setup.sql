@@ -219,9 +219,12 @@ END $$;
 
 -- ── Seed: chart of accounts (spec §2) ─────────────────────────────────────
 
+-- The spec listed a 1010 UCCU Checking account "if still active" (§2, §11
+-- open item). Confirmed 2026-09-01: no UCCU account exists among what was
+-- linked via Plaid (exactly 6 accounts — 2 Chase, 2 Amex, 2 U.S. Bank),
+-- so it's omitted rather than seeded and left unused.
 INSERT INTO accounts (code, name, type, is_cash, is_contra) VALUES
   ('1000', 'Chase Business Checking',      'asset',     true,  false),
-  ('1010', 'UCCU Checking',                'asset',     true,  false),
   ('1100', 'Square Clearing',              'asset',     false, false),
   ('1110', 'Stripe Clearing',              'asset',     false, false),
   ('1200', 'Security Deposits',            'asset',     false, false),

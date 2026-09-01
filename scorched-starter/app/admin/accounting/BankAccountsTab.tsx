@@ -120,7 +120,7 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-neutral-500">Chase, Amex, U.S. Bank, and any active UCCU accounts, synced daily via Plaid.</p>
+        <p className="text-sm text-neutral-500">Chase Checking, Chase Ink, both Amex cards, and both U.S. Bank cards, synced daily via Plaid.</p>
         <button
           onClick={startLink}
           className={`${vulfMono.className} flex items-center gap-1.5 rounded-xl bg-[#884A20] px-4 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90`}
