@@ -13,7 +13,7 @@
 // register, so it's explicitly unsupported here for now — those bank rows
 // stay in the inbox until then.
 import { buildJournalLines, type JournalLineInput, type TemplateInput } from "./templates.ts";
-import type { MatchableTransaction, CategorizationRule } from "./rules.ts";
+import { directionOf, type MatchableTransaction, type CategorizationRule } from "./rules.ts";
 
 export type ResolvedCodes = {
   srcAccountCode: string;
@@ -23,6 +23,30 @@ export type ResolvedCodes = {
 export type PostingResult =
   | { ok: true; lines: JournalLineInput[] }
   | { ok: false; reason: string };
+
+// The direction each template normally fires on. A real Amex "ACH Pmt"
+// autopay is always a debit on checking, but the same descriptor pattern
+// can also show up as a credit — a reversed payroll debit, a card issuer's
+// statement-credit rebate, a refunded purchase at an otherwise-expense
+// merchant. Confirmed against real synced data (a "Cash Rebate Statement
+// Credit Fulfillment" credit would otherwise have been debited to an
+// expense account, increasing it, when it should reduce it). When a
+// transaction's actual direction doesn't match the template's natural one,
+// every line's sign is flipped — same two accounts, debit and credit swap
+// sides — rather than blindly applying the natural-direction posting.
+const NATURAL_DIRECTION: Partial<Record<string, "debit" | "credit">> = {
+  expense: "debit",
+  cogs: "debit",
+  capex: "debit",
+  security_deposit: "debit",
+  card_payoff: "debit",
+  card_interest: "debit",
+  sales_tax_remit: "debit",
+  payroll_clearing: "debit",
+  owner_draw: "debit",
+  owner_contribution: "credit",
+  loan_proceeds: "credit",
+};
 
 export function buildLinesForBankRule(
   rule: CategorizationRule,
@@ -94,5 +118,8 @@ export function buildLinesForBankRule(
       return { ok: false, reason: `template '${rule.template}' is not postable from a single bank transaction` };
   }
 
-  return { ok: true, lines: buildJournalLines(input) };
+  const lines = buildJournalLines(input);
+  const natural = NATURAL_DIRECTION[rule.template];
+  const flip = natural != null && natural !== directionOf(txn.amount);
+  return { ok: true, lines: flip ? lines.map((l) => ({ ...l, amount: -l.amount })) : lines };
 }
