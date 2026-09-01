@@ -15,7 +15,10 @@ import { getSupabase } from "@/lib/supabase";
 import { getDecryptedAccessToken, syncTransactions, type PlaidTransaction } from "@/lib/plaid";
 import { classify, type CategorizationRule, type MatchableTransaction } from "@/lib/accounting/rules";
 import { buildLinesForBankRule } from "@/lib/accounting/posting";
+import { loanPayment } from "@/lib/accounting/templates";
+import { findNearestUnpaidRow } from "@/lib/accounting/loan-schedule";
 import { postSquareRevenueForDay, postStripeRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
+import { postDepreciationForMonth } from "@/lib/accounting/depreciation-job";
 import { todayInDenver } from "@/lib/timezone";
 
 function yesterdayInDenver(): string {
@@ -146,10 +149,45 @@ async function classifyUnreviewed(sb: ReturnType<typeof getSupabase>) {
     const srcAccountCode = (txn.bank_accounts as unknown as { accounts: { code: string } | null } | null)?.accounts?.code;
     if (!srcAccountCode) continue;
 
-    const result = buildLinesForBankRule(rule, matchable, { srcAccountCode, targetAccountCode: rule.targetAccountCode }, txn.name ?? undefined);
-    if (!result.ok) {
-      console.error("PLAID_SYNC_POST_UNSUPPORTED", rule.id, result.reason);
-      continue;
+    let lines: { accountCode: string; amount: number; memo?: string }[];
+    let scheduleRowId: string | null = null;
+
+    if (rule.template === "loan_payment") {
+      if (!rule.loanId || !rule.targetAccountCode) {
+        console.error("PLAID_SYNC_POST_UNSUPPORTED", rule.id, "loan_payment rule needs loan_id and target_account_id");
+        continue;
+      }
+      const { data: scheduleRows, error: scheduleErr } = await sb
+        .from("loan_schedule")
+        .select("id, due_date, principal, interest, status")
+        .eq("loan_id", rule.loanId)
+        .eq("status", "scheduled");
+      if (scheduleErr) { console.error("PLAID_SYNC_LOAN_SCHEDULE_FETCH_ERROR", scheduleErr); continue; }
+
+      const match = findNearestUnpaidRow(
+        (scheduleRows ?? []).map((r) => ({ ...r, dueDate: r.due_date })),
+        txn.date
+      );
+      if (!match) {
+        console.error("PLAID_SYNC_LOAN_NO_SCHEDULE_MATCH", rule.loanId, txn.id, txn.date);
+        continue;
+      }
+
+      lines = loanPayment({
+        srcAccountCode,
+        loanAccountCode: rule.targetAccountCode,
+        principal: match.principal,
+        interest: match.interest,
+        memo: txn.name ?? undefined,
+      });
+      scheduleRowId = match.id;
+    } else {
+      const result = buildLinesForBankRule(rule, matchable, { srcAccountCode, targetAccountCode: rule.targetAccountCode }, txn.name ?? undefined);
+      if (!result.ok) {
+        console.error("PLAID_SYNC_POST_UNSUPPORTED", rule.id, result.reason);
+        continue;
+      }
+      lines = result.lines;
     }
 
     const { data: entryId, error: postErr } = await sb.rpc("post_journal_entry", {
@@ -160,11 +198,15 @@ async function classifyUnreviewed(sb: ReturnType<typeof getSupabase>) {
       p_template: rule.template,
       p_location_id: rule.locationId,
       p_created_by: "rules-engine",
-      p_lines: result.lines.map((l) => ({ account_code: l.accountCode, amount: l.amount, memo: l.memo ?? null })),
+      p_lines: lines.map((l) => ({ account_code: l.accountCode, amount: l.amount, memo: l.memo ?? null })),
     });
     if (postErr) {
       console.error("PLAID_SYNC_POST_ERROR", rule.id, txn.id, postErr.message);
       continue;
+    }
+
+    if (scheduleRowId) {
+      await sb.from("loan_schedule").update({ status: "paid", bank_transaction_id: txn.id }).eq("id", scheduleRowId);
     }
 
     await sb.from("bank_transactions").update({ status: "posted", rule_id: rule.id, journal_entry_id: entryId }).eq("id", txn.id);
@@ -218,7 +260,21 @@ export async function GET(req: NextRequest) {
       revenueResults.stripe = { status: "error", message: err instanceof Error ? err.message : String(err) };
     }
 
-    return Response.json({ synced: results, ...classifyResult, revenue: { date: revenueDate, results: revenueResults } });
+    const { y: depYear, m: depMonth } = todayInDenver();
+    let depreciationResult: unknown;
+    try {
+      depreciationResult = await postDepreciationForMonth(depYear, depMonth);
+    } catch (err) {
+      console.error("DEPRECIATION_CRON_ERROR", err);
+      depreciationResult = { status: "error", message: err instanceof Error ? err.message : String(err) };
+    }
+
+    return Response.json({
+      synced: results,
+      ...classifyResult,
+      revenue: { date: revenueDate, results: revenueResults },
+      depreciation: depreciationResult,
+    });
   } catch (err) {
     console.error("PLAID_SYNC_ERROR", err);
     return Response.json({ error: err instanceof Error ? err.message : "Sync failed" }, { status: 500 });
