@@ -63,25 +63,38 @@ export async function GET(req: NextRequest) {
     let totalOrderRevenueCents = 0;
     const itemRevenueCents = new Map<string, number>();
     let daysWithOrderData = 0;
+    const dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[] = [];
 
     for (const r of rows) {
       const raw = r.raw as SettlementRaw;
       if (!raw?.orders?.length) continue;
       daysWithOrderData++;
+      let dayOrders = 0;
+      let dayItems = 0;
+      let dayCents = 0;
       for (const order of raw.orders) {
         if (order.state !== "COMPLETED") continue;
         totalOrders++;
+        dayOrders++;
         let orderCents = 0;
         for (const li of order.line_items ?? []) {
           const qty = parseFloat(li.quantity ?? "1") || 1;
           const cents = li.gross_sales_money?.amount ?? 0;
           totalItems += qty;
+          dayItems += qty;
           orderCents += cents;
           const name = li.name ?? "(unnamed item)";
           itemRevenueCents.set(name, (itemRevenueCents.get(name) ?? 0) + cents);
         }
         totalOrderRevenueCents += orderCents;
+        dayCents += orderCents;
       }
+      dailyOrderStats.push({
+        date: r.settle_date,
+        orders: dayOrders,
+        items: dayItems,
+        avgOrderValue: dayOrders > 0 ? Math.round(dayCents / dayOrders) / 100 : 0,
+      });
     }
 
     const topItems = [...itemRevenueCents.entries()]
@@ -99,6 +112,7 @@ export async function GET(req: NextRequest) {
         daysWithOrderData,
       },
       topItems,
+      dailyOrderStats,
       dataStartsAt: "2026-06-03",
       orderDataNote: "Order-level stats (orders, avg order value, items/order, top items) only cover days with real Square order data — the Jan-May CSV backfill has revenue totals only, no line items.",
     });
