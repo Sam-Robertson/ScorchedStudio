@@ -9,11 +9,11 @@ import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
 import {
-  BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import {
-  CostsResponse, EstimatedBookingsResponse, Section, KpiCard, LoadingOrError,
+  CostsResponse, EstimatedBookingsResponse, JournalDrillDown, Section, KpiCard, LoadingOrError,
   fmtMoney0, fmtAxisMoney, monthShort, monthTick, monthsBetween, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
 } from "./shared";
 import {
@@ -23,10 +23,18 @@ import {
 
 const MARKETING_CODE = "6200";
 
+// "2026-02" -> "2026-02-28" (last calendar day of that month).
+function monthEnd(monthKey: string) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${monthKey}-${String(last).padStart(2, "0")}`;
+}
+
 type SortDir = "desc" | "asc";
 type SortCol = "count" | "revenue" | "party" | "cancel";
 
-export default function MarketingView({ bookings, costs, costsLoading, query, estimated, estimatedLoading }: {
+export default function MarketingView({ token, bookings, costs, costsLoading, query, estimated, estimatedLoading }: {
+  token: string;
   bookings: BookingRecord[];
   costs: CostsResponse | null;
   costsLoading: boolean;
@@ -38,6 +46,7 @@ export default function MarketingView({ bookings, costs, costsLoading, query, es
   const [hiddenSources, setHiddenSources] = useState<Set<string>>(new Set());
   const [sortCol, setSortCol] = useState<SortCol>("count");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [drillMonth, setDrillMonth] = useState<string | null>(null);
 
   const confirmed = useMemo(() => bookings.filter((b) => b.status === "confirmed"), [bookings]);
   const rangedConfirmed = useMemo(() => bookingsInRange(confirmed, query), [confirmed, query]);
@@ -88,6 +97,7 @@ export default function MarketingView({ bookings, costs, costsLoading, query, es
       ? monthsBetween(start, end)
       : [...new Set([...spendByMonth.keys(), ...bookingsByMonth.keys(), ...estByMonth.keys()])].sort();
     return months.map((m) => ({
+      monthKey: m,
       label: monthShort(`${m}-01`),
       "Marketing Spend": Math.round((spendByMonth.get(m) ?? 0) * 100) / 100,
       Bookings: bookingsByMonth.has(m) ? bookingsByMonth.get(m)! : null,
@@ -201,16 +211,41 @@ export default function MarketingView({ bookings, costs, costsLoading, query, es
                   }}
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
                 />
-                <Bar yAxisId="spend" dataKey="Marketing Spend" fill={BROWN} radius={[3, 3, 0, 0]} maxBarSize={40} />
+                <Bar
+                  yAxisId="spend" dataKey="Marketing Spend" radius={[3, 3, 0, 0]} maxBarSize={40}
+                  className="cursor-pointer"
+                  onClick={(entry) => {
+                    const key = (entry as unknown as { monthKey?: string })?.monthKey;
+                    if (key) setDrillMonth((prev) => (prev === key ? null : key));
+                  }}
+                >
+                  {spendVsBookings.map((row) => (
+                    <Cell key={row.monthKey} fill={BROWN} fillOpacity={drillMonth == null || drillMonth === row.monthKey ? 1 : 0.3} />
+                  ))}
+                </Bar>
                 <Line yAxisId="bookings" type="monotone" dataKey="Bookings" stroke={GREEN} strokeWidth={2} dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} connectNulls={false} />
                 <Line yAxisId="bookings" type="monotone" dataKey="Estimated Bookings" stroke={GREEN} strokeOpacity={0.55} strokeDasharray="5 4" strokeWidth={2} dot={{ r: 3, fill: GREEN, fillOpacity: 0.55 }} activeDot={{ r: 5 }} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="flex items-center justify-center gap-4 mt-1 flex-wrap">
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Marketing spend ($, left)</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Marketing spend ($, left) — click a bar for charges</span></div>
               <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Confirmed bookings (count, right)</span></div>
               <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C] opacity-55" style={{ backgroundImage: "repeating-linear-gradient(90deg, #418A5C 0 4px, transparent 4px 7px)" }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated bookings (right)</span></div>
             </div>
+            {drillMonth && (
+              <div className="mx-4 mt-3 rounded-lg border border-black/8 bg-neutral-50/40 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`${vulfMono.className} text-xs font-semibold text-neutral-700`}>
+                    Marketing charges — {monthShort(`${drillMonth}-01`)}
+                  </p>
+                  <button onClick={() => setDrillMonth(null)}
+                    className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-2.5 py-1 hover:bg-neutral-50`}>
+                    Close
+                  </button>
+                </div>
+                <JournalDrillDown token={token} from={`${drillMonth}-01`} to={monthEnd(drillMonth)} accountCodes={[MARKETING_CODE]} />
+              </div>
+            )}
             <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-2`}>
               Spend from the accounting ledger (account 6200); bookings counted by the date they were made. Online
               booking launched {monthShort(ONLINE_BOOKING_LAUNCH)} — before that, &quot;estimated&quot; counts

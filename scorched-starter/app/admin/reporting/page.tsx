@@ -207,7 +207,7 @@ function ReportingDashboard({ token }: { token: string }) {
         <OverviewView token={token} query={query} bookings={bookings} bookingsLoading={bookingsLoading} costs={costs} costsLoading={costsLoading} />
       </div>
       <div className={view === "marketing" ? "" : "hidden"}>
-        <MarketingView bookings={locationBookings} costs={costs} costsLoading={costsLoading} query={query} estimated={estimated} estimatedLoading={estimatedLoading} />
+        <MarketingView token={token} bookings={locationBookings} costs={costs} costsLoading={costsLoading} query={query} estimated={estimated} estimatedLoading={estimatedLoading} />
       </div>
       <div className={view === "capacity" ? "" : "hidden"}>
         {bookingsLoading ? (
