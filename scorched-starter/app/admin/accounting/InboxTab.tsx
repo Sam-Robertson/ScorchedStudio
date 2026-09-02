@@ -60,6 +60,7 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
   const [targetAccountCode, setTargetAccountCode] = useState("");
   const [createRule, setCreateRule] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sweepMessage, setSweepMessage] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -100,12 +101,21 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
       const body = await res.json();
       if (body.error) throw new Error(body.error);
       setOpenId(null);
-      setTxns((prev) => prev.filter((x) => x.id !== t.id));
+      announceSweep(body.sweep);
+      load(); // re-fetch: the sweep may have also posted/ignored other items, not just this one
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to categorize");
     } finally {
       setSaving(false);
     }
+  }
+
+  function announceSweep(sweep: { classified: number; posted: number } | undefined) {
+    if (!sweep || sweep.classified === 0) { setSweepMessage(null); return; }
+    const parts = [`${sweep.posted} other transaction${sweep.posted === 1 ? "" : "s"} posted`];
+    const flaggedOrIgnored = sweep.classified - sweep.posted;
+    if (flaggedOrIgnored > 0) parts.push(`${flaggedOrIgnored} flagged or ignored`);
+    setSweepMessage(`Also matched existing rules: ${parts.join(", ")}.`);
   }
 
   async function ignoreTxn(t: InboxTxn) {
@@ -119,7 +129,8 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
       });
       const body = await res.json();
       if (body.error) throw new Error(body.error);
-      setTxns((prev) => prev.filter((x) => x.id !== t.id));
+      announceSweep(body.sweep);
+      load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to ignore");
     } finally {
@@ -134,6 +145,9 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
       </p>
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-6">{error}</p>}
+      {sweepMessage && (
+        <p className={`${vulfMono.className} text-xs text-[#519A70] bg-[#519A70]/10 rounded-lg px-4 py-3 mb-6`}>{sweepMessage}</p>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-neutral-400 py-16 justify-center">

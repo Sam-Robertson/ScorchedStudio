@@ -3,11 +3,15 @@
 // the P&L without a rule or a human, build spec §6). POST categorizes one:
 // posts a journal entry via the same template engine the rules cron uses,
 // and optionally creates a categorization rule from the override so the
-// same merchant auto-posts next time.
+// same merchant auto-posts next time. After every POST, also runs the same
+// categorization sweep the daily cron runs — otherwise a newly created (or
+// already-existing but never-applied) rule only affects other matching
+// inbox items on tomorrow's cron run instead of immediately.
 import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { buildLinesForBankRule } from "@/lib/accounting/posting";
+import { classifyUnreviewed } from "@/lib/accounting/classify-job";
 import type { CategorizationRule } from "@/lib/accounting/rules";
 
 const CAPEX_SUGGESTION_THRESHOLD = 1000;
@@ -71,7 +75,8 @@ export async function POST(req: NextRequest) {
 
     if (template === "ignore") {
       await sb.from("bank_transactions").update({ status: "ignored" }).eq("id", transactionId);
-      return Response.json({ ok: true, status: "ignored" });
+      const sweep = await classifyUnreviewed(sb);
+      return Response.json({ ok: true, status: "ignored", sweep });
     }
 
     const matchable = { bankAccountId: txn.bank_account_id, name: txn.name, merchantName: txn.merchant_name, amount: txn.amount };
@@ -131,7 +136,13 @@ export async function POST(req: NextRequest) {
 
     await sb.from("bank_transactions").update({ status: "posted", journal_entry_id: entryId, rule_id: ruleId }).eq("id", transactionId);
 
-    return Response.json({ ok: true, journalEntryId: entryId, ruleId });
+    // Sweep the rest of the inbox against current rules (including the one
+    // just created) so other matching transactions post immediately instead
+    // of waiting for tomorrow's cron run. Excludes the transaction just
+    // posted above, which classifyUnreviewed's own status filter handles.
+    const sweep = await classifyUnreviewed(sb);
+
+    return Response.json({ ok: true, journalEntryId: entryId, ruleId, sweep });
   } catch (err) {
     console.error("ACCOUNTING_INBOX_POST_ERROR", err);
     return Response.json({ error: "Server error" }, { status: 500 });
