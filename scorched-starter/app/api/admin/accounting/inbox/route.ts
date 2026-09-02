@@ -13,6 +13,7 @@ import { getSupabase } from "@/lib/supabase";
 import { buildLinesForBankRule } from "@/lib/accounting/posting";
 import { classifyUnreviewed } from "@/lib/accounting/classify-job";
 import type { CategorizationRule } from "@/lib/accounting/rules";
+import { buildHistoryIndex, suggestFor } from "@/lib/accounting/suggest";
 
 const CAPEX_SUGGESTION_THRESHOLD = 1000;
 
@@ -31,6 +32,35 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: "Failed to fetch inbox" }, { status: 500 });
     }
 
+    // No rule recognized these, so the only free signal left is "have we
+    // categorized something that reads like this before" — match against
+    // our own posting history (see lib/accounting/suggest.ts) and pre-fill
+    // a best guess. Purely advisory: it fills the form, it never posts.
+    const { data: history, error: historyErr } = await sb
+      .from("bank_transactions")
+      .select("name, merchant_name, categorization_rules!inner(template, accounts(code, name, active))")
+      .eq("status", "posted")
+      .not("rule_id", "is", null)
+      .limit(3000);
+    if (historyErr) console.error("ACCOUNTING_INBOX_HISTORY_ERROR", historyErr);
+
+    type HistoryRow = {
+      name: string | null;
+      merchant_name: string | null;
+      categorization_rules: { template: string; accounts: { code: string; name: string; active: boolean } | null } | null;
+    };
+    const historyIndex = buildHistoryIndex(
+      ((history ?? []) as unknown as HistoryRow[])
+        .filter((h) => h.categorization_rules && (h.categorization_rules.accounts?.active ?? true))
+        .map((h) => ({
+          name: h.name,
+          merchantName: h.merchant_name,
+          template: h.categorization_rules!.template,
+          targetAccountCode: h.categorization_rules!.accounts?.code ?? null,
+          targetAccountName: h.categorization_rules!.accounts?.name ?? null,
+        }))
+    );
+
     // §6 priority-90 heuristic: any large debit at a merchant no rule
     // recognized is a candidate fixed-asset purchase worth a second look —
     // this is a UI hint, not an auto-applied template (fixed_assets register
@@ -38,6 +68,7 @@ export async function GET(req: NextRequest) {
     const withHints = (data ?? []).map((t) => ({
       ...t,
       suggestCapex: !t.categorization_rules && t.amount >= CAPEX_SUGGESTION_THRESHOLD,
+      historySuggestion: t.categorization_rules ? null : suggestFor(t.name, t.merchant_name, historyIndex),
     }));
 
     return Response.json({ transactions: withHints });

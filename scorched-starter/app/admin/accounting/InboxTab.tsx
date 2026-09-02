@@ -28,6 +28,7 @@ type InboxTxn = {
   bank_accounts: { name: string; mask: string | null; accounts: { code: string; name: string } | null } | null;
   locations: { key: string; name: string } | null;
   categorization_rules: { id: string; template: string; match_regex: string } | null;
+  historySuggestion: { template: string; targetAccountCode: string | null; targetAccountName: string | null; confidence: "exact" | "fuzzy" } | null;
 };
 
 function fmtMoney(n: number) {
@@ -78,8 +79,11 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
 
   function startCategorize(t: InboxTxn) {
     setOpenId(t.id);
-    setTemplate(t.categorization_rules?.template && t.categorization_rules.template !== "inbox" ? t.categorization_rules.template : "expense");
-    setTargetAccountCode("");
+    const flagged = t.categorization_rules?.template && t.categorization_rules.template !== "inbox" ? t.categorization_rules.template : null;
+    const guess = t.historySuggestion;
+    const chosenTemplate = flagged ?? guess?.template ?? "expense";
+    setTemplate(chosenTemplate);
+    setTargetAccountCode(chosenTemplate === guess?.template ? guess?.targetAccountCode ?? "" : "");
     setCreateRule(true);
     setError(null);
   }
@@ -195,6 +199,13 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
                   {t.categorization_rules && (
                     <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700`}>
                       Suggested: {t.categorization_rules.template}
+                    </span>
+                  )}
+                  {!t.categorization_rules && t.historySuggestion && (
+                    <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600`}>
+                      Best guess: {t.historySuggestion.template}
+                      {t.historySuggestion.targetAccountName ? ` → ${t.historySuggestion.targetAccountName}` : ""}
+                      {t.historySuggestion.confidence === "fuzzy" ? " (fuzzy)" : ""}
                     </span>
                   )}
                   {t.suggestCapex && (
