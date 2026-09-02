@@ -84,6 +84,15 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
     setError(null);
   }
 
+  // A rule created moments ago (by categorizing a different transaction
+  // from the same merchant) sweeps the whole inbox immediately — including
+  // a transaction someone still has this exact form open for. If they then
+  // submit, the server correctly rejects it as already handled; treat that
+  // as the success it effectively is instead of a scary error.
+  function isAlreadyHandled(message: string) {
+    return /already (posted|ignored)/i.test(message);
+  }
+
   async function submitCategorize(t: InboxTxn) {
     setSaving(true);
     setError(null);
@@ -99,7 +108,15 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
         }),
       });
       const body = await res.json();
-      if (body.error) throw new Error(body.error);
+      if (body.error) {
+        if (isAlreadyHandled(body.error)) {
+          setOpenId(null);
+          setSweepMessage("This one was already categorized automatically (a rule you created moments ago matched it too) — nothing left to do here.");
+          load();
+          return;
+        }
+        throw new Error(body.error);
+      }
       setOpenId(null);
       announceSweep(body.sweep);
       load(); // re-fetch: the sweep may have also posted/ignored other items, not just this one
@@ -128,7 +145,14 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
         body: JSON.stringify({ transactionId: t.id, template: "ignore" }),
       });
       const body = await res.json();
-      if (body.error) throw new Error(body.error);
+      if (body.error) {
+        if (isAlreadyHandled(body.error)) {
+          setSweepMessage("This one was already categorized automatically (a rule you created moments ago matched it too) — nothing left to do here.");
+          load();
+          return;
+        }
+        throw new Error(body.error);
+      }
       announceSweep(body.sweep);
       load();
     } catch (e) {
