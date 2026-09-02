@@ -46,14 +46,13 @@ export type SalesResponse = {
   topItems: { name: string; revenue: number }[];
   dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[];
   dataStartsAt?: string;
-  orderDataNote?: string;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // All three report APIs return this as `dataStartsAt`; used as the fallback
 // while a response is still loading.
-export const DATA_STARTS_AT = "2026-06-03";
+export const DATA_STARTS_AT = "2025-06-06";
 
 export const BROWN = "#884A20";
 export const GREEN = "#418A5C"; // chart-safe deep green, near brand #519A70
@@ -108,12 +107,12 @@ export function monthShort(period_month: string) {
   return new Date(period_month.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
 
-/** "2026-06-03" -> "Jun 3, 2026" */
+/** "2025-08-02" -> "Aug 2, 2025" */
 export function dateLong(date: string) {
   return new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** "2026-06-03" -> "Jun 3" */
+/** "2025-08-02" -> "Aug 2" */
 export function dateShort(date: string) {
   return new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -377,25 +376,30 @@ export function MoneyTooltip({ active, payload, label, showTotal }: {
 }
 
 // ── Data-gap banner ───────────────────────────────────────────────────────────
-// Required on every dashboard tab: the ledger's expense data starts 2026-06-03
-// (Plaid bank-feed history limit). Jan–May 2026 has revenue from a manual CSV
-// import but essentially no expenses, so early-month profit figures are not a
-// full P&L. Order-level sales data also starts 2026-06-03.
+// After extending Plaid's history (re-link, Sept 2026) and backfilling real
+// daily Square settlements back to the studio's actual grand opening, there's
+// no meaningful data gap left within the ledger's history — bank/card data
+// starts 2025-06-06, and Square order data starts 2025-08-02 (a few days
+// after the 2025-07-28 grand opening). What's left to flag is informational,
+// not a warning: revenue is genuinely $0 before the opening (pre-launch
+// build-out), not missing data, and anything before the bank data's own
+// start (2025-06-06) simply isn't in this ledger at all.
 
-export function DataGapBanner({ dataStartsAt, salesNote }: { dataStartsAt?: string; salesNote?: boolean }) {
-  const d = dateLong(dataStartsAt ?? DATA_STARTS_AT);
+export const GRAND_OPENING_AT = "2025-07-28";
+export const BANK_DATA_STARTS_AT = "2025-06-06";
+
+export function DataGapBanner({ dataStartsAt }: { dataStartsAt?: string }) {
+  const bankStart = dateLong(dataStartsAt ?? DATA_STARTS_AT);
+  const opening = dateLong(GRAND_OPENING_AT);
   return (
     <div className="rounded-2xl border border-amber-400/40 bg-amber-50 p-5 flex gap-3">
       <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
       <div>
-        <p className="text-sm font-semibold text-amber-800">Expense data begins {d}</p>
+        <p className="text-sm font-semibold text-amber-800">Ledger history starts {bankStart}</p>
         <p className="text-sm text-amber-700 mt-1">
-          Months before {d} show revenue only (manual CSV import) — expenses were not tracked in this ledger,
-          so profit, cost, and margin figures for those months are not a full P&amp;L.
-          {salesNote && (
-            <> Order-level sales metrics (orders, average order value, items per order, top items, daily revenue)
-            also only cover {d} onward.</>
-          )}
+          Bank and card data goes back to {bankStart}. Revenue is genuinely $0 before the studio&apos;s grand opening
+          on {opening} — that&apos;s real pre-launch history (build-out costs, no sales yet), not missing data.
+          Nothing before {bankStart} is in this ledger at all.
         </p>
       </div>
     </div>

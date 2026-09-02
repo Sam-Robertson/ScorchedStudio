@@ -3,9 +3,11 @@
 // revenue_settlements (settle_date, net_sales) — no need to touch the raw
 // order data for those. Order-level stats (total orders, avg order value,
 // avg items/order, top items) require iterating each day's stored Square
-// orders, which only exist for real daily settlements (2026-06-03
-// onward) — the Jan-May CSV-backfill rows have no `raw.orders`, so those
-// five months are excluded from every metric here, not just under-counted.
+// orders, which only exist for rows with a real daily settlement (every
+// row now, after backfilling actual daily Square data back to the studio's
+// 2025-07-28 grand opening — the original Jan-May 2026 CSV-lump rows this
+// comment used to warn about have since been replaced with real per-day
+// settlements).
 //
 // No product "category" is buildable: Square line items only carry a
 // catalog_object_id and a name, not a category — that needs a separate
@@ -67,8 +69,9 @@ export async function GET(req: NextRequest) {
     const revenueByDayOfWeek = DOW_NAMES.map((name, i) => ({ day: name, revenue: byDow.get(i) ?? 0 }))
       .sort((a, b) => b.revenue - a.revenue);
 
-    // Order-level stats: only rows with real Square order data (excludes
-    // the Jan-May CSV backfill, whose raw is just a source marker).
+    // Order-level stats: only rows with real Square order data. Every row
+    // should have this now, but the check stays as a safety net in case a
+    // future manual backfill ever posts a lump-sum entry again.
     let totalOrders = 0;
     let totalItems = 0;
     let totalOrderRevenueCents = 0;
@@ -124,8 +127,7 @@ export async function GET(req: NextRequest) {
       },
       topItems,
       dailyOrderStats,
-      dataStartsAt: "2026-06-03",
-      orderDataNote: "Order-level stats (orders, avg order value, items/order, top items) only cover days with real Square order data — the Jan-May CSV backfill has revenue totals only, no line items.",
+      dataStartsAt: "2025-08-02", // grand opening 2025-07-28; first Square order data lands a few days later
     });
   } catch (err) {
     console.error("ACCOUNTING_REPORTS_SALES_ERROR", err);

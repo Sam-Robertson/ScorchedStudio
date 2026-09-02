@@ -60,7 +60,7 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
 
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} salesNote />
+      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
 
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <Section title="Daily Order Detail">

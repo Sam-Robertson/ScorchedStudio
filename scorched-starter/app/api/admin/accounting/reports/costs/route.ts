@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       breakdown: [...breakdownByCode.values()].sort((a, b) => b.amount - a.amount),
       monthlyCategories,
       laborByMonth: [...laborByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period_month, amount]) => ({ period_month, amount })),
-      dataStartsAt: "2026-06-03",
+      dataStartsAt: "2025-06-06",
     });
   } catch (err) {
     console.error("ACCOUNTING_REPORTS_COSTS_ERROR", err);

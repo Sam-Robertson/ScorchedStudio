@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
     return Response.json({
       months: locationId ? (months ?? []) : mergeMonths((months ?? []) as PlMonthRow[]),
       lines: locationId ? (lineItems ?? []) : mergeLines((lineItems ?? []) as PlLineRow[]),
-      dataStartsAt: "2026-06-03",
+      dataStartsAt: "2025-06-06",
     });
   } catch (err) {
     console.error("ACCOUNTING_REPORTS_PL_ERROR", err);

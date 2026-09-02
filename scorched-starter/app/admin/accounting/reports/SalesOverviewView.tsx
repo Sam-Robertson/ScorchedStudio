@@ -18,11 +18,11 @@ export default function SalesOverviewView({ token, query }: { token: string; que
 
   const dataStartsAt = data?.dataStartsAt ?? DATA_STARTS_AT;
 
-  // The Jan–May CSV backfill posts each month's revenue as a single entry dated
-  // the 1st of the month. Those are not real daily figures, so both the daily
-  // chart and the day-of-week breakdown only use dates from dataStartsAt on.
-  // (The API's own revenueByDayOfWeek field includes the backfill lumps, so we
-  // recompute day-of-week here from the honest daily set instead.)
+  // dataStartsAt is the first date with real per-day Square order data
+  // (a few days after the 2025-07-28 grand opening) — filtering to it here
+  // just drops the pre-opening zero-revenue days, not any real data.
+  // (Recomputed from `daily` rather than using the API's own
+  // revenueByDayOfWeek field so the two stay in lockstep with this filter.)
   const orderDays = useMemo(
     () => (data?.daily ?? []).filter((d) => d.date >= dataStartsAt),
     [data, dataStartsAt],
@@ -64,14 +64,14 @@ export default function SalesOverviewView({ token, query }: { token: string; que
 
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} salesNote />
+      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
 
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <>
           {/* KPI strip — order-level stats; no customer count exists in the data */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Net Sales (order days)" value={fmtMoney0(netSalesOrderPeriod)}
-              sub={`since ${dateShort(dataStartsAt)} — excludes CSV backfill`} />
+            <KpiCard label="Net Sales" value={fmtMoney0(netSalesOrderPeriod)}
+              sub={`since ${dateShort(dataStartsAt)} (grand opening)`} />
             <KpiCard label="Total Orders" value={(stats?.totalOrders ?? 0).toLocaleString()}
               sub={`${stats?.daysWithOrderData ?? 0} days with order data`} />
             <KpiCard label="Avg Order Value" value={fmtMoney2(stats?.avgOrderValue ?? 0)} />
