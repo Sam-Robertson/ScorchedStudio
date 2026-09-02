@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
-import { Check, Lock, Plus, Trash2, Unlock, X } from "lucide-react";
+import { Check, Info, Lock, Plus, Trash2, Unlock, X } from "lucide-react";
 import type { Account } from "./types";
 import BankAccountsTab from "./BankAccountsTab";
 import InboxTab from "./InboxTab";
@@ -370,7 +370,56 @@ const TYPE_LABEL: Record<Account["type"], string> = {
   revenue: "Revenue", cogs: "COGS", expense: "Expense",
 };
 
+// Reference text only — not editable from the UI, not stored in the DB.
+// Update here when an account's real-world meaning changes or a new one
+// is added; this chart doesn't change often enough to need its own table.
+const ACCOUNT_DESCRIPTIONS: Record<string, string> = {
+  "1000": "Main operating bank account (Chase). Revenue lands here after Square/Stripe payouts clear; most expenses and card payments go out from here.",
+  "1100": "Holding account for Square revenue between when a sale is recorded and when Square actually pays it out to checking, usually a few days later. Should trend toward zero — a large or growing balance means payouts aren't clearing as expected.",
+  "1110": "Same idea as Square Clearing, but for Stripe (membership and booking payments).",
+  "1200": "Refundable deposits paid out (e.g. a landlord security deposit for a new location). This is money owed back to you, not an expense — it doesn't hit the P&L.",
+  "1500": "Cost basis of equipment, vehicles, and fixtures the business owns and depreciates over time (the truck, Bluetti power stations, etc.). Paired with Accumulated Depreciation to show current book value.",
+  "1510": "Running total of depreciation taken against Fixed Assets so far. Always a credit balance (contra-asset) — Fixed Assets minus this equals what the assets are worth on the books today.",
+  "2000": "Chase Ink business credit card balance.",
+  "2010": "Amex Blue Business Plus card balance.",
+  "2020": "Amex Blue Business Cash card balance.",
+  "2030": "U.S. Bank card (···1370) balance.",
+  "2040": "U.S. Bank card (···1386) balance.",
+  "2100": "Sales tax collected from customers that's owed to the state until it's actually remitted. A growing balance is normal between filing periods.",
+  "2200": "Gift card balances sold but not yet redeemed — money already received that hasn't been earned yet. Moves to revenue when the card is used.",
+  "2300": "Should always read $0. Square Payroll's API isn't accessible with the current credentials, so wages and employer taxes post directly to 6000/6010 instead of clearing through here.",
+  "2500": "Remaining principal owed on the LiftFund business loan.",
+  "2510": "Square Capital merchant cash advance balance — not yet registered in the system (no terms on file).",
+  "2520": "Placeholder for an SBA loan, if one is taken out.",
+  "3000": "Money the owner has personally put into the business.",
+  "3010": "Money the owner has taken out of the business.",
+  "3900": "Accumulated profit or loss carried forward from prior years. Maintained automatically by the system, not posted to directly.",
+  "4000": "Revenue from woodburning studio sessions.",
+  "4100": "Revenue from memberships.",
+  "4200": "Revenue from courses.",
+  "4300": "Revenue from group events and private bookings.",
+  "4400": "Revenue from retail and product sales.",
+  "5000": "Materials directly consumed in what's sold — wood, leather, blanks, and similar. Cost of goods sold, not general supplies.",
+  "6000": "Employee wages.",
+  "6010": "Employer-side payroll taxes (the business's share, not what's withheld from employees).",
+  "6020": "Payments to 1099 contractors.",
+  "6100": "Studio lease payments.",
+  "6200": "Advertising and promotion.",
+  "6300": "Square/Stripe transaction processing fees.",
+  "6400": "Power, water, internet, and similar utility bills.",
+  "6500": "General studio and office supplies — the catch-all for small hardware-store and miscellaneous purchases that aren't a specific category below.",
+  "6600": "Software subscriptions (Gusto fees, Webflow, Asana, and similar).",
+  "6700": "Business insurance premiums.",
+  "6800": "Legal, accounting, and consulting fees.",
+  "6850": "Business meals. Kept separate from Bank Fees & Misc because meals are only 50% tax-deductible (Schedule C Line 24b) — lumping them in would hide that from your CPA at tax time.",
+  "6900": "Bank fees, overdraft charges, and small purchases that don't fit any other category.",
+  "6950": "Fuel and other vehicle-related expenses.",
+  "7000": "Monthly depreciation expense on Fixed Assets — the flip side of Accumulated Depreciation.",
+  "8000": "Interest paid on loans and credit card balances.",
+};
+
 function AccountsTab({ accounts, loaded }: { accounts: Account[]; loaded: boolean }) {
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
   if (!loaded) {
     return (
       <div className="flex items-center gap-2 text-sm text-neutral-400 py-16 justify-center">
@@ -391,11 +440,25 @@ function AccountsTab({ accounts, loaded }: { accounts: Account[]; loaded: boolea
             <p className={`${vulfMono.className} text-xs tracking-widest uppercase text-neutral-400 mb-2`}>{TYPE_LABEL[type]}</p>
             <div className="rounded-2xl border border-black/10 bg-white divide-y divide-black/5 overflow-hidden">
               {grouped[type].map((a) => (
-                <div key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className={`${vulfMono.className} text-neutral-400 w-14 flex-shrink-0`}>{a.code}</span>
-                  <span className="flex-1">{a.name}</span>
-                  {!a.active && (
-                    <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase text-neutral-400`}>Inactive</span>
+                <div key={a.id}>
+                  <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <span className={`${vulfMono.className} text-neutral-400 w-14 flex-shrink-0`}>{a.code}</span>
+                    <span className="flex-1">{a.name}</span>
+                    {ACCOUNT_DESCRIPTIONS[a.code] && (
+                      <button
+                        onClick={() => setExpandedCode((prev) => (prev === a.code ? null : a.code))}
+                        aria-label={`What is ${a.name}?`}
+                        className={`p-1 rounded-full transition-colors ${expandedCode === a.code ? "text-[#884A20] bg-[#884A20]/10" : "text-neutral-300 hover:text-neutral-500 hover:bg-black/5"}`}
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {!a.active && (
+                      <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase text-neutral-400 ml-2`}>Inactive</span>
+                    )}
+                  </div>
+                  {expandedCode === a.code && ACCOUNT_DESCRIPTIONS[a.code] && (
+                    <p className="px-4 pb-3 -mt-1 text-xs text-neutral-500 leading-relaxed">{ACCOUNT_DESCRIPTIONS[a.code]}</p>
                   )}
                 </div>
               ))}
