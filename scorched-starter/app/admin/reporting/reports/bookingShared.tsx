@@ -37,6 +37,12 @@ export const SOURCE_COLORS: Record<string, string> = {
 export type TimeFrame = "week" | "month" | "year";
 export type BookingLocation = "all" | "orem" | "slc";
 
+// The online booking widget (this `bookings` table's source) went live this
+// date — there are zero rows of any status before it. Before this, sessions
+// were booked through Acuity Scheduling and paid via Square, so the only
+// historical signal is the Square settlement data (see EstimatedBookingsResponse).
+export const ONLINE_BOOKING_LAUNCH = "2026-03-24";
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function toDateStr(d: Date) {

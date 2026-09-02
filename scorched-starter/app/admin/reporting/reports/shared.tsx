@@ -47,6 +47,13 @@ export type SalesResponse = {
   dataStartsAt?: string;
 };
 
+// Pre-online-booking-launch proxy: Square orders containing a "General
+// Admission" line item, counted from the same settlement data Sales &
+// Products already reads. Only meaningful before ONLINE_BOOKING_LAUNCH
+// (see bookingShared.tsx) — the real `bookings` table has no rows before
+// that date at all.
+export type EstimatedBookingsResponse = { daily: { date: string; orders: number; seats: number }[] };
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // All three report APIs return this as `dataStartsAt`; used as the fallback
@@ -134,6 +141,21 @@ export function dateShort(date: string) {
 /** Day-of-week index for a YYYY-MM-DD string — same UTC-noon trick the sales API uses. */
 export function dowIndex(date: string) {
   return new Date(date + "T12:00:00Z").getUTCDay();
+}
+
+/** Every "YYYY-MM" from startISO through endISO, inclusive — fills gaps so a
+ * month with zero data in every series doesn't silently vanish from a chart. */
+export function monthsBetween(startISO: string, endISO: string): string[] {
+  const [sy, sm] = startISO.slice(0, 7).split("-").map(Number);
+  const [ey, em] = endISO.slice(0, 7).split("-").map(Number);
+  const months: string[] = [];
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return months;
 }
 
 export const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

@@ -13,12 +13,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {
-  CostsResponse, Section, KpiCard, LoadingOrError,
-  fmtMoney0, fmtAxisMoney, monthShort, monthTick, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
+  CostsResponse, EstimatedBookingsResponse, Section, KpiCard, LoadingOrError,
+  fmtMoney0, fmtAxisMoney, monthShort, monthTick, monthsBetween, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
 } from "./shared";
 import {
   REFERRAL_OPTIONS, SOURCE_COLORS, TimeFrame, TfToggle, ChartTooltip,
-  buildSourceChart, bookingsInRange, topChannel, fmt$,
+  buildSourceChart, bookingsInRange, rangeBounds, topChannel, fmt$, ONLINE_BOOKING_LAUNCH,
 } from "./bookingShared";
 
 const MARKETING_CODE = "6200";
@@ -26,11 +26,13 @@ const MARKETING_CODE = "6200";
 type SortDir = "desc" | "asc";
 type SortCol = "count" | "revenue" | "party" | "cancel";
 
-export default function MarketingView({ bookings, costs, costsLoading, query }: {
+export default function MarketingView({ bookings, costs, costsLoading, query, estimated, estimatedLoading }: {
   bookings: BookingRecord[];
   costs: CostsResponse | null;
   costsLoading: boolean;
   query: string;
+  estimated: EstimatedBookingsResponse | null;
+  estimatedLoading: boolean;
 }) {
   const [sourceTf, setSourceTf] = useState<TimeFrame>("month");
   const [hiddenSources, setHiddenSources] = useState<Set<string>>(new Set());
@@ -54,9 +56,13 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
   const costPerBooking = rangedConfirmed.length > 0 ? marketingSpend / rangedConfirmed.length : null;
 
   // ── Spend vs bookings by month ─────────────────────────────────────────────
-  // Two sources merged by month: the Costs report's monthly Marketing figure
-  // and a month-bucketed count of confirmed bookings (by created_at) within
-  // the same range.
+  // Three sources merged by month: the Costs report's monthly Marketing
+  // figure, a month-bucketed count of confirmed bookings (by created_at) —
+  // real, but only exists from ONLINE_BOOKING_LAUNCH onward, since the
+  // `bookings` table has no rows before that — and, for months before the
+  // launch, an estimate of booked parties from Square orders (see
+  // EstimatedBookingsResponse). The two bookings series never overlap: the
+  // estimate stops the day the real widget starts.
 
   const spendVsBookings = useMemo(() => {
     const spendByMonth = new Map<string, number>(); // YYYY-MM -> $
@@ -71,29 +77,43 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
       const key = b.created_at.slice(0, 7);
       bookingsByMonth.set(key, (bookingsByMonth.get(key) ?? 0) + 1);
     }
-    const months = [...new Set([...spendByMonth.keys(), ...bookingsByMonth.keys()])].sort();
+    const estByMonth = new Map<string, number>();
+    for (const row of estimated?.daily ?? []) {
+      if (row.date >= ONLINE_BOOKING_LAUNCH) continue;
+      const key = row.date.slice(0, 7);
+      estByMonth.set(key, (estByMonth.get(key) ?? 0) + row.orders);
+    }
+    const { start, end } = rangeBounds(query);
+    const months = start && end
+      ? monthsBetween(start, end)
+      : [...new Set([...spendByMonth.keys(), ...bookingsByMonth.keys(), ...estByMonth.keys()])].sort();
     return months.map((m) => ({
       label: monthShort(`${m}-01`),
       "Marketing Spend": Math.round((spendByMonth.get(m) ?? 0) * 100) / 100,
-      Bookings: bookingsByMonth.get(m) ?? 0,
+      Bookings: bookingsByMonth.has(m) ? bookingsByMonth.get(m)! : null,
+      "Estimated Bookings": estByMonth.has(m) ? estByMonth.get(m)! : null,
     }));
-  }, [costs, marketingName, rangedConfirmed]);
+  }, [costs, marketingName, rangedConfirmed, estimated, query]);
 
   // ── Bookings by source (relocated from the old Overview page) ──────────────
+  // Ranged like the KPI row and spend chart above, so the time-range picker
+  // actually affects every section on this tab.
+
+  const rangedBookings = useMemo(() => bookingsInRange(bookings, query), [bookings, query]);
 
   const presentSources = useMemo(() => {
     const seen = new Set<string>();
-    for (const b of confirmed) seen.add(b.referral_source || "(not recorded)");
+    for (const b of rangedConfirmed) seen.add(b.referral_source || "(not recorded)");
     return [...REFERRAL_OPTIONS.filter((o) => seen.has(o)), ...[...seen].filter((s) => !REFERRAL_OPTIONS.includes(s))];
-  }, [confirmed]);
+  }, [rangedConfirmed]);
 
   const activeSources = useMemo(() => new Set(presentSources.filter((s) => !hiddenSources.has(s))), [presentSources, hiddenSources]);
   const activeSourcesList = useMemo(() => [...activeSources], [activeSources]);
-  const sourceChartData = useMemo(() => buildSourceChart(confirmed, sourceTf, activeSources), [confirmed, sourceTf, activeSources]);
+  const sourceChartData = useMemo(() => buildSourceChart(rangedConfirmed, sourceTf, activeSources), [rangedConfirmed, sourceTf, activeSources]);
 
   const { sourceRows, otherDetails } = useMemo(() => {
     const data: Record<string, { conf: number; canc: number; seats: number; rev: number }> = {};
-    for (const b of bookings) {
+    for (const b of rangedBookings) {
       const src = b.referral_source || "(not recorded)";
       if (!data[src]) data[src] = { conf: 0, canc: 0, seats: 0, rev: 0 };
       if (b.status === "confirmed") { data[src].conf++; data[src].seats += b.party_size; data[src].rev += b.amount_paid ?? 0; }
@@ -111,9 +131,9 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
       else { const ta = a.conf + a.canc, tb = b.conf + b.canc; av = ta > 0 ? a.canc / ta : 0; bv = tb > 0 ? b.canc / tb : 0; }
       return sortDir === "desc" ? bv - av : av - bv;
     });
-    const others = bookings.filter((b) => b.referral_source === "Other" && b.referral_other).map((b) => b.referral_other!);
+    const others = rangedBookings.filter((b) => b.referral_source === "Other" && b.referral_other).map((b) => b.referral_other!);
     return { sourceRows: rows, otherDetails: others };
-  }, [bookings, sortCol, sortDir]);
+  }, [rangedBookings, sortCol, sortDir]);
 
   function toggleSource(src: string) {
     setHiddenSources((prev) => { const n = new Set(prev); if (n.has(src)) { n.delete(src); } else { n.add(src); } return n; });
@@ -152,7 +172,7 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
 
       {/* Spend vs bookings combo chart */}
       <Section title="Marketing spend vs. bookings by month">
-        {costsLoading ? (
+        {costsLoading || estimatedLoading ? (
           <LoadingOrError loading error={null} />
         ) : spendVsBookings.length === 0 ? (
           <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No data in this range.</p>
@@ -168,27 +188,33 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null;
                     const spend = payload.find((p) => p.dataKey === "Marketing Spend")?.value as number | undefined;
-                    const count = payload.find((p) => p.dataKey === "Bookings")?.value as number | undefined;
+                    const count = payload.find((p) => p.dataKey === "Bookings")?.value as number | null | undefined;
+                    const est = payload.find((p) => p.dataKey === "Estimated Bookings")?.value as number | null | undefined;
                     return (
                       <div style={{ fontFamily: "var(--font-display,monospace)", fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", padding: "10px 14px" }}>
                         <p style={{ fontWeight: "bold", color: "#374151", marginBottom: 4 }}>{label}</p>
                         <p style={{ color: BROWN }}>{fmtMoney0(spend ?? 0)} marketing spend</p>
-                        <p style={{ color: GREEN }}>{count ?? 0} confirmed bookings</p>
+                        {count != null && <p style={{ color: GREEN }}>{count} confirmed bookings</p>}
+                        {est != null && <p style={{ color: GREEN, opacity: 0.6 }}>~{est} estimated bookings</p>}
                       </div>
                     );
                   }}
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
                 />
                 <Bar yAxisId="spend" dataKey="Marketing Spend" fill={BROWN} radius={[3, 3, 0, 0]} maxBarSize={40} />
-                <Line yAxisId="bookings" type="monotone" dataKey="Bookings" stroke={GREEN} strokeWidth={2} dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} />
+                <Line yAxisId="bookings" type="monotone" dataKey="Bookings" stroke={GREEN} strokeWidth={2} dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} connectNulls={false} />
+                <Line yAxisId="bookings" type="monotone" dataKey="Estimated Bookings" stroke={GREEN} strokeOpacity={0.55} strokeDasharray="5 4" strokeWidth={2} dot={{ r: 3, fill: GREEN, fillOpacity: 0.55 }} activeDot={{ r: 5 }} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div className="flex items-center justify-center gap-4 mt-1">
+            <div className="flex items-center justify-center gap-4 mt-1 flex-wrap">
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Marketing spend ($, left)</span></div>
               <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Confirmed bookings (count, right)</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C] opacity-55" style={{ backgroundImage: "repeating-linear-gradient(90deg, #418A5C 0 4px, transparent 4px 7px)" }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated bookings (right)</span></div>
             </div>
             <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-2`}>
-              Spend from the accounting ledger (account 6200); bookings counted by the date they were made.
+              Spend from the accounting ledger (account 6200); bookings counted by the date they were made. Online
+              booking launched {monthShort(ONLINE_BOOKING_LAUNCH)} — before that, &quot;estimated&quot; counts
+              Square orders with a General Admission item (booked via Acuity Scheduling).
             </p>
           </div>
         )}
@@ -231,8 +257,8 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
 
       {/* Source breakdown table */}
       <Section title="Breakdown by source">
-        {bookings.length === 0 ? (
-          <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>No bookings yet.</p>
+        {rangedBookings.length === 0 ? (
+          <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>No bookings in this range.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className={`${vulfMono.className} w-full min-w-[700px] text-sm`}>
@@ -249,7 +275,7 @@ export default function MarketingView({ bookings, costs, costsLoading, query }: 
               <tbody>
                 {sourceRows.map((row) => {
                   const total = row.conf + row.canc;
-                  const pct = confirmed.length > 0 ? Math.round((row.conf / confirmed.length) * 100) : 0;
+                  const pct = rangedConfirmed.length > 0 ? Math.round((row.conf / rangedConfirmed.length) * 100) : 0;
                   const avgPty = row.conf > 0 ? (row.seats / row.conf).toFixed(1) : "--";
                   const avgRev = row.conf > 0 ? fmt$(Math.round(row.rev / row.conf)) : "--";
                   const cancelPct = total > 0 ? Math.round((row.canc / total) * 100) : 0;

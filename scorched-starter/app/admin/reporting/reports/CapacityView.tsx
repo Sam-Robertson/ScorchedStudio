@@ -8,17 +8,24 @@ import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
 import {
-  BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Section, KpiCard } from "./shared";
+import { EstimatedBookingsResponse, LoadingOrError, Section, KpiCard, GREEN, monthShort, monthTick, monthsBetween, AXIS_TICK } from "./shared";
 import {
   TimeFrame, TfToggle, ChartTooltip, fmtPct,
   buildCapacityData, buildHeatmap, buildRepeatData, buildRepeatChart,
-  DOW_LABELS, DOW_ORDER,
+  DOW_LABELS, DOW_ORDER, ONLINE_BOOKING_LAUNCH, rangeBounds,
 } from "./bookingShared";
 
-export default function CapacityView({ bookings }: { bookings: BookingRecord[] }) {
+const ESTIMATE_FILL = "#A9CDB6"; // GREEN, lightened — pre-launch estimate bars
+
+export default function CapacityView({ bookings, query, estimated, estimatedLoading }: {
+  bookings: BookingRecord[];
+  query: string;
+  estimated: EstimatedBookingsResponse | null;
+  estimatedLoading: boolean;
+}) {
   const [capDays, setCapDays] = useState<30 | 60 | 90>(30);
   const [repeatTf, setRepeatTf] = useState<TimeFrame>("month");
 
@@ -32,6 +39,38 @@ export default function CapacityView({ bookings }: { bookings: BookingRecord[] }
   const cancelRate = bookings.length > 0 ? cancelled.length / bookings.length : 0;
 
   const capacityData = useMemo(() => buildCapacityData(bookings, capDays), [bookings, capDays]);
+
+  // Seats booked by month, full selected range — unlike the trailing daily
+  // chart above (capped at 90 days), this reaches back before
+  // ONLINE_BOOKING_LAUNCH by falling back to the Square-order estimate for
+  // any month the real `bookings` table has no rows for.
+  const monthlySeats = useMemo(() => {
+    const realByMonth = new Map<string, number>();
+    for (const b of bookings) {
+      if (b.status !== "confirmed") continue;
+      const key = b.date.slice(0, 7);
+      realByMonth.set(key, (realByMonth.get(key) ?? 0) + b.party_size);
+    }
+    const estByMonth = new Map<string, number>();
+    for (const row of estimated?.daily ?? []) {
+      if (row.date >= ONLINE_BOOKING_LAUNCH) continue;
+      const key = row.date.slice(0, 7);
+      estByMonth.set(key, (estByMonth.get(key) ?? 0) + row.seats);
+    }
+    const { start, end } = rangeBounds(query);
+    const months = start && end
+      ? monthsBetween(start, end)
+      : [...new Set([...realByMonth.keys(), ...estByMonth.keys()])].sort();
+    const cutoverMonth = ONLINE_BOOKING_LAUNCH.slice(0, 7);
+    return months.map((m) => {
+      const isEstimate = m < cutoverMonth;
+      return {
+        label: monthShort(`${m}-01`),
+        seats: isEstimate ? (estByMonth.get(m) ?? 0) : (realByMonth.get(m) ?? 0),
+        estimated: isEstimate,
+      };
+    });
+  }, [bookings, estimated, query]);
   const { slots: heatSlots, cells: heatCells, maxCount: heatMax } = useMemo(() => buildHeatmap(bookings), [bookings]);
   const { tagged, uniqueCustomers, returningCustomers, cohortRows } = useMemo(() => buildRepeatData(bookings), [bookings]);
   const repeatChartData = useMemo(() => buildRepeatChart(tagged, repeatTf), [tagged, repeatTf]);
@@ -92,6 +131,53 @@ export default function CapacityView({ bookings }: { bookings: BookingRecord[] }
             Booked seats by session date. The line is the average of that day and the previous six -- read it for trend and week-over-week direction, not against a capacity ceiling.
           </p>
         </div>
+      </Section>
+
+      {/* Seats by month, full range — the only view that reaches before ONLINE_BOOKING_LAUNCH */}
+      <Section title="Seats booked by month">
+        {estimatedLoading ? (
+          <LoadingOrError loading error={null} />
+        ) : monthlySeats.length === 0 ? (
+          <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No data in this range.</p>
+        ) : (
+          <div className="px-2 pt-4 pb-2">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={monthlySeats} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={monthTick} />
+                <YAxis allowDecimals={false} tick={AXIS_TICK} axisLine={false} tickLine={false} width={32} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as { seats: number; estimated: boolean } | undefined;
+                    if (!row) return null;
+                    return (
+                      <div style={{ fontFamily: "var(--font-display,monospace)", fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", padding: "10px 14px" }}>
+                        <p style={{ fontWeight: "bold", color: "#374151", marginBottom: 4 }}>{label}</p>
+                        <p style={{ color: GREEN }}>{row.seats} seats {row.estimated ? "(estimated)" : "booked"}</p>
+                      </div>
+                    );
+                  }}
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                />
+                <Bar dataKey="seats" radius={[3, 3, 0, 0]} maxBarSize={40}>
+                  {monthlySeats.map((row, i) => (
+                    <Cell key={i} fill={row.estimated ? ESTIMATE_FILL : GREEN} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex items-center justify-center gap-4 mt-1">
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: GREEN }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Booked (real)</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: ESTIMATE_FILL }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated (pre-launch)</span></div>
+            </div>
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-3`}>
+              Online booking launched {monthShort(ONLINE_BOOKING_LAUNCH)}. Before that, the online widget has no
+              records at all — the lighter bars estimate seats from Square orders with a General Admission item
+              (booked via Acuity Scheduling), so treat them as directional, not exact.
+            </p>
+          </div>
+        )}
       </Section>
 
       {/* Day x time heatmap */}

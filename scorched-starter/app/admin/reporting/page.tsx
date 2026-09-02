@@ -13,7 +13,7 @@ import type { BookingRecord } from "@/lib/supabase";
 import { Printer } from "lucide-react";
 import {
   DateRangeFilter, rangeToQuery, fmtMoney0, monthShort,
-  useRangedReport, type RangeState, type CostsResponse,
+  useRangedReport, type RangeState, type CostsResponse, type EstimatedBookingsResponse,
 } from "./reports/shared";
 import { type BookingLocation } from "./reports/bookingShared";
 import OverviewView from "./reports/OverviewView";
@@ -58,7 +58,7 @@ const VIEW_LABEL: Record<ReportView, string> = {
 };
 
 // Tabs that share the ledger date-range selector.
-const RANGED_VIEWS: ReportView[] = ["overview", "marketing", "pl-overview", "pl-details", "sales", "costs"];
+const RANGED_VIEWS: ReportView[] = ["overview", "marketing", "capacity", "pl-overview", "pl-details", "sales", "costs"];
 // Tabs scoped by the booking Location filter (All/Orem/SLC).
 const LOCATION_VIEWS: ReportView[] = ["marketing", "capacity"];
 
@@ -125,6 +125,12 @@ function ReportingDashboard({ token }: { token: string }) {
   // range beats restructuring CostsView).
   const { data: costs, loading: costsLoading } = useRangedReport<CostsResponse>(
     "/api/admin/accounting/reports/costs", token, query,
+  );
+
+  // Pre-launch (before ONLINE_BOOKING_LAUNCH) booking-volume proxy from Square
+  // settlement data — fetched once here, shared by Marketing and Capacity.
+  const { data: estimated, loading: estimatedLoading } = useRangedReport<EstimatedBookingsResponse>(
+    "/api/admin/accounting/reports/estimated-bookings", token, query,
   );
 
   return (
@@ -201,7 +207,7 @@ function ReportingDashboard({ token }: { token: string }) {
         <OverviewView token={token} query={query} bookings={bookings} bookingsLoading={bookingsLoading} costs={costs} costsLoading={costsLoading} />
       </div>
       <div className={view === "marketing" ? "" : "hidden"}>
-        <MarketingView bookings={locationBookings} costs={costs} costsLoading={costsLoading} query={query} />
+        <MarketingView bookings={locationBookings} costs={costs} costsLoading={costsLoading} query={query} estimated={estimated} estimatedLoading={estimatedLoading} />
       </div>
       <div className={view === "capacity" ? "" : "hidden"}>
         {bookingsLoading ? (
@@ -210,7 +216,7 @@ function ReportingDashboard({ token }: { token: string }) {
             Loading…
           </div>
         ) : (
-          <CapacityView bookings={locationBookings} />
+          <CapacityView bookings={locationBookings} query={query} estimated={estimated} estimatedLoading={estimatedLoading} />
         )}
       </div>
       <div className={view === "pl-overview" ? "" : "hidden"}><PlOverviewView token={token} query={query} /></div>
