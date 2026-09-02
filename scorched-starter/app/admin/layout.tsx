@@ -22,7 +22,6 @@ import {
   KanbanSquare,
   Landmark,
   LayoutDashboard,
-  LineChart,
   LogOut,
   Menu,
   Printer,
@@ -44,8 +43,7 @@ const IN_STUDIO_NAV = [
 const ADMIN_NAV = [
   { href: "/admin/locations",  label: "Locations",  icon: Clock },
   { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
-    { href: "/admin/reporting",             label: "Overview",    icon: LayoutDashboard },
-    { href: "/admin/reporting/financials",  label: "Financials",  icon: LineChart },
+    { href: "/admin/reporting",             label: "Reporting",   icon: LayoutDashboard },
     { href: "/admin/reporting/projections", label: "Projections", icon: TrendingUp },
     { href: "/admin/accounting",            label: "Accounting",  icon: Landmark },
   ] },
@@ -81,9 +79,9 @@ function NavItem({
         pathname?.startsWith("/admin/projects") ||
         pathname?.startsWith("/admin/social")
       : href === "/admin/reporting"
-        // Exact match only — "/admin/reporting" is the Overview child of the
-        // Reporting group and must not light up on its sibling sub-routes
-        // (/admin/reporting/financials, /admin/reporting/projections).
+        // Exact match only — "/admin/reporting" is the merged Reporting child
+        // of the Reporting group and must not light up on its sibling
+        // sub-route (/admin/reporting/projections).
         ? pathname === "/admin/reporting"
         : pathname?.startsWith(href);
   return (

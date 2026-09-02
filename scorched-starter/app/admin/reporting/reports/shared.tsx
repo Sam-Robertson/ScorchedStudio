@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { vulfMono } from "@/app/fonts";
-import { AlertTriangle } from "lucide-react";
 
 // ── Shared types (shapes of the three report API responses) ──────────────────
 
@@ -107,6 +106,21 @@ export function monthShort(period_month: string) {
   return new Date(period_month.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
 
+/**
+ * Chart X-axis ticks only: month with no year — "2026-01-01" (or an already
+ * formatted "Jan 26" label) -> "Jan". With 12-15 ticks in a row the repeating
+ * years collide visually; the eye tracks left-to-right chronologically, so the
+ * year is dropped here but kept everywhere else (tables, tooltip headers) via
+ * monthShort. Use as an XAxis tickFormatter so the tooltip's label keeps the
+ * full "Jan 26" form.
+ */
+export function monthTick(period_month: string) {
+  if (/^\d{4}-\d{2}/.test(period_month)) {
+    return new Date(period_month.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short" });
+  }
+  return period_month.split(" ")[0];
+}
+
 /** "2025-08-02" -> "Aug 2, 2025" */
 export function dateLong(date: string) {
   return new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -156,10 +170,10 @@ export function rangeToQuery(range: RangeState): string {
 }
 
 const PRESET_LABEL: Record<Exclude<RangePreset, "custom">, string> = {
-  "3m": "Last 3 mo",
-  "6m": "Last 6 mo",
+  "3m": "3M",
+  "6m": "6M",
   ytd: "YTD",
-  all: "All time",
+  all: "ALL",
 };
 
 export function DateRangeFilter({ value, onChange }: { value: RangeState; onChange: (r: RangeState) => void }) {
@@ -313,11 +327,12 @@ export function Section({ title, action, children }: { title: string; action?: R
   );
 }
 
-export function KpiCard({ label, value, sub, valueColor, onClick, selected }: {
+export function KpiCard({ label, value, sub, valueColor, subColor, onClick, selected }: {
   label: string;
   value: string;
   sub?: string;
   valueColor?: string;
+  subColor?: string;
   onClick?: () => void;
   selected?: boolean;
 }) {
@@ -329,7 +344,7 @@ export function KpiCard({ label, value, sub, valueColor, onClick, selected }: {
     <>
       <p className={`${vulfMono.className} text-[10px] uppercase tracking-widest text-neutral-400 mb-1`}>{label}</p>
       <p className="text-2xl font-bold tabular-nums" style={{ color: valueColor ?? "#171717" }}>{value}</p>
-      {sub && <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>{sub}</p>}
+      {sub && <p className={`${vulfMono.className} text-xs mt-0.5`} style={{ color: subColor ?? "#a3a3a3" }}>{sub}</p>}
     </>
   );
   if (onClick) {
@@ -353,7 +368,10 @@ export function MoneyTooltip({ active, payload, label, showTotal }: {
   showTotal?: boolean;
 }) {
   if (!active || !payload?.length) return null;
-  const items = [...payload].reverse().filter((p) => typeof p.value === "number" && p.value !== 0);
+  // Biggest first, so the eye lands on what matters.
+  const items = [...payload]
+    .filter((p) => typeof p.value === "number" && p.value !== 0)
+    .sort((a, b) => (b.value as number) - (a.value as number));
   if (!items.length) return null;
   const total = items.reduce((s, p) => s + (p.value as number), 0);
   return (
@@ -375,33 +393,105 @@ export function MoneyTooltip({ active, payload, label, showTotal }: {
   );
 }
 
-// ── Data-gap banner ───────────────────────────────────────────────────────────
-// After extending Plaid's history (re-link, Sept 2026) and backfilling real
-// daily Square settlements back to the studio's actual grand opening, there's
-// no meaningful data gap left within the ledger's history — bank/card data
-// starts 2025-06-06, and Square order data starts 2025-08-02 (a few days
-// after the 2025-07-28 grand opening). What's left to flag is informational,
-// not a warning: revenue is genuinely $0 before the opening (pre-launch
-// build-out), not missing data, and anything before the bank data's own
-// start (2025-06-06) simply isn't in this ledger at all.
+// ── Journal-entry drill-down panel ───────────────────────────────────────────
+// Transaction-level detail for one or more account codes over a date window.
+// Used by the Monthly P&L cell drill-down (one account, one month) and the
+// Costs donut "View charges" action (one or more accounts, the page's range).
+// Fetches from the journal-entries route's accountCode filter.
 
-export const GRAND_OPENING_AT = "2025-07-28";
-export const BANK_DATA_STARTS_AT = "2025-06-06";
+type DrillLine = { amount: number; memo: string | null; accounts: { code: string; name: string; type: string } | null };
+type DrillEntry = { id: string; entry_date: string; memo: string | null; journal_lines: DrillLine[] };
 
-export function DataGapBanner({ dataStartsAt }: { dataStartsAt?: string }) {
-  const bankStart = dateLong(dataStartsAt ?? DATA_STARTS_AT);
-  const opening = dateLong(GRAND_OPENING_AT);
-  return (
-    <div className="rounded-2xl border border-amber-400/40 bg-amber-50 p-5 flex gap-3">
-      <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-      <div>
-        <p className="text-sm font-semibold text-amber-800">Ledger history starts {bankStart}</p>
-        <p className="text-sm text-amber-700 mt-1">
-          Bank and card data goes back to {bankStart}. Revenue is genuinely $0 before the studio&apos;s grand opening
-          on {opening} — that&apos;s real pre-launch history (build-out costs, no sales yet), not missing data.
-          Nothing before {bankStart} is in this ledger at all.
-        </p>
+export function JournalDrillDown({ token, from, to, accountCodes }: {
+  token: string;
+  from?: string;
+  to?: string;
+  accountCodes: string[];
+}) {
+  const [entries, setEntries] = useState<DrillEntry[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const codes = accountCodes.join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const parts = [`accountCode=${encodeURIComponent(codes)}`, "limit=500"];
+    if (from) parts.push(`from=${from}`);
+    if (to) parts.push(`to=${to}`);
+    fetch(`/api/admin/accounting/journal-entries?${parts.join("&")}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (json?.error) throw new Error(json.error);
+        setEntries((json.entries ?? []) as DrillEntry[]);
+      })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, from, to, codes]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-neutral-400 py-6 justify-center">
+        <span className="inline-block w-4 h-4 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+        Loading transactions…
       </div>
+    );
+  }
+  if (error) return <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">{error}</p>;
+
+  const codeSet = new Set(accountCodes);
+  const rows = (entries ?? []).map((e) => {
+    const matching = e.journal_lines.filter((l) => l.accounts && codeSet.has(l.accounts.code));
+    const amount = matching.reduce((s, l) => s + Number(l.amount), 0);
+    const accountNames = [...new Set(matching.map((l) => l.accounts!.name))];
+    const lineMemo = matching.map((l) => l.memo).find((m) => m) ?? null;
+    return { id: e.id, date: e.entry_date, memo: e.memo ?? lineMemo, amount, accountNames };
+  });
+  const showAccount = accountCodes.length > 1;
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  if (rows.length === 0) {
+    return <p className={`${vulfMono.className} text-xs text-neutral-400 py-4 text-center`}>No transactions found for this window.</p>;
+  }
+  return (
+    <div>
+      <table className={`${vulfMono.className} w-full text-xs`}>
+        <thead>
+          <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
+            <th className="px-3 py-2 font-medium">Date</th>
+            {showAccount && <th className="px-3 py-2 font-medium">Account</th>}
+            <th className="px-3 py-2 font-medium">Memo</th>
+            <th className="px-3 py-2 font-medium text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/5">
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td className="px-3 py-2 whitespace-nowrap text-neutral-700">{dateLong(r.date)}</td>
+              {showAccount && <td className="px-3 py-2 text-neutral-500">{r.accountNames.join(", ")}</td>}
+              <td className="px-3 py-2 text-neutral-500">{r.memo ?? "—"}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmtMoney0(r.amount)}</td>
+            </tr>
+          ))}
+          <tr className="border-t border-black/15 bg-neutral-50/60">
+            <td colSpan={showAccount ? 3 : 2} className="px-3 py-2 font-bold text-neutral-800 uppercase tracking-wide">
+              Total ({rows.length} entries)
+            </td>
+            <td className="px-3 py-2 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+      {rows.length >= 500 && (
+        <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-3 py-2`}>
+          Showing the 500 most recent entries — narrow the date range to see everything.
+        </p>
+      )}
     </div>
   );
 }

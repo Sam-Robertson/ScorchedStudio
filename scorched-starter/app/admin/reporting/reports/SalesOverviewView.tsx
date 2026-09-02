@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   SalesResponse, useRangedReport, LoadingOrError, Section, KpiCard, MoneyTooltip,
-  DataGapBanner, DATA_STARTS_AT, fmtMoney0, fmtMoney2, fmtAxisMoney, dateShort,
+  DATA_STARTS_AT, fmtMoney0, fmtMoney2, fmtAxisMoney, dateShort,
   dowIndex, DOW_NAMES, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
 } from "./shared";
 import SpDetailsView from "./SpDetailsView";
@@ -69,8 +69,6 @@ export default function SalesOverviewView({ token, query }: { token: string; que
 
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
-
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <>
           {/* KPI strip — order-level stats; no customer count exists in the data */}
@@ -189,20 +187,21 @@ export default function SalesOverviewView({ token, query }: { token: string; que
             )}
           </Section>
 
-          {/* Opt-in raw daily table (the old S&P Details tab), scoped to the
-              same date range as the rest of this page. */}
+          {/* Opt-in compact daily table: the last 15 days of order data by
+              default (its own fixed recent window, independent of the
+              page-wide date-range selector), with a jump-to-date control. */}
           <div>
             <button
               onClick={() => { setShowDailyDetail((v) => !v); setDailyDetailMounted(true); }}
               className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50`}
               aria-expanded={showDailyDetail}
             >
-              {showDailyDetail ? "Hide daily detail" : "Show daily detail"}
+              {showDailyDetail ? "Hide daily detail" : "Show daily detail (last 15 days)"}
             </button>
           </div>
           {dailyDetailMounted && (
             <div className={showDailyDetail ? "" : "hidden"}>
-              <SpDetailsView token={token} query={query} />
+              <SpDetailsView token={token} />
             </div>
           )}
         </>

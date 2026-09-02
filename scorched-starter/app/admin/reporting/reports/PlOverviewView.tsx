@@ -8,8 +8,8 @@ import {
 } from "recharts";
 import {
   PlResponse, useRangedReport, LoadingOrError, mergePlMonths, sumLinesByMonth,
-  dropEmptyTrailingMonths, Section, KpiCard, MoneyTooltip, DataGapBanner,
-  fmtMoney0, fmtPct1, fmtAxisMoney, monthShort, AXIS_TICK, GRID_STROKE,
+  dropEmptyTrailingMonths, Section, KpiCard, MoneyTooltip,
+  fmtMoney0, fmtPct1, fmtAxisMoney, monthShort, monthTick, AXIS_TICK, GRID_STROKE,
   BROWN, GREEN, BLUE,
 } from "./shared";
 
@@ -60,6 +60,7 @@ export default function PlOverviewView({ token, query }: { token: string; query:
       label: monthShort(m.period_month),
       "Net Revenue": Math.round(m.revenue * 100) / 100,
       "Gross Profit": Math.round(m.gross_profit * 100) / 100,
+      "Net Profit": Math.round(m.net_income * 100) / 100,
     })),
     [months],
   );
@@ -82,9 +83,12 @@ export default function PlOverviewView({ token, query }: { token: string; query:
   }
 
   // Line emphasis for the Revenue vs Profit chart (revenue / profit cards).
-  const lineOpacity = (line: "revenue" | "profit") => {
+  // "profit" isolates Net Profit (net income) — the figure the KPI card
+  // actually shows — not Gross Profit, which has no card of its own.
+  const lineOpacity = (line: "revenue" | "grossProfit" | "netProfit") => {
     if (selectedKpi !== "revenue" && selectedKpi !== "profit") return 1;
-    return selectedKpi === line ? 1 : 0.15;
+    if (selectedKpi === "revenue") return line === "revenue" ? 1 : 0.15;
+    return line === "netProfit" ? 1 : 0.15;
   };
   // Segment emphasis for the Cost Structure chart (cogs / opex cards).
   const segOpacity = (seg: "COGS" | "Labor" | "Other OpEx") => {
@@ -97,8 +101,6 @@ export default function PlOverviewView({ token, query }: { token: string; query:
 
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
-
       {/* KPI cards — click to isolate the matching series below */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
@@ -149,14 +151,16 @@ export default function PlOverviewView({ token, query }: { token: string; query:
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={revProfitData} margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={monthTick} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
                     <Tooltip content={<MoneyTooltip />} />
                     <Legend wrapperStyle={{ fontFamily: "var(--font-display,monospace)", fontSize: 12 }} iconType="plainline" />
                     <Line type="monotone" dataKey="Net Revenue" stroke={GREEN} strokeWidth={2}
                       strokeOpacity={lineOpacity("revenue")} dot={{ r: 2, fill: GREEN, opacity: lineOpacity("revenue") }} activeDot={{ r: 4 }} />
                     <Line type="monotone" dataKey="Gross Profit" stroke={BROWN} strokeWidth={2}
-                      strokeOpacity={lineOpacity("profit")} dot={{ r: 2, fill: BROWN, opacity: lineOpacity("profit") }} activeDot={{ r: 4 }} />
+                      strokeOpacity={lineOpacity("grossProfit")} dot={{ r: 2, fill: BROWN, opacity: lineOpacity("grossProfit") }} activeDot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="Net Profit" stroke={BLUE} strokeWidth={2}
+                      strokeOpacity={lineOpacity("netProfit")} dot={{ r: 2, fill: BLUE, opacity: lineOpacity("netProfit") }} activeDot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
                 {(selectedKpi === "revenue" || selectedKpi === "profit") && (
@@ -176,7 +180,7 @@ export default function PlOverviewView({ token, query }: { token: string; query:
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={costStructureData} margin={{ top: 4, right: 24, left: 4, bottom: 4 }} barCategoryGap="30%">
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={monthTick} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
                     <Tooltip content={<MoneyTooltip showTotal />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                     <Legend wrapperStyle={{ fontFamily: "var(--font-display,monospace)", fontSize: 12 }} iconType="circle" iconSize={8} />

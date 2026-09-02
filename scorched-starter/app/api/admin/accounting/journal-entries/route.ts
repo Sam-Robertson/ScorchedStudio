@@ -18,6 +18,13 @@ export async function GET(req: NextRequest) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "100", 10) || 100, 500);
+    // Optional filter: only entries containing at least one line against one
+    // of these account codes (comma-separated). Used by the reporting
+    // drill-downs (Monthly P&L cells, Costs "View charges").
+    const accountCodes = (searchParams.get("accountCode") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     const sb = getSupabase();
     let query = sb
@@ -25,7 +32,10 @@ export async function GET(req: NextRequest) {
       .select("*, locations(key,name), journal_lines(*, accounts(code,name,type))")
       .order("entry_date", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(limit);
+      // When filtering by account, over-fetch and filter in JS (the nested
+      // account code isn't a top-level column), then trim to the requested
+      // limit afterwards so the caller still gets up to `limit` matches.
+      .limit(accountCodes.length > 0 ? 2000 : limit);
 
     if (from) query = query.gte("entry_date", from);
     if (to) query = query.lte("entry_date", to);
@@ -35,7 +45,16 @@ export async function GET(req: NextRequest) {
       console.error("ACCOUNTING_JOURNAL_GET_ERROR", error);
       return Response.json({ error: "Failed to fetch journal entries" }, { status: 500 });
     }
-    return Response.json({ entries: data });
+
+    let entries = data ?? [];
+    if (accountCodes.length > 0) {
+      const codeSet = new Set(accountCodes);
+      type EntryWithLines = { journal_lines?: { accounts?: { code?: string } | null }[] };
+      entries = entries
+        .filter((e: EntryWithLines) => (e.journal_lines ?? []).some((l) => l.accounts?.code && codeSet.has(l.accounts.code)))
+        .slice(0, limit);
+    }
+    return Response.json({ entries });
   } catch (err) {
     console.error("ACCOUNTING_JOURNAL_GET_ERROR", err);
     return Response.json({ error: "Server error" }, { status: 500 });

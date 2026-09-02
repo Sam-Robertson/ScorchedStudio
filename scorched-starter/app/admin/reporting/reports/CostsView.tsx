@@ -8,12 +8,27 @@ import {
 } from "recharts";
 import {
   CostsResponse, useRangedReport, LoadingOrError, Section, KpiCard, MoneyTooltip,
-  DataGapBanner, fmtMoney0, fmtAxisMoney, fmtPct1, monthShort, AXIS_TICK, GRID_STROKE,
-  CHART_COLORS, OTHER_COLOR, GREEN,
+  JournalDrillDown, fmtMoney0, fmtAxisMoney, fmtPct1, monthShort, monthTick,
+  AXIS_TICK, GRID_STROKE, CHART_COLORS, OTHER_COLOR, GREEN,
 } from "./shared";
 
 const OTHER = "Other";
 const MAX_SERIES = 9; // one per validated palette color; the rest fold into "Other"
+
+// Synthetic donut slice so the donut and the stacked chart below agree on
+// what's included — the stacked chart has always shown labor, the donut
+// (built from the opex-only breakdown) didn't. Fixed addition, not part of
+// the MAX_SERIES rank/fold logic.
+const LABOR_SLICE = "Labor";
+const LABOR_CODES = ["6000", "6010"];
+// Account names for the labor codes as seeded in supabase-accounting-setup.sql;
+// used to keep the Labor donut slice and the payroll series in the stacked
+// chart pointing at each other when one is isolated.
+const LABOR_NAME_TO_CODE: Record<string, string> = {
+  "Payroll: Wages": "6000",
+  "Payroll: Employer Taxes": "6010",
+};
+const LABOR_SERIES_NAMES = new Set(Object.keys(LABOR_NAME_TO_CODE));
 
 type SortCol = "name" | "amount" | "pct";
 type SortDir = "desc" | "asc";
@@ -21,6 +36,7 @@ type SortDir = "desc" | "asc";
 export default function CostsView({ token, query }: { token: string; query: string }) {
   const { data, loading, error } = useRangedReport<CostsResponse>("/api/admin/accounting/reports/costs", token, query);
   const [selected, setSelected] = useState<string | null>(null);
+  const [showCharges, setShowCharges] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("amount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -65,9 +81,11 @@ export default function CostsView({ token, query }: { token: string; query: stri
     };
   }, [data]);
 
-  // Pie: operating-expense accounts only (as the API's breakdown provides).
-  // Accounts that fold into "Other" in the stacked chart fold here too, so the
-  // click-to-isolate mapping between the two charts is one-to-one.
+  // Pie: operating-expense accounts (as the API's breakdown provides) plus a
+  // synthetic Labor slice, so the donut agrees with the stacked chart below on
+  // what's included. Accounts that fold into "Other" in the stacked chart fold
+  // here too, so the click-to-isolate mapping between the two charts is
+  // one-to-one.
   const { pieData, pieTotal } = useMemo(() => {
     const majorSet = new Set(seriesNames);
     const slices: { name: string; value: number }[] = [];
@@ -76,14 +94,51 @@ export default function CostsView({ token, query }: { token: string; query: stri
       if (majorSet.has(b.name)) slices.push({ name: b.name, value: Math.round(b.amount * 100) / 100 });
       else other += b.amount;
     }
+    const laborTotal = data?.totals.totalLaborCosts ?? 0;
+    if (laborTotal > 0) slices.push({ name: LABOR_SLICE, value: Math.round(laborTotal * 100) / 100 });
     if (other > 0) slices.push({ name: OTHER, value: Math.round(other * 100) / 100 });
     slices.sort((a, b) => (a.name === OTHER ? 1 : b.name === OTHER ? -1 : b.value - a.value));
     return { pieData: slices, pieTotal: slices.reduce((s, x) => s + x.value, 0) };
   }, [data, seriesNames]);
 
+  // Donut colors: the synthetic Labor slice always gets the same green used
+  // for Labor elsewhere (e.g. the P&L cost-structure chart); everything else
+  // keeps its rank-assigned color from the stacked chart.
+  const sliceColor = (name: string) => (name === LABOR_SLICE ? GREEN : colorFor(name));
+
+  // Does `name` light up while `sel` is isolated? The Labor donut slice and
+  // the individual payroll series in the stacked chart map onto each other.
+  function matchesSelection(name: string, sel: string) {
+    if (name === sel) return true;
+    if (name === LABOR_SLICE && LABOR_SERIES_NAMES.has(sel)) return true;
+    if (sel === LABOR_SLICE && LABOR_SERIES_NAMES.has(name)) return true;
+    return false;
+  }
+
   function toggle(name: string) {
+    setShowCharges(false);
     setSelected((prev) => (prev === name ? null : name));
   }
+
+  // Account codes behind the isolated slice/series, for the charges drill-down.
+  const nameToCode = useMemo(
+    () => new Map((data?.breakdown ?? []).map((b) => [b.name, b.code] as const)),
+    [data],
+  );
+  const selectedCodes = useMemo<string[]>(() => {
+    if (!selected) return [];
+    if (selected === LABOR_SLICE) return LABOR_CODES;
+    if (LABOR_NAME_TO_CODE[selected]) return [LABOR_NAME_TO_CODE[selected]];
+    if (selected === OTHER) return otherMembers.map((n) => nameToCode.get(n)).filter((c): c is string => !!c);
+    const code = nameToCode.get(selected);
+    return code ? [code] : [];
+  }, [selected, nameToCode, otherMembers]);
+
+  // The page's selected range, for the charges drill-down window.
+  const rangeParams = useMemo(() => {
+    const params = new URLSearchParams(query);
+    return { from: params.get("start") ?? undefined, to: params.get("end") ?? undefined };
+  }, [query]);
 
   const totals = data?.totals;
 
@@ -131,8 +186,6 @@ export default function CostsView({ token, query }: { token: string; query: stri
 
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
-
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -141,14 +194,14 @@ export default function CostsView({ token, query }: { token: string; query: stri
             <KpiCard label="Total COGS" value={fmtMoney0(totals?.totalCogs ?? 0)} sub="materials & goods sold" />
           </div>
 
-          <Section title="Operating Costs Breakdown">
+          <Section title="Costs Breakdown">
             {pieData.length === 0 ? (
-              <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No operating costs in this range.</p>
+              <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No costs in this range.</p>
             ) : (
               <div className="px-6 py-6 grid md:grid-cols-[minmax(220px,300px)_1fr] gap-6 items-center">
                 <div>
                   {pieData.map((slice) => {
-                    const active = selected == null || selected === slice.name;
+                    const active = selected == null || matchesSelection(slice.name, selected);
                     return (
                       <button
                         key={slice.name}
@@ -159,9 +212,11 @@ export default function CostsView({ token, query }: { token: string; query: stri
                         aria-pressed={selected === slice.name}
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorFor(slice.name) }} />
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sliceColor(slice.name) }} />
                           <span className="text-neutral-700 truncate">
-                            {slice.name === OTHER ? `Other (${otherMembers.length} accounts)` : slice.name}
+                            {slice.name === OTHER ? `Other (${otherMembers.length} accounts)`
+                              : slice.name === LABOR_SLICE ? "Labor (wages + employer taxes)"
+                              : slice.name}
                           </span>
                         </span>
                         <span className="tabular-nums text-neutral-500 shrink-0">{fmtMoney0(slice.value)}</span>
@@ -173,7 +228,8 @@ export default function CostsView({ token, query }: { token: string; query: stri
                     <span className="tabular-nums">{fmtMoney0(pieTotal)}</span>
                   </div>
                   <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-3 px-2.5`}>
-                    Click an account to isolate it in the monthly chart below. Full account list in the table at the bottom of this page.
+                    Operating expenses plus labor (COGS excluded), matching the monthly chart below. Click an account to
+                    isolate it in that chart. Full account list in the table at the bottom of this page.
                   </p>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
@@ -191,8 +247,8 @@ export default function CostsView({ token, query }: { token: string; query: stri
                       {pieData.map((slice) => (
                         <Cell
                           key={slice.name}
-                          fill={colorFor(slice.name)}
-                          fillOpacity={selected == null || selected === slice.name ? 1 : 0.25}
+                          fill={sliceColor(slice.name)}
+                          fillOpacity={selected == null || matchesSelection(slice.name, selected) ? 1 : 0.25}
                         />
                       ))}
                     </Pie>
@@ -205,10 +261,23 @@ export default function CostsView({ token, query }: { token: string; query: stri
           <Section
             title="Cost Categories by Month"
             action={selected != null ? (
-              <button onClick={() => setSelected(null)}
-                className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50`}>
-                Reset — showing {selected} only
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedCodes.length > 0 && (
+                  <button onClick={() => setShowCharges((v) => !v)}
+                    className={`${vulfMono.className} text-xs rounded-lg px-3 py-1.5 border transition-colors ${
+                      showCharges
+                        ? "bg-[#884A20] text-white border-transparent"
+                        : "text-neutral-500 border-black/15 hover:bg-neutral-50"
+                    }`}
+                    aria-expanded={showCharges}>
+                    {showCharges ? "Hide charges" : "View charges"}
+                  </button>
+                )}
+                <button onClick={() => { setSelected(null); setShowCharges(false); }}
+                  className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50`}>
+                  Reset — showing {selected} only
+                </button>
+              </div>
             ) : undefined}
           >
             {stackedData.length === 0 ? (
@@ -218,13 +287,13 @@ export default function CostsView({ token, query }: { token: string; query: stri
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={stackedData} margin={{ top: 4, right: 24, left: 4, bottom: 4 }} barCategoryGap="30%">
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={monthTick} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
                     <Tooltip content={<MoneyTooltip showTotal />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                     {seriesNames.map((name, i) => (
                       <Bar
                         key={name} dataKey={name} stackId="a" fill={colorFor(name)}
-                        fillOpacity={selected == null || selected === name ? 1 : 0.12}
+                        fillOpacity={selected == null || matchesSelection(name, selected) ? 1 : 0.12}
                         stroke="#fff" strokeWidth={1}
                         radius={i === seriesNames.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
                         maxBarSize={48}
@@ -236,7 +305,7 @@ export default function CostsView({ token, query }: { token: string; query: stri
                   {seriesNames.map((name) => (
                     <button key={name} onClick={() => toggle(name)}
                       className={`${vulfMono.className} flex items-center gap-1.5 text-[11px] transition-opacity ${
-                        selected == null || selected === name ? "text-neutral-600" : "text-neutral-400 opacity-50"
+                        selected == null || matchesSelection(name, selected) ? "text-neutral-600" : "text-neutral-400 opacity-50"
                       }`}>
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colorFor(name) }} />
                       {name}
@@ -251,6 +320,20 @@ export default function CostsView({ token, query }: { token: string; query: stri
             )}
           </Section>
 
+          {/* Transaction-level drill-down for the isolated slice */}
+          {selected != null && showCharges && selectedCodes.length > 0 && (
+            <Section title={`Charges — ${selected}`}>
+              <div className="px-4 py-3">
+                <JournalDrillDown
+                  token={token}
+                  from={rangeParams.from}
+                  to={rangeParams.to}
+                  accountCodes={selectedCodes}
+                />
+              </div>
+            </Section>
+          )}
+
           <Section title="Labor Costs by Month">
             {laborData.length === 0 ? (
               <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No labor costs in this range.</p>
@@ -259,7 +342,7 @@ export default function CostsView({ token, query }: { token: string; query: stri
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={laborData} margin={{ top: 20, right: 40, left: 12, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" padding={{ left: 16, right: 16 }} />
+                    <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" padding={{ left: 16, right: 16 }} tickFormatter={monthTick} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
                     <Tooltip content={<MoneyTooltip />} />
                     <Area type="monotone" dataKey="Labor" stroke={GREEN} strokeWidth={2} fill={GREEN} fillOpacity={0.12}

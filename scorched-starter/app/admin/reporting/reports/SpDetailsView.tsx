@@ -1,24 +1,41 @@
 "use client";
 
+// Compact daily order detail: shows the last 15 days of order data by default
+// (a fixed recent window, independent of the page-wide date-range selector),
+// with a date picker to jump to a specific day. Rendered inside Sales &
+// Products behind its disclosure toggle.
+
 import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import {
   SalesResponse, useRangedReport, LoadingOrError, Section,
-  fmtMoney0, fmtMoney2, dateShort, dowIndex, DOW_NAMES,
+  fmtMoney0, fmtMoney2, dateShort, dateLong, dowIndex, DOW_NAMES,
 } from "./shared";
+
+const RECENT_DAYS = 15;   // default window: the 15 most recent days with data
+const JUMP_PAD_DAYS = 3;  // jump mode: the picked day ± this many days
 
 type Row = { date: string; dow: number; orders: number; items: number; netSales: number | null; avgOrderValue: number };
 type SortCol = "date" | "dow" | "orders" | "items" | "netSales" | "aov";
 type SortDir = "desc" | "asc";
 
-export default function SpDetailsView({ token, query }: { token: string; query: string }) {
-  const { data, loading, error } = useRangedReport<SalesResponse>("/api/admin/accounting/reports/sales", token, query);
+function shiftDate(date: string, days: number) {
+  const d = new Date(date + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export default function SpDetailsView({ token }: { token: string }) {
+  // Deliberately unranged: this table has its own fixed recent window plus a
+  // jump-to-date control, so it needs the full history available client-side.
+  const { data, loading, error } = useRangedReport<SalesResponse>("/api/admin/accounting/reports/sales", token, "");
   const [sortCol, setSortCol] = useState<SortCol>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [jumpDate, setJumpDate] = useState("");
 
-  const rows = useMemo<Row[]>(() => {
+  const allRows = useMemo<Row[]>(() => {
     const salesByDate = new Map((data?.daily ?? []).map((d) => [d.date, d.netSales]));
-    const out = (data?.dailyOrderStats ?? []).map((d) => ({
+    return (data?.dailyOrderStats ?? []).map((d) => ({
       date: d.date,
       dow: dowIndex(d.date),
       orders: d.orders,
@@ -26,6 +43,18 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
       netSales: salesByDate.get(d.date) ?? null,
       avgOrderValue: d.avgOrderValue,
     }));
+  }, [data]);
+
+  const rows = useMemo<Row[]>(() => {
+    let subset: Row[];
+    if (jumpDate) {
+      const from = shiftDate(jumpDate, -JUMP_PAD_DAYS);
+      const to = shiftDate(jumpDate, JUMP_PAD_DAYS);
+      subset = allRows.filter((r) => r.date >= from && r.date <= to);
+    } else {
+      subset = [...allRows].sort((a, b) => b.date.localeCompare(a.date)).slice(0, RECENT_DAYS);
+    }
+    const out = [...subset];
     out.sort((a, b) => {
       let cmp = 0;
       if (sortCol === "date") cmp = a.date.localeCompare(b.date);
@@ -37,7 +66,7 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
       return sortDir === "desc" ? -cmp : cmp;
     });
     return out;
-  }, [data, sortCol, sortDir]);
+  }, [allRows, jumpDate, sortCol, sortDir]);
 
   const totals = useMemo(() => rows.reduce(
     (t, r) => ({ orders: t.orders + r.orders, items: t.items + r.items, netSales: t.netSales + (r.netSales ?? 0) }),
@@ -58,14 +87,36 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
     </th>
   );
 
-  // Rendered inside Sales & Products (behind the "Show daily detail"
-  // disclosure), which already shows the DataGapBanner — no banner here.
   return (
     <div className="space-y-6">
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
-        <Section title="Daily Order Detail">
+        <Section
+          title="Daily Order Detail"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <label className={`${vulfMono.className} text-xs text-neutral-400`}>Jump to date</label>
+              <input
+                type="date"
+                value={jumpDate}
+                onChange={(e) => setJumpDate(e.target.value)}
+                className={`${vulfMono.className} text-xs border border-black/20 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-black/40`}
+                aria-label="Jump to date"
+              />
+              {jumpDate && (
+                <button
+                  onClick={() => setJumpDate("")}
+                  className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50`}
+                >
+                  Show recent
+                </button>
+              )}
+            </div>
+          }
+        >
           {rows.length === 0 ? (
-            <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No order data in this range.</p>
+            <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>
+              {jumpDate ? `No order data around ${dateLong(jumpDate)}.` : "No order data yet."}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className={`${vulfMono.className} w-full min-w-[720px] text-sm`}>
@@ -106,8 +157,10 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
                 </tbody>
               </table>
               <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-4 py-3`}>
-                One row per day with real Square order data. Net Sales joined from the daily revenue series by date.
-                Click a column header to sort.
+                {jumpDate
+                  ? `Showing ${dateLong(jumpDate)} ± ${JUMP_PAD_DAYS} days.`
+                  : `The last ${RECENT_DAYS} days with Square order data (independent of the page's date range).`}
+                {" "}Net Sales joined from the daily revenue series by date. Click a column header to sort.
               </p>
             </div>
           )}
