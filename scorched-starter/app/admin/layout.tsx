@@ -39,8 +39,9 @@ const IN_STUDIO_NAV = [
 
 const ADMIN_NAV = [
   { href: "/admin/locations",  label: "Locations",  icon: Clock },
-  { href: "/admin/accounting", label: "Accounting", icon: Landmark },
-  { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2 },
+  { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
+    { href: "/admin/accounting", label: "Accounting", icon: Landmark },
+  ] },
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
@@ -138,7 +139,16 @@ function SidebarContent({
             </p>
             <div className="space-y-0.5">
               {ADMIN_NAV.map((item) => (
-                <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+                <div key={item.href}>
+                  <NavItem href={item.href} label={item.label} icon={item.icon} pathname={pathname} onClick={onNavClick} />
+                  {item.children && (
+                    <div className="ml-4 mt-0.5 space-y-0.5 border-l border-black/8 pl-2">
+                      {item.children.map((child) => (
+                        <NavItem key={child.href} {...child} pathname={pathname} onClick={onNavClick} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </>
