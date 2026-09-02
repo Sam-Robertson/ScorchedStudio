@@ -2,21 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import type { BookingRecord } from "@/lib/supabase";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
 } from "recharts";
-
-// ── Config ────────────────────────────────────────────────────────────────────
-
-// TODO: set real per-location capacity once confirmed.
-// Orem estimate: Mon-Fri 8 slots x 20 seats = 160; Sat 19 slots x 20 = 380.
-// Orem and SLC will differ -- update when SLC opens.
-const STUDIO_MAX_SEATS_PER_DAY = 160;
 
 // ── Source config ─────────────────────────────────────────────────────────────
 
@@ -193,11 +187,26 @@ function buildSourceChart(bookings: BookingRecord[], tf: TimeFrame, active: Set<
 
 function buildCapacityData(bookings: BookingRecord[], days: number) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  return Array.from({ length: days }, (_, i) => {
-    const d = addDays(today, i - (days - 1));
-    const ds = toDateStr(d);
-    const seats = bookings.filter((b) => b.status === "confirmed" && b.date === ds).reduce((s, b) => s + b.party_size, 0);
-    return { label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), seats, pct: Math.min(100, Math.round((seats / STUDIO_MAX_SEATS_PER_DAY) * 100)) };
+  const seatsByDate: Record<string, number> = {};
+  for (const b of bookings) {
+    if (b.status !== "confirmed") continue;
+    seatsByDate[b.date] = (seatsByDate[b.date] ?? 0) + b.party_size;
+  }
+  // Extend the series 6 days before the visible window so the 7-day rolling
+  // average is computed from real data on the first visible day too.
+  const LOOKBACK = 6;
+  const series = Array.from({ length: days + LOOKBACK }, (_, i) => {
+    const d = addDays(today, i - (days + LOOKBACK - 1));
+    return { d, seats: seatsByDate[toDateStr(d)] ?? 0 };
+  });
+  return series.slice(LOOKBACK).map((row, i) => {
+    const win = series.slice(i, i + LOOKBACK + 1); // this day + previous 6
+    const avg7 = win.reduce((s, r) => s + r.seats, 0) / win.length;
+    return {
+      label: row.d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      seats: row.seats,
+      avg7: Math.round(avg7 * 10) / 10,
+    };
   });
 }
 
@@ -223,26 +232,60 @@ function buildHeatmap(bookings: BookingRecord[]) {
 
 type Tagged = BookingRecord & { isReturning: boolean };
 
+// Strip formatting from a phone number; drop a leading US country code.
+// Values under 7 digits are treated as junk (a partial or placeholder entry
+// would otherwise glue unrelated customers together).
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  let digits = phone.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  return digits.length >= 7 ? digits : null;
+}
+
+// Customer identity: two bookings belong to the same customer if their emails
+// match OR their normalized phone numbers match (when both have one). This
+// catches the common case of one person booking for a group under different
+// guest emails but the same phone. Grouping is transitive (union-find), so
+// email A + phone 1 and email B + phone 1 merge into one customer.
 function buildRepeatData(bookings: BookingRecord[]) {
   const confirmed = bookings.filter((b) => b.status === "confirmed");
-  const byEmail: Record<string, BookingRecord[]> = {};
-  for (const b of confirmed) {
-    const k = b.email.toLowerCase().trim();
-    if (!byEmail[k]) byEmail[k] = [];
-    byEmail[k].push(b);
-  }
-  for (const k in byEmail) byEmail[k].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  const firstId: Record<string, string> = {};
-  for (const k in byEmail) firstId[k] = byEmail[k][0].id;
+  const parent = confirmed.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const union = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; };
 
-  const tagged: Tagged[] = confirmed.map((b) => ({ ...b, isReturning: firstId[b.email.toLowerCase().trim()] !== b.id }));
+  const byEmail = new Map<string, number>();
+  const byPhone = new Map<string, number>();
+  confirmed.forEach((b, i) => {
+    const email = b.email.toLowerCase().trim();
+    if (email) {
+      const prev = byEmail.get(email);
+      if (prev == null) byEmail.set(email, i); else union(prev, i);
+    }
+    const phone = normalizePhone(b.phone);
+    if (phone) {
+      const prev = byPhone.get(phone);
+      if (prev == null) byPhone.set(phone, i); else union(prev, i);
+    }
+  });
 
-  const uniqueCustomers = Object.keys(byEmail).length;
-  const returningCustomers = Object.values(byEmail).filter((bs) => bs.length > 1).length;
+  const groups = new Map<number, BookingRecord[]>();
+  confirmed.forEach((b, i) => {
+    const root = find(i);
+    const g = groups.get(root);
+    if (g) g.push(b); else groups.set(root, [b]);
+  });
+  const customers = [...groups.values()];
+  for (const bs of customers) bs.sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const firstIds = new Set(customers.map((bs) => bs[0].id));
+  const tagged: Tagged[] = confirmed.map((b) => ({ ...b, isReturning: !firstIds.has(b.id) }));
+
+  const uniqueCustomers = customers.length;
+  const returningCustomers = customers.filter((bs) => bs.length > 1).length;
 
   const cohortMap: Record<string, { total: number; returned: number }> = {};
-  for (const bs of Object.values(byEmail)) {
+  for (const bs of customers) {
     const month = bs[0].created_at.slice(0, 7);
     if (!cohortMap[month]) cohortMap[month] = { total: 0, returned: 0 };
     cohortMap[month].total++;
@@ -290,9 +333,10 @@ function ReportingDashboard({ token }: { token: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Location filter: no effect until bookings gain a location column.
-  // When SLC is selected we show a notice and treat data as empty.
-  const locationBookings = useMemo(() => location === "slc" ? [] : bookings, [bookings, location]);
+  const locationBookings = useMemo(
+    () => (location === "all" ? bookings : bookings.filter((b) => b.location === location)),
+    [bookings, location]
+  );
 
   const confirmed = useMemo(() => locationBookings.filter((b) => b.status === "confirmed"), [locationBookings]);
   const cancelled = useMemo(() => locationBookings.filter((b) => b.status === "cancelled"), [locationBookings]);
@@ -346,7 +390,7 @@ function ReportingDashboard({ token }: { token: string }) {
   const { slots: heatSlots, cells: heatCells, maxCount: heatMax } = useMemo(() => buildHeatmap(locationBookings), [locationBookings]);
 
   // Repeat
-  const { tagged, uniqueCustomers, returningCustomers, cohortRows } = useMemo(() => buildRepeatData(bookings), [bookings]);
+  const { tagged, uniqueCustomers, returningCustomers, cohortRows } = useMemo(() => buildRepeatData(locationBookings), [locationBookings]);
   const repeatChartData = useMemo(() => buildRepeatChart(tagged, repeatTf), [tagged, repeatTf]);
   const realRepeatRate = uniqueCustomers > 0 ? returningCustomers / uniqueCustomers : 0;
 
@@ -395,23 +439,13 @@ function ReportingDashboard({ token }: { token: string }) {
       {!loading && !error && (
         <div className="space-y-6">
 
-          {/* SLC placeholder notice */}
-          {location === "slc" && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-              <p className={`${vulfMono.className} text-xs font-bold text-amber-700 mb-0.5`}>SLC is pre-launch</p>
-              <p className={`${vulfMono.className} text-xs text-amber-600`}>
-                Bookings do not yet have a location column. Add a <code>location text</code> column to the bookings table and filter here once SLC opens.
-              </p>
-            </div>
-          )}
-
           {/* KPI strip */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard label="Confirmed bookings" value={confirmed.length.toLocaleString()} />
-            <KpiCard label="Entry-fee revenue" value={fmt$(totalRevCents)} sub="Stripe only -- product sales in Domo" />
+            <KpiCard label="Entry-fee revenue" value={fmt$(totalRevCents)} sub="Stripe only -- full P&L in Financials" />
             <KpiCard label="Avg party size" value={avgParty.toFixed(1)} sub="confirmed bookings" />
             <KpiCard label="Cancellation rate" value={fmtPct(cancelRate)} sub={`${cancelled.length} of ${locationBookings.length} total`} />
-            <KpiCard label="Repeat customer rate" value={fmtPct(realRepeatRate)} sub={`${returningCustomers} of ${uniqueCustomers} unique emails`} />
+            <KpiCard label="Repeat customer rate" value={fmtPct(realRepeatRate)} sub={`${returningCustomers} of ${uniqueCustomers} unique customers`} />
           </div>
 
           {/* Bookings by source over time */}
@@ -520,51 +554,51 @@ function ReportingDashboard({ token }: { token: string }) {
             )}
           </Section>
 
-          {/* Capacity utilization */}
+          {/* Booked seats trend */}
           <Section
-            title="Capacity utilization -- booked seats per day"
+            title="Booked seats per day"
             action={
-              <div className="flex items-center gap-3">
-                <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>max {STUDIO_MAX_SEATS_PER_DAY} seats/day</span>
-                <div className="flex rounded-lg border border-black/15 overflow-hidden">
-                  {([30, 60, 90] as const).map((d) => (
-                    <button key={d} onClick={() => setCapDays(d)}
-                      className={`${vulfMono.className} px-3 py-1.5 text-xs transition-colors ${capDays === d ? "bg-[#884A20] text-white" : "text-neutral-500 hover:bg-neutral-50"}`}>
-                      {d}d
-                    </button>
-                  ))}
-                </div>
+              <div className="flex rounded-lg border border-black/15 overflow-hidden">
+                {([30, 60, 90] as const).map((d) => (
+                  <button key={d} onClick={() => setCapDays(d)}
+                    className={`${vulfMono.className} px-3 py-1.5 text-xs transition-colors ${capDays === d ? "bg-[#884A20] text-white" : "text-neutral-500 hover:bg-neutral-50"}`}>
+                    {d}d
+                  </button>
+                ))}
               </div>
             }
           >
             <div className="px-2 pt-4 pb-2">
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={capacityData} margin={{ top: 4, right: 32, left: 0, bottom: 4 }} barCategoryGap="15%">
+                <ComposedChart data={capacityData} margin={{ top: 4, right: 32, left: 0, bottom: 4 }} barCategoryGap="15%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} interval={Math.floor(capDays / 8)} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} width={32} domain={[0, Math.max(STUDIO_MAX_SEATS_PER_DAY * 1.1, 10)]} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
-                      const seats = payload[0].value as number;
-                      const pct = Math.round((seats / STUDIO_MAX_SEATS_PER_DAY) * 100);
+                      const seats = payload.find((p) => p.dataKey === "seats")?.value as number | undefined;
+                      const avg7 = payload.find((p) => p.dataKey === "avg7")?.value as number | undefined;
                       return (
                         <div style={{ fontFamily: "var(--font-display,monospace)", fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", padding: "10px 14px" }}>
                           <p style={{ fontWeight: "bold", color: "#374151", marginBottom: 4 }}>{label}</p>
-                          <p style={{ color: "#519A70" }}>{seats} seats booked</p>
-                          <p style={{ color: "#9ca3af" }}>{pct}% of configured max</p>
+                          <p style={{ color: "#519A70" }}>{seats ?? 0} seats booked</p>
+                          {avg7 != null && <p style={{ color: "#884A20" }}>{avg7} avg (7-day)</p>}
                         </div>
                       );
                     }}
                     cursor={{ fill: "rgba(0,0,0,0.04)" }}
                   />
-                  <ReferenceLine y={STUDIO_MAX_SEATS_PER_DAY} stroke="#884A20" strokeDasharray="4 4" strokeWidth={1.5}
-                    label={{ value: "Max", position: "right", fontSize: 10, fill: "#884A20", fontFamily: "var(--font-display,monospace)" }} />
                   <Bar dataKey="seats" fill="#519A70" radius={[3, 3, 0, 0]} maxBarSize={20} />
-                </BarChart>
+                  <Line type="monotone" dataKey="avg7" stroke="#884A20" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                </ComposedChart>
               </ResponsiveContainer>
+              <div className="flex items-center justify-center gap-4 mt-1">
+                <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#519A70]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Seats booked</span></div>
+                <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>7-day rolling avg</span></div>
+              </div>
               <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-3`}>
-                Booked seats by session date. Dashed line = STUDIO_MAX_SEATS_PER_DAY constant -- update once real capacity is confirmed.
+                Booked seats by session date. The line is the average of that day and the previous six -- read it for trend and week-over-week direction, not against a capacity ceiling.
               </p>
             </div>
           </Section>
@@ -680,8 +714,11 @@ function ReportingDashboard({ token }: { token: string }) {
                 </table>
               )}
               <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-4`}>
-                {`Repeat rate computed from email identity, not the self-reported "Returning Customer" source label.
-                Cohort retention = % of first-time customers in that month who made at least one additional booking.`}
+                {`Identity is matched by phone number OR email (not email alone), so a group booking under a different
+                guest email still counts as the same customer when the phone matches. Still imperfect -- a shared
+                family phone can merge two people, and a new email + new phone looks like a new customer. Not based
+                on the self-reported "Returning Customer" source label. Cohort retention = % of first-time customers
+                in that month who made at least one additional booking.`}
               </p>
             </div>
           </Section>
@@ -690,7 +727,9 @@ function ReportingDashboard({ token }: { token: string }) {
           <div className="rounded-2xl border border-black/8 bg-neutral-50 px-5 py-4">
             <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-400 mb-0.5`}>Not shown here: product revenue</p>
             <p className={`${vulfMono.className} text-xs text-neutral-400`}>
-              Wood and leather product sales come from Square POS and are tracked in Domo. Only Stripe entry-fee revenue is shown above.
+              This page covers booking and session behavior only (Stripe entry fees). For full revenue -- including Square
+              product sales -- plus P&amp;L, costs, and cash flow, see{" "}
+              <Link href="/admin/reporting/financials" className="text-[#884A20] underline underline-offset-2 hover:opacity-80">Financials</Link>.
             </p>
           </div>
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import { Printer } from "lucide-react";
 import { DateRangeFilter, rangeToQuery, type RangeState } from "./reports/shared";
 import PlOverviewView from "./reports/PlOverviewView";
@@ -59,15 +61,35 @@ const VIEW_LABEL: Record<ReportView, string> = {
 
 const DASHBOARD_VIEWS: ReportView[] = ["pl-overview", "pl-details", "sales", "sp-details", "costs", "cost-details"];
 
-export default function ReportsTab({ token }: { token: string }) {
+// ── Page shell ────────────────────────────────────────────────────────────────
+
+export default function AdminFinancialsPage() {
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = getAdminToken();
+    if (!saved) { router.replace("/admin"); return; }
+    setToken(saved);
+  }, [router]);
+
+  if (!token) return null;
+  return <FinancialsDashboard token={token} />;
+}
+
+function FinancialsDashboard({ token }: { token: string }) {
   const [view, setView] = useState<ReportView>("pl-overview");
-  // Date range shared by all six dashboard views, persisted across tab switches.
+  // Date range shared by all six dashboard views, persisted across view switches.
   const [range, setRange] = useState<RangeState>({ preset: "all" });
   const query = rangeToQuery(range);
   const isDashboard = DASHBOARD_VIEWS.includes(view);
 
   return (
-    <div>
+    <section className="container-px py-12 sm:py-16 max-w-5xl mx-auto">
+      <div className="mb-8 print:hidden">
+        <h1 className="h2 font-bold">Financials</h1>
+        <p className="text-sm text-neutral-500 mt-1">P&amp;L, sales, costs, balance sheet, and cash flow — built from the accounting ledger.</p>
+      </div>
       <div className="flex items-start justify-between gap-4 mb-4 print:hidden">
         <div className={`${vulfMono.className} flex gap-1 flex-wrap`}>
           {(Object.keys(VIEW_LABEL) as ReportView[]).map((v) => (
@@ -108,7 +130,7 @@ export default function ReportsTab({ token }: { token: string }) {
       {view === "cash-flow" && <CashFlowView token={token} />}
       {view === "seasonality" && <SeasonalityView token={token} />}
       {view === "normalized" && <NormalizedView token={token} />}
-    </div>
+    </section>
   );
 }
 

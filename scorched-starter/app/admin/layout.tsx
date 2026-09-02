@@ -21,9 +21,12 @@ import {
   GraduationCap,
   KanbanSquare,
   Landmark,
+  LayoutDashboard,
+  LineChart,
   LogOut,
   Menu,
   Printer,
+  TrendingUp,
   Users,
   X,
 } from "lucide-react";
@@ -41,7 +44,10 @@ const IN_STUDIO_NAV = [
 const ADMIN_NAV = [
   { href: "/admin/locations",  label: "Locations",  icon: Clock },
   { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
-    { href: "/admin/accounting", label: "Accounting", icon: Landmark },
+    { href: "/admin/reporting",             label: "Overview",    icon: LayoutDashboard },
+    { href: "/admin/reporting/financials",  label: "Financials",  icon: LineChart },
+    { href: "/admin/reporting/projections", label: "Projections", icon: TrendingUp },
+    { href: "/admin/accounting",            label: "Accounting",  icon: Landmark },
   ] },
   { href: "/admin/events",    label: "Events",     icon: CalendarDays },
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
@@ -74,7 +80,12 @@ function NavItem({
       ? pathname?.startsWith("/admin/boards") ||
         pathname?.startsWith("/admin/projects") ||
         pathname?.startsWith("/admin/social")
-      : pathname?.startsWith(href);
+      : href === "/admin/reporting"
+        // Exact match only — "/admin/reporting" is the Overview child of the
+        // Reporting group and must not light up on its sibling sub-routes
+        // (/admin/reporting/financials, /admin/reporting/projections).
+        ? pathname === "/admin/reporting"
+        : pathname?.startsWith(href);
   return (
     <Link
       href={href}

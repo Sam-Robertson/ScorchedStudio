@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
+import { getAdminToken } from "@/lib/adminAuth";
 import { AlertTriangle } from "lucide-react";
 
 function fmtMoney(n: number | null | undefined) {
@@ -24,7 +26,31 @@ type DscrRow = { period_month: string; ebitda_ttm: number; debt_service_ttm: num
 
 const DSCR_MIN = 1.25;
 
-export default function ProjectionsTab({ token }: { token: string }) {
+// ── Page shell ────────────────────────────────────────────────────────────────
+
+export default function AdminProjectionsPage() {
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = getAdminToken();
+    if (!saved) { router.replace("/admin"); return; }
+    setToken(saved);
+  }, [router]);
+
+  if (!token) return null;
+  return (
+    <section className="container-px py-12 sm:py-16 max-w-5xl mx-auto">
+      <div className="mb-8">
+        <h1 className="h2 font-bold">Projections</h1>
+        <p className="text-sm text-neutral-500 mt-1">The 24-month model vs. actuals, and trailing-12 DSCR.</p>
+      </div>
+      <ProjectionsDashboard token={token} />
+    </section>
+  );
+}
+
+function ProjectionsDashboard({ token }: { token: string }) {
   const [projections, setProjections] = useState<ProjectionRow[]>([]);
   const [dscr, setDscr] = useState<DscrRow[]>([]);
   const [modelLoaded, setModelLoaded] = useState(true);
