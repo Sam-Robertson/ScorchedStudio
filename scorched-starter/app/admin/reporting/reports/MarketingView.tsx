@@ -99,7 +99,11 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
     return months.map((m) => ({
       monthKey: m,
       label: monthShort(`${m}-01`),
-      "Marketing Spend": Math.round((spendByMonth.get(m) ?? 0) * 100) / 100,
+      // Floored at 0 for the chart: a month with a refund larger than that
+      // month's spend nets negative in the ledger, but the bar just reads as
+      // $0 rather than dipping below the axis — click through for the real
+      // net total (KPI card above stays unclamped, since it's the true figure).
+      "Marketing Spend": Math.max(0, Math.round((spendByMonth.get(m) ?? 0) * 100) / 100),
       Bookings: bookingsByMonth.has(m) ? bookingsByMonth.get(m)! : null,
       "Estimated Bookings": estByMonth.has(m) ? estByMonth.get(m)! : null,
     }));
@@ -192,7 +196,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
               <ComposedChart data={spendVsBookings} margin={{ top: 4, right: 8, left: 4, bottom: 4 }} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={monthTick} />
-                <YAxis yAxisId="spend" tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
+                <YAxis yAxisId="spend" domain={[0, "auto"]} tick={AXIS_TICK} axisLine={false} tickLine={false} width={52} tickFormatter={fmtAxisMoney} />
                 <YAxis yAxisId="bookings" orientation="right" allowDecimals={false} tick={{ ...AXIS_TICK, fill: GREEN }} axisLine={false} tickLine={false} width={36} />
                 <Tooltip
                   content={({ active, payload, label }) => {
@@ -212,7 +216,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
                 />
                 <Bar
-                  yAxisId="spend" dataKey="Marketing Spend" radius={[3, 3, 0, 0]} maxBarSize={40}
+                  yAxisId="spend" dataKey="Marketing Spend" radius={[3, 3, 0, 0]} maxBarSize={40} minPointSize={2}
                   className="cursor-pointer"
                   onClick={(entry) => {
                     const key = (entry as unknown as { monthKey?: string })?.monthKey;
@@ -249,7 +253,8 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
             <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-2`}>
               Spend from the accounting ledger (account 6200); bookings counted by the date they were made. Online
               booking launched {monthShort(ONLINE_BOOKING_LAUNCH)} — before that, &quot;estimated&quot; counts
-              Square orders with a General Admission item (booked via Acuity Scheduling).
+              Square orders with a General Admission item (booked via Acuity Scheduling). A month where refunds
+              exceeded spend floors at $0 here — click that bar for the real net total.
             </p>
           </div>
         )}
