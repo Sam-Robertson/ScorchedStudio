@@ -126,7 +126,29 @@ function PlView({ token }: { token: string }) {
   );
   const guard = loadingOrErrorNode(loading, error);
   if (guard) return guard;
-  const months = data?.months ?? [];
+
+  // The view groups by (month, location), but most bank-rule postings carry
+  // no location_id while revenue settlements do — for this single-location
+  // business that splits every month into a mostly-revenue row and a
+  // mostly-expense row. Merge by month here; a per-location breakdown can
+  // come back once a locationId filter is wired up for multi-location use.
+  const byMonth = new Map<string, PlMonth>();
+  for (const m of data?.months ?? []) {
+    const existing = byMonth.get(m.period_month);
+    if (!existing) {
+      byMonth.set(m.period_month, { ...m, location_id: null });
+      continue;
+    }
+    existing.revenue += m.revenue;
+    existing.cogs += m.cogs;
+    existing.gross_profit += m.gross_profit;
+    existing.operating_expenses += m.operating_expenses;
+    existing.ebitda += m.ebitda;
+    existing.depreciation += m.depreciation;
+    existing.interest += m.interest;
+    existing.net_income += m.net_income;
+  }
+  const months = [...byMonth.values()].sort((a, b) => a.period_month.localeCompare(b.period_month));
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white">
@@ -148,7 +170,7 @@ function PlView({ token }: { token: string }) {
           {months.length === 0 ? (
             <tr><td colSpan={9} className="px-4 py-8 text-center text-neutral-400">No posted activity yet.</td></tr>
           ) : months.map((m) => (
-            <tr key={`${m.period_month}-${m.location_id ?? "all"}`}>
+            <tr key={m.period_month}>
               <td className="px-4 py-2.5 font-semibold">{monthLabel(m.period_month)}</td>
               <td className="px-4 py-2.5 text-right">{fmtMoney(m.revenue)}</td>
               <td className="px-4 py-2.5 text-right">{fmtMoney(m.cogs)}</td>
@@ -186,9 +208,13 @@ function BalanceSheetView({ token }: { token: string }) {
       </div>
       {loading || error ? loadingOrErrorNode(loading, error) : (
         <div className="rounded-2xl border border-black/10 bg-white divide-y divide-black/5 overflow-hidden">
-          {(["asset", "liability", "equity"] as const).map((t) => (
+          {([
+            { key: "asset", label: "Assets" },
+            { key: "liability", label: "Liabilities" },
+            { key: "equity", label: "Equity" },
+          ] as const).map(({ key: t, label }) => (
             <div key={t} className="px-4 py-3">
-              <p className={`${vulfMono.className} text-xs uppercase tracking-widest text-neutral-400 mb-2`}>{t}s</p>
+              <p className={`${vulfMono.className} text-xs uppercase tracking-widest text-neutral-400 mb-2`}>{label}</p>
               {byType(t).map((r) => (
                 <div key={r.code} className="flex items-center justify-between text-sm py-1">
                   <span>{r.code} — {r.name}</span>
@@ -196,7 +222,7 @@ function BalanceSheetView({ token }: { token: string }) {
                 </div>
               ))}
               <div className={`flex items-center justify-between text-sm py-1 font-semibold border-t border-black/10 mt-1 pt-1 ${vulfMono.className}`}>
-                <span>Total {t}s</span>
+                <span>Total {label.toLowerCase()}</span>
                 <span>{fmtMoney(totalOf(t))}</span>
               </div>
             </div>
