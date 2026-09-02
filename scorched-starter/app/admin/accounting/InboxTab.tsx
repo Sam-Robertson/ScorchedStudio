@@ -216,7 +216,7 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
                     {NEEDS_TARGET.has(template) && (
                       <select className={`${inputCls} max-w-[260px]`} value={targetAccountCode} onChange={(e) => setTargetAccountCode(e.target.value)}>
                         <option value="">Target account…</option>
-                        {accounts.map((a) => <option key={a.id} value={a.code}>{a.code} — {a.name}</option>)}
+                        {accounts.filter((a) => a.active).map((a) => <option key={a.id} value={a.code}>{a.code} — {a.name}</option>)}
                       </select>
                     )}
                   </div>

@@ -115,7 +115,7 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
     }
   }
 
-  const mappableAccounts = accounts.filter((a) => a.type === "asset" || a.type === "liability");
+  const mappableAccounts = accounts.filter((a) => a.active && (a.type === "asset" || a.type === "liability"));
 
   return (
     <div>

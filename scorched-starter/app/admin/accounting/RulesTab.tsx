@@ -119,7 +119,7 @@ export default function RulesTab({ token, accounts }: { token: string; accounts:
             </select>
             <select className={inputCls} value={targetAccountCode} onChange={(e) => setTargetAccountCode(e.target.value)}>
               <option value="">No target account</option>
-              {accounts.map((a) => <option key={a.id} value={a.code}>{a.code} — {a.name}</option>)}
+              {accounts.filter((a) => a.active).map((a) => <option key={a.id} value={a.code}>{a.code} — {a.name}</option>)}
             </select>
           </div>
           <div className="flex gap-3">

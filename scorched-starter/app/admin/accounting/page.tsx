@@ -257,7 +257,7 @@ function JournalTab({ token, accounts }: { token: string; accounts: Account[] })
                     onChange={(e) => updateLine(i, { accountCode: e.target.value })}
                   >
                     <option value="">Account…</option>
-                    {accounts.map((a) => (
+                    {accounts.filter((a) => a.active).map((a) => (
                       <option key={a.id} value={a.code}>{a.code} — {a.name}</option>
                     ))}
                   </select>
