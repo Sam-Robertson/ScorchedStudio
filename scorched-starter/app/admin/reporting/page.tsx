@@ -749,6 +749,16 @@ export default function ReportingPage() {
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
   }, [router]);
-  if (!token) return null;
+  if (!token) {
+    // Brief token check on direct load/refresh — show the standard spinner
+    // instead of a blank content area.
+    return (
+      <section className="container-px py-10 max-w-6xl mx-auto">
+        <div className="flex items-center justify-center py-24">
+          <span className="inline-block w-4 h-4 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+        </div>
+      </section>
+    );
+  }
   return <ReportingDashboard token={token} />;
 }

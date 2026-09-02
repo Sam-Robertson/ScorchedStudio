@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+
+// Dismissed state for the expected-residual note, remembered per device
+// (same localStorage approach as lib/adminAuth.ts).
+const RESIDUAL_NOTE_KEY = "reconcile-residual-note-dismissed";
 
 type BankRow = {
   bankAccountId: string;
@@ -26,6 +30,18 @@ export default function ReconcileTab({ token }: { token: string }) {
   const [clearing, setClearing] = useState<ClearingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Starts hidden so users who already dismissed it never see a flash;
+  // shown from the effect below if it hasn't been dismissed on this device.
+  const [noteDismissed, setNoteDismissed] = useState(true);
+
+  useEffect(() => {
+    if (localStorage.getItem(RESIDUAL_NOTE_KEY) !== "1") setNoteDismissed(false);
+  }, []);
+
+  function dismissNote() {
+    setNoteDismissed(true);
+    localStorage.setItem(RESIDUAL_NOTE_KEY, "1");
+  }
 
   const load = useCallback(() => {
     setLoading(true);
@@ -54,6 +70,20 @@ export default function ReconcileTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-8">
+      {!noteDismissed && (
+        <div className="rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 flex items-start gap-3">
+          <Info className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-neutral-500 flex-1">
+            Small differences here are expected and not a bug — these bank connections are test-scoped,
+            so each one&apos;s live balance doesn&apos;t necessarily match the ledger to the cent.
+            A large or growing gap is still worth investigating.
+          </p>
+          <button onClick={dismissNote} aria-label="Dismiss note" className="text-neutral-400 hover:text-neutral-600 shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div>
         <p className={`${vulfMono.className} text-xs tracking-widest uppercase text-neutral-400 mb-2`}>Bank accounts</p>
         {bankRows.length === 0 ? (

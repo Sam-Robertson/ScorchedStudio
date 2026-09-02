@@ -15,11 +15,34 @@ import {
 
 const LABOR_CODES = ["6000", "6010"]; // Payroll: Wages + Payroll: Employer Taxes
 
+const RED = "#C25B5B"; // same soft red used for negative Net Profit below
+
 type KpiKey = "revenue" | "profit" | "cogs" | "opex";
+type SeasonalityRow = { period_month: string; revenue: number; ttm_avg: number | null; index: number | null };
 
 export default function PlOverviewView({ token, query }: { token: string; query: string }) {
   const { data, loading, error } = useRangedReport<PlResponse>("/api/admin/accounting/reports/pl", token, query);
+  // Deliberately unranged (query ""): the seasonality index needs full history
+  // for its trailing-12-month average, regardless of the page's date range.
+  const { data: seasonality } = useRangedReport<{ rows: SeasonalityRow[] }>(
+    "/api/admin/accounting/reports/seasonality", token, "",
+  );
   const [selectedKpi, setSelectedKpi] = useState<KpiKey | null>(null);
+
+  // Most recent *complete* month with a computable index — the one-line
+  // takeaway that used to be buried at the bottom of the Seasonality tab.
+  // Excludes the current in-progress calendar month: a partial month's
+  // revenue compared against a full-month trailing average always reads as
+  // dramatically "below average" early in the month, which is misleading
+  // rather than useful (e.g. "99% below" on the 2nd of the month).
+  const seasonalityNow = useMemo(() => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const rows = [...(seasonality?.rows ?? [])]
+      .filter((r) => r.index != null && r.period_month.slice(0, 7) !== currentMonth)
+      .sort((a, b) => a.period_month.localeCompare(b.period_month));
+    return rows.length > 0 ? rows[rows.length - 1] : null;
+  }, [seasonality]);
+  const seasonalityPct = seasonalityNow ? Math.round((seasonalityNow.index! - 1) * 100) : null;
 
   const months = useMemo(() => dropEmptyTrailingMonths(mergePlMonths(data?.months ?? [])), [data]);
   const laborByMonth = useMemo(() => sumLinesByMonth(data?.lines ?? [], LABOR_CODES), [data]);
@@ -100,6 +123,21 @@ export default function PlOverviewView({ token, query }: { token: string; query:
           onClick={() => toggleKpi("opex")} selected={selectedKpi === "opex"}
         />
       </div>
+
+      {/* Seasonality callout — one line, full-history TTM index for the current month */}
+      {seasonalityNow && seasonalityPct != null && (
+        <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+          Seasonality: {monthShort(seasonalityNow.period_month)} revenue is running{" "}
+          {seasonalityPct === 0 ? (
+            <span className="font-semibold text-neutral-600">in line with</span>
+          ) : (
+            <span className="font-semibold" style={{ color: seasonalityPct > 0 ? GREEN : RED }}>
+              {Math.abs(seasonalityPct)}% {seasonalityPct > 0 ? "above" : "below"}
+            </span>
+          )}{" "}
+          its 12-month average.
+        </p>
+      )}
 
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <div className="grid lg:grid-cols-2 gap-6">

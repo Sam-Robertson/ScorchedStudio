@@ -5,36 +5,21 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { Printer } from "lucide-react";
-import { DateRangeFilter, rangeToQuery, type RangeState } from "./reports/shared";
+import { DateRangeFilter, rangeToQuery, fmtMoney0, monthShort, type RangeState } from "./reports/shared";
 import PlOverviewView from "./reports/PlOverviewView";
 import PlDetailsView from "./reports/PlDetailsView";
 import SalesOverviewView from "./reports/SalesOverviewView";
-import SpDetailsView from "./reports/SpDetailsView";
 import CostsView from "./reports/CostsView";
-import CostDetailsView from "./reports/CostDetailsView";
 
+// Full-cents formatter kept for Normalized EBITDA (add-back amounts are
+// entered to the cent); the report tables use shared fmtMoney0.
 function fmtMoney(n: number | null | undefined) {
   if (n == null) return "—";
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-type PlMonth = {
-  period_month: string;
-  location_id: string | null;
-  revenue: number;
-  cogs: number;
-  gross_profit: number;
-  operating_expenses: number;
-  ebitda: number;
-  depreciation: number;
-  interest: number;
-  net_income: number;
-};
-
-type PlLine = { period_month: string; location_id: string | null; code: string; name: string; type: string; amount: number };
 type BalanceSheetRow = { code: string; name: string; type: string; balance: number };
 type CashFlowRow = { period_month: string; activity: string; net_change: number };
-type SeasonalityRow = { period_month: string; revenue: number; ttm_avg: number | null; index: number | null };
 type NormalizedRow = { period_month: string; ebitda: number; adjustments: number; ebitda_normalized: number };
 type Adjustment = { id: string; period_month: string; label: string; amount: number; note: string | null; include: boolean };
 
@@ -42,24 +27,20 @@ const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40";
 
 type ReportView =
-  | "pl-overview" | "pl-details" | "sales" | "sp-details" | "costs" | "cost-details"
-  | "pl" | "balance-sheet" | "cash-flow" | "seasonality" | "normalized";
+  | "pl-overview" | "pl-details" | "sales" | "costs"
+  | "balance-sheet" | "cash-flow" | "normalized";
 
 const VIEW_LABEL: Record<ReportView, string> = {
   "pl-overview": "P&L Overview",
-  "pl-details": "P&L Details",
+  "pl-details": "Monthly P&L",
   sales: "Sales & Products",
-  "sp-details": "S&P Details",
   costs: "Costs",
-  "cost-details": "Cost Details",
-  pl: "P&L Table",
   "balance-sheet": "Balance Sheet",
   "cash-flow": "Cash Flow",
-  seasonality: "Seasonality",
   normalized: "Normalized",
 };
 
-const DASHBOARD_VIEWS: ReportView[] = ["pl-overview", "pl-details", "sales", "sp-details", "costs", "cost-details"];
+const DASHBOARD_VIEWS: ReportView[] = ["pl-overview", "pl-details", "sales", "costs"];
 
 // ── Page shell ────────────────────────────────────────────────────────────────
 
@@ -79,8 +60,10 @@ export default function AdminFinancialsPage() {
 
 function FinancialsDashboard({ token }: { token: string }) {
   const [view, setView] = useState<ReportView>("pl-overview");
-  // Date range shared by all six dashboard views, persisted across view switches.
-  const [range, setRange] = useState<RangeState>({ preset: "all" });
+  // Date range shared by the dashboard views, persisted across view switches.
+  // Defaults to a recent window so the page opens on current performance,
+  // not an all-time cumulative figure dominated by pre-launch months.
+  const [range, setRange] = useState<RangeState>({ preset: "3m" });
   const query = rangeToQuery(range);
   const isDashboard = DASHBOARD_VIEWS.includes(view);
 
@@ -92,7 +75,7 @@ function FinancialsDashboard({ token }: { token: string }) {
       </div>
       <div className="flex items-start justify-between gap-4 mb-4 print:hidden">
         <div className={`${vulfMono.className} flex gap-1 flex-wrap`}>
-          {(Object.keys(VIEW_LABEL) as ReportView[]).map((v) => (
+          {(Object.keys(VIEW_LABEL) as ReportView[]).filter((v) => v !== "normalized").map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -113,23 +96,35 @@ function FinancialsDashboard({ token }: { token: string }) {
         </button>
       </div>
 
+      {/* Secondary, deliberately muted entry point — real feature, but for a
+          future financing/sale conversation, not daily use. */}
+      <div className="mb-4 print:hidden">
+        <button
+          onClick={() => setView("normalized")}
+          className={`${vulfMono.className} text-xs underline underline-offset-2 transition-colors ${
+            view === "normalized" ? "text-[#884A20] font-semibold" : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Normalized EBITDA
+        </button>
+        <span className={`${vulfMono.className} text-xs text-neutral-400 ml-2`}>for financing / sale prep</span>
+      </div>
+
       {isDashboard && (
         <div className="mb-6 print:hidden">
           <DateRangeFilter value={range} onChange={setRange} />
         </div>
       )}
 
-      {view === "pl-overview" && <PlOverviewView token={token} query={query} />}
-      {view === "pl-details" && <PlDetailsView token={token} query={query} />}
-      {view === "sales" && <SalesOverviewView token={token} query={query} />}
-      {view === "sp-details" && <SpDetailsView token={token} query={query} />}
-      {view === "costs" && <CostsView token={token} query={query} />}
-      {view === "cost-details" && <CostDetailsView token={token} query={query} />}
-      {view === "pl" && <PlView token={token} />}
-      {view === "balance-sheet" && <BalanceSheetView token={token} />}
-      {view === "cash-flow" && <CashFlowView token={token} />}
-      {view === "seasonality" && <SeasonalityView token={token} />}
-      {view === "normalized" && <NormalizedView token={token} />}
+      {/* All views stay mounted; tab switches only toggle visibility, so each
+          view keeps its already-fetched data instead of reloading every time. */}
+      <div className={view === "pl-overview" ? "" : "hidden"}><PlOverviewView token={token} query={query} /></div>
+      <div className={view === "pl-details" ? "" : "hidden"}><PlDetailsView token={token} query={query} /></div>
+      <div className={view === "sales" ? "" : "hidden"}><SalesOverviewView token={token} query={query} /></div>
+      <div className={view === "costs" ? "" : "hidden"}><CostsView token={token} query={query} /></div>
+      <div className={view === "balance-sheet" ? "" : "hidden"}><BalanceSheetView token={token} /></div>
+      <div className={view === "cash-flow" ? "" : "hidden"}><CashFlowView token={token} /></div>
+      <div className={view === "normalized" ? "" : "hidden"}><NormalizedView token={token} /></div>
     </section>
   );
 }
@@ -173,76 +168,6 @@ function monthLabel(period_month: string) {
   return period_month.slice(0, 7);
 }
 
-function PlView({ token }: { token: string }) {
-  const { data, loading, error } = useReport(
-    "/api/admin/accounting/reports/pl",
-    token,
-    (json) => (json as { months: PlMonth[]; lines: PlLine[] })
-  );
-  const guard = loadingOrErrorNode(loading, error);
-  if (guard) return guard;
-
-  // The view groups by (month, location), but most bank-rule postings carry
-  // no location_id while revenue settlements do — for this single-location
-  // business that splits every month into a mostly-revenue row and a
-  // mostly-expense row. Merge by month here; a per-location breakdown can
-  // come back once a locationId filter is wired up for multi-location use.
-  const byMonth = new Map<string, PlMonth>();
-  for (const m of data?.months ?? []) {
-    const existing = byMonth.get(m.period_month);
-    if (!existing) {
-      byMonth.set(m.period_month, { ...m, location_id: null });
-      continue;
-    }
-    existing.revenue += m.revenue;
-    existing.cogs += m.cogs;
-    existing.gross_profit += m.gross_profit;
-    existing.operating_expenses += m.operating_expenses;
-    existing.ebitda += m.ebitda;
-    existing.depreciation += m.depreciation;
-    existing.interest += m.interest;
-    existing.net_income += m.net_income;
-  }
-  const months = [...byMonth.values()].sort((a, b) => a.period_month.localeCompare(b.period_month));
-
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white">
-      <table className={`${vulfMono.className} w-full text-xs`}>
-        <thead>
-          <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-            <th className="px-4 py-3">Month</th>
-            <th className="px-4 py-3 text-right">Revenue</th>
-            <th className="px-4 py-3 text-right">COGS</th>
-            <th className="px-4 py-3 text-right">Gross Profit</th>
-            <th className="px-4 py-3 text-right">OpEx</th>
-            <th className="px-4 py-3 text-right">EBITDA</th>
-            <th className="px-4 py-3 text-right">Depreciation</th>
-            <th className="px-4 py-3 text-right">Interest</th>
-            <th className="px-4 py-3 text-right">Net Income</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-black/5">
-          {months.length === 0 ? (
-            <tr><td colSpan={9} className="px-4 py-8 text-center text-neutral-400">No posted activity yet.</td></tr>
-          ) : months.map((m) => (
-            <tr key={m.period_month}>
-              <td className="px-4 py-2.5 font-semibold">{monthLabel(m.period_month)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.revenue)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.cogs)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.gross_profit)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.operating_expenses)}</td>
-              <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney(m.ebitda)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.depreciation)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(m.interest)}</td>
-              <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney(m.net_income)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function BalanceSheetView({ token }: { token: string }) {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
   const { data, loading, error } = useReport(
@@ -273,12 +198,12 @@ function BalanceSheetView({ token }: { token: string }) {
               {byType(t).map((r) => (
                 <div key={r.code} className="flex items-center justify-between text-sm py-1">
                   <span>{r.code} — {r.name}</span>
-                  <span className={vulfMono.className}>{fmtMoney(r.balance)}</span>
+                  <span className={vulfMono.className}>{fmtMoney0(r.balance)}</span>
                 </div>
               ))}
               <div className={`flex items-center justify-between text-sm py-1 font-semibold border-t border-black/10 mt-1 pt-1 ${vulfMono.className}`}>
                 <span>Total {label.toLowerCase()}</span>
-                <span>{fmtMoney(totalOf(t))}</span>
+                <span>{fmtMoney0(totalOf(t))}</span>
               </div>
             </div>
           ))}
@@ -297,14 +222,15 @@ function CashFlowView({ token }: { token: string }) {
   const guard = loadingOrErrorNode(loading, error);
   if (guard) return guard;
   const rows = data ?? [];
-  const months = [...new Set(rows.map((r) => r.period_month))].sort();
+  // Newest first, so recent activity is at the top.
+  const months = [...new Set(rows.map((r) => r.period_month))].sort().reverse();
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white">
       <table className={`${vulfMono.className} w-full text-xs`}>
         <thead>
           <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-            <th className="px-4 py-3">Month</th>
+            <th className="px-4 py-3 sticky left-0 z-10 bg-white">Month</th>
             <th className="px-4 py-3 text-right">Operating</th>
             <th className="px-4 py-3 text-right">Investing</th>
             <th className="px-4 py-3 text-right">Financing</th>
@@ -320,52 +246,14 @@ function CashFlowView({ token }: { token: string }) {
             const fin = rows.find((r) => r.period_month === m && r.activity === "financing")?.net_change ?? 0;
             return (
               <tr key={m}>
-                <td className="px-4 py-2.5 font-semibold">{monthLabel(m)}</td>
-                <td className="px-4 py-2.5 text-right">{fmtMoney(op)}</td>
-                <td className="px-4 py-2.5 text-right">{fmtMoney(inv)}</td>
-                <td className="px-4 py-2.5 text-right">{fmtMoney(fin)}</td>
-                <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney(op + inv + fin)}</td>
+                <td className="px-4 py-2.5 font-semibold sticky left-0 z-10 bg-white">{monthShort(m)}</td>
+                <td className="px-4 py-2.5 text-right">{fmtMoney0(op)}</td>
+                <td className="px-4 py-2.5 text-right">{fmtMoney0(inv)}</td>
+                <td className="px-4 py-2.5 text-right">{fmtMoney0(fin)}</td>
+                <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney0(op + inv + fin)}</td>
               </tr>
             );
           })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SeasonalityView({ token }: { token: string }) {
-  const { data, loading, error } = useReport(
-    "/api/admin/accounting/reports/seasonality",
-    token,
-    (json) => (json as { rows: SeasonalityRow[] }).rows
-  );
-  const guard = loadingOrErrorNode(loading, error);
-  if (guard) return guard;
-  const rows = data ?? [];
-
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white">
-      <table className={`${vulfMono.className} w-full text-xs`}>
-        <thead>
-          <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-            <th className="px-4 py-3">Month</th>
-            <th className="px-4 py-3 text-right">Revenue</th>
-            <th className="px-4 py-3 text-right">TTM Avg</th>
-            <th className="px-4 py-3 text-right">Index</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-black/5">
-          {rows.length === 0 ? (
-            <tr><td colSpan={4} className="px-4 py-8 text-center text-neutral-400">No posted activity yet.</td></tr>
-          ) : rows.map((r) => (
-            <tr key={r.period_month}>
-              <td className="px-4 py-2.5 font-semibold">{monthLabel(r.period_month)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(r.revenue)}</td>
-              <td className="px-4 py-2.5 text-right">{fmtMoney(r.ttm_avg)}</td>
-              <td className="px-4 py-2.5 text-right">{r.index == null ? "—" : r.index.toFixed(2)}</td>
-            </tr>
-          ))}
         </tbody>
       </table>
     </div>

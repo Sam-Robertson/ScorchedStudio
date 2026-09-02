@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import {
-  SalesResponse, useRangedReport, LoadingOrError, Section, DataGapBanner,
+  SalesResponse, useRangedReport, LoadingOrError, Section,
   fmtMoney0, fmtMoney2, dateShort, dowIndex, DOW_NAMES,
 } from "./shared";
 
@@ -58,10 +58,10 @@ export default function SpDetailsView({ token, query }: { token: string; query: 
     </th>
   );
 
+  // Rendered inside Sales & Products (behind the "Show daily detail"
+  // disclosure), which already shows the DataGapBanner — no banner here.
   return (
     <div className="space-y-6">
-      <DataGapBanner dataStartsAt={data?.dataStartsAt} />
-
       {loading || error ? <LoadingOrError loading={loading} error={error} /> : (
         <Section title="Daily Order Detail">
           {rows.length === 0 ? (

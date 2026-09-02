@@ -11,10 +11,15 @@ import {
   DataGapBanner, DATA_STARTS_AT, fmtMoney0, fmtMoney2, fmtAxisMoney, dateShort,
   dowIndex, DOW_NAMES, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
 } from "./shared";
+import SpDetailsView from "./SpDetailsView";
 
 export default function SalesOverviewView({ token, query }: { token: string; query: string }) {
   const { data, loading, error } = useRangedReport<SalesResponse>("/api/admin/accounting/reports/sales", token, query);
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
+  // Daily-detail disclosure: mounted lazily on first open, then kept mounted
+  // (just hidden) so re-opening doesn't refetch.
+  const [showDailyDetail, setShowDailyDetail] = useState(false);
+  const [dailyDetailMounted, setDailyDetailMounted] = useState(false);
 
   const dataStartsAt = data?.dataStartsAt ?? DATA_STARTS_AT;
 
@@ -183,6 +188,23 @@ export default function SalesOverviewView({ token, query }: { token: string; que
               </div>
             )}
           </Section>
+
+          {/* Opt-in raw daily table (the old S&P Details tab), scoped to the
+              same date range as the rest of this page. */}
+          <div>
+            <button
+              onClick={() => { setShowDailyDetail((v) => !v); setDailyDetailMounted(true); }}
+              className={`${vulfMono.className} text-xs text-neutral-500 border border-black/15 rounded-lg px-3 py-1.5 hover:bg-neutral-50`}
+              aria-expanded={showDailyDetail}
+            >
+              {showDailyDetail ? "Hide daily detail" : "Show daily detail"}
+            </button>
+          </div>
+          {dailyDetailMounted && (
+            <div className={showDailyDetail ? "" : "hidden"}>
+              <SpDetailsView token={token} query={query} />
+            </div>
+          )}
         </>
       )}
     </div>

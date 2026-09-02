@@ -19,6 +19,7 @@ import { getSupabase } from "@/lib/supabase";
 
 type SquareOrderLineItem = {
   name?: string;
+  note?: string;
   quantity?: string;
   item_type?: string;
   gross_sales_money?: { amount?: number };
@@ -97,7 +98,11 @@ export async function GET(req: NextRequest) {
           totalItems += qty;
           dayItems += qty;
           orderCents += cents;
-          const name = li.name ?? "(unnamed item)";
+          // Nameless line items are CUSTOM_AMOUNT register charges (ad-hoc
+          // amounts rung up without a catalog item, e.g. private-session
+          // pricing) — real sales, not a data error. Use the register note
+          // when the cashier left one, else label them for what they are.
+          const name = li.name ?? (li.note?.trim() || "Custom Amount");
           itemRevenueCents.set(name, (itemRevenueCents.get(name) ?? 0) + cents);
         }
         totalOrderRevenueCents += orderCents;
