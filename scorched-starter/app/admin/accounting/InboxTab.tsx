@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { Check, Lightbulb, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Lightbulb, X } from "lucide-react";
 import type { Account } from "./types";
 
 const inputCls =
@@ -32,6 +32,23 @@ type InboxTxn = {
 
 function fmtMoney(n: number) {
   return Math.abs(n).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+// Plaid's sign convention is the opposite of everyday intuition (positive =
+// money left the account, negative = money came in) — showing the raw sign
+// alone still leaves people unsure which way it goes, so spell it out.
+function DirectionTag({ amount }: { amount: number }) {
+  const out = amount > 0;
+  return (
+    <span
+      className={`${vulfMono.className} flex items-center gap-1 text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full ${
+        out ? "bg-red-50 text-red-600" : "bg-[#519A70]/10 text-[#519A70]"
+      }`}
+    >
+      {out ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+      {out ? "Money out" : "Money in"}
+    </span>
+  );
 }
 
 export default function InboxTab({ token, accounts }: { token: string; accounts: Account[] }) {
@@ -133,6 +150,7 @@ export default function InboxTab({ token, accounts }: { token: string; accounts:
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className={`${vulfMono.className} text-sm font-bold`}>{t.date}</p>
                   <span className={`${vulfMono.className} text-sm`}>{fmtMoney(t.amount)}</span>
+                  <DirectionTag amount={t.amount} />
                   {t.pending && (
                     <span className={`${vulfMono.className} text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-400`}>Pending</span>
                   )}
