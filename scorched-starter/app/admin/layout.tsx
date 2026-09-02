@@ -14,6 +14,7 @@ import {
   Briefcase,
   CalendarClock,
   CalendarDays,
+  ChevronDown,
   ClipboardList,
   Clock,
   FileText,
@@ -92,6 +93,68 @@ function NavItem({
   );
 }
 
+// ── Nav group (parent link + collapsible children) ─────────────────────────────
+//
+// Collapsed by default to keep the sidebar short — auto-expands when the
+// current route is the parent or one of its children, otherwise the user
+// toggles it open with the chevron independent of navigating the parent link.
+
+function NavGroup({
+  href,
+  label,
+  icon: Icon,
+  children,
+  pathname,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  children: { href: string; label: string; icon: React.ElementType }[];
+  pathname: string | null;
+  onClick?: () => void;
+}) {
+  const [manuallyOpen, setManuallyOpen] = useState(false);
+  const isActiveGroup = pathname?.startsWith(href) || children.some((c) => pathname?.startsWith(c.href));
+  const open = isActiveGroup || manuallyOpen;
+
+  return (
+    <div>
+      <div className="flex items-center gap-1">
+        <Link
+          href={href}
+          onClick={onClick}
+          className={clsx(
+            vulfMono.className,
+            "flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-colors",
+            isActiveGroup && !children.some((c) => pathname?.startsWith(c.href))
+              ? "bg-[#884A20] text-white font-semibold"
+              : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900"
+          )}
+        >
+          <Icon className="w-4 h-4 flex-shrink-0" />
+          {label}
+        </Link>
+        <button
+          type="button"
+          onClick={() => setManuallyOpen((v) => !v)}
+          aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
+          className="p-2 rounded-lg text-neutral-400 hover:bg-black/5 hover:text-neutral-700 transition-colors"
+        >
+          <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
+      {open && (
+        <div className="ml-4 mt-0.5 space-y-0.5 border-l border-black/8 pl-2">
+          {children.map((child) => (
+            <NavItem key={child.href} {...child} pathname={pathname} onClick={onClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sidebar content (shared between desktop and mobile drawer) ────────────────
 
 function SidebarContent({
@@ -138,18 +201,13 @@ function SidebarContent({
               Admin
             </p>
             <div className="space-y-0.5">
-              {ADMIN_NAV.map((item) => (
-                <div key={item.href}>
-                  <NavItem href={item.href} label={item.label} icon={item.icon} pathname={pathname} onClick={onNavClick} />
-                  {item.children && (
-                    <div className="ml-4 mt-0.5 space-y-0.5 border-l border-black/8 pl-2">
-                      {item.children.map((child) => (
-                        <NavItem key={child.href} {...child} pathname={pathname} onClick={onNavClick} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {ADMIN_NAV.map((item) =>
+                item.children ? (
+                  <NavGroup key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+                ) : (
+                  <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+                )
+              )}
             </div>
           </>
         )}
