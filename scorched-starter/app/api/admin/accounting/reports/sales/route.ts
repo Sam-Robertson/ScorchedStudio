@@ -46,10 +46,21 @@ export async function GET(req: NextRequest) {
 
     const rows = data ?? [];
 
-    // Daily revenue + day-of-week: every settlement row qualifies, backfill included.
+    // Daily revenue: every settlement row qualifies, backfill included — a
+    // whole month posted on the 1st is still a real day's worth of revenue
+    // to plot, just concentrated on one point.
     const daily = rows.map((r) => ({ date: r.settle_date, netSales: Number(r.net_sales) }));
+
+    // Day-of-week, however, breaks under that same backfill: each CSV month
+    // lands entirely on whatever weekday the 1st happened to be, so e.g.
+    // Sunday can show as the top revenue day for a studio that's closed
+    // Sundays. Only real per-day settlements (raw.orders present) have a
+    // day-of-week that means anything — same condition as the order-level
+    // stats below.
     const byDow = new Map<number, number>();
     for (const r of rows) {
+      const raw = r.raw as SettlementRaw;
+      if (!raw?.orders?.length) continue;
       const dow = new Date(r.settle_date + "T12:00:00Z").getUTCDay();
       byDow.set(dow, (byDow.get(dow) ?? 0) + Number(r.net_sales));
     }

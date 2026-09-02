@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import { Printer } from "lucide-react";
+import { DateRangeFilter, rangeToQuery, type RangeState } from "./reports/shared";
+import PlOverviewView from "./reports/PlOverviewView";
+import PlDetailsView from "./reports/PlDetailsView";
+import SalesOverviewView from "./reports/SalesOverviewView";
+import SpDetailsView from "./reports/SpDetailsView";
+import CostsView from "./reports/CostsView";
+import CostDetailsView from "./reports/CostDetailsView";
 
 function fmtMoney(n: number | null | undefined) {
   if (n == null) return "—";
@@ -32,22 +39,36 @@ type Adjustment = { id: string; period_month: string; label: string; amount: num
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40";
 
-type ReportView = "pl" | "balance-sheet" | "cash-flow" | "seasonality" | "normalized";
+type ReportView =
+  | "pl-overview" | "pl-details" | "sales" | "sp-details" | "costs" | "cost-details"
+  | "pl" | "balance-sheet" | "cash-flow" | "seasonality" | "normalized";
 
 const VIEW_LABEL: Record<ReportView, string> = {
-  pl: "P&L",
+  "pl-overview": "P&L Overview",
+  "pl-details": "P&L Details",
+  sales: "Sales & Products",
+  "sp-details": "S&P Details",
+  costs: "Costs",
+  "cost-details": "Cost Details",
+  pl: "P&L Table",
   "balance-sheet": "Balance Sheet",
   "cash-flow": "Cash Flow",
   seasonality: "Seasonality",
   normalized: "Normalized",
 };
 
+const DASHBOARD_VIEWS: ReportView[] = ["pl-overview", "pl-details", "sales", "sp-details", "costs", "cost-details"];
+
 export default function ReportsTab({ token }: { token: string }) {
-  const [view, setView] = useState<ReportView>("pl");
+  const [view, setView] = useState<ReportView>("pl-overview");
+  // Date range shared by all six dashboard views, persisted across tab switches.
+  const [range, setRange] = useState<RangeState>({ preset: "all" });
+  const query = rangeToQuery(range);
+  const isDashboard = DASHBOARD_VIEWS.includes(view);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 print:hidden">
+      <div className="flex items-start justify-between gap-4 mb-4 print:hidden">
         <div className={`${vulfMono.className} flex gap-1 flex-wrap`}>
           {(Object.keys(VIEW_LABEL) as ReportView[]).map((v) => (
             <button
@@ -63,13 +84,25 @@ export default function ReportsTab({ token }: { token: string }) {
         </div>
         <button
           onClick={() => window.print()}
-          className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50`}
+          className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50 shrink-0`}
         >
           <Printer className="w-3.5 h-3.5" />
           Print / Save PDF
         </button>
       </div>
 
+      {isDashboard && (
+        <div className="mb-6 print:hidden">
+          <DateRangeFilter value={range} onChange={setRange} />
+        </div>
+      )}
+
+      {view === "pl-overview" && <PlOverviewView token={token} query={query} />}
+      {view === "pl-details" && <PlDetailsView token={token} query={query} />}
+      {view === "sales" && <SalesOverviewView token={token} query={query} />}
+      {view === "sp-details" && <SpDetailsView token={token} query={query} />}
+      {view === "costs" && <CostsView token={token} query={query} />}
+      {view === "cost-details" && <CostDetailsView token={token} query={query} />}
       {view === "pl" && <PlView token={token} />}
       {view === "balance-sheet" && <BalanceSheetView token={token} />}
       {view === "cash-flow" && <CashFlowView token={token} />}

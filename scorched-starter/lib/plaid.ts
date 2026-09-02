@@ -38,6 +38,12 @@ export async function createLinkToken(userId: string): Promise<{ link_token: str
     products: ["transactions"],
     country_codes: ["US"],
     language: "en",
+    // Without this, Plaid defaults to a 90-day transaction history request —
+    // confirmed the hard way: every account linked this session only synced
+    // back to its exact link date minus 90 days. 730 is Plaid's max (24mo),
+    // matching what the accounting spec's backfill plan assumed. Actual
+    // history returned still depends on what the institution provides.
+    transactions: { days_requested: 730 },
   });
 }
 
