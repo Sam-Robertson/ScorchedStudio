@@ -64,6 +64,10 @@ export async function POST(req: NextRequest) {
         quantity: 1,
       },
     ],
+    // Codes are created in the Stripe Dashboard (Products > Coupons >
+    // Promotion codes); the webhook already records session.amount_total, so
+    // a discounted enrollment stores what was actually paid, not list price.
+    allow_promotion_codes: true,
     // The webhook reads name/email/phone straight out of this metadata
     // rather than Stripe's own customer_details — we already collected
     // these on the course detail page before redirecting to Stripe.

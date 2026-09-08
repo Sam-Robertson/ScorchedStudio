@@ -179,12 +179,12 @@ INSERT INTO courses (name, slug, description, curriculum, default_price_cents, d
 VALUES (
   'Pyrography 101',
   'pyrography-101',
-  'A 4-week introduction to woodburning — from tool control to a finished, sealed project.',
+  'A 4-week introduction to woodburning. Start with tool control on a practice board, then burn and seal a coaster set and a cutting board to take home.',
   '[
-    {"week": 1, "title": "Foundations and control", "topics": ["Tools, tips, and wood types", "Safety", "Heat control", "Grain and prep", "Control drills", "Start practice board"]},
-    {"week": 2, "title": "Shading, texture, and value", "topics": ["Gradients", "Texture techniques", "Tip selection", "Finish practice board as a value study"]},
-    {"week": 3, "title": "Composition and project start", "topics": ["Design transfer", "Composition basics", "Burn order", "Begin main project"]},
-    {"week": 4, "title": "Detail, finishing, and seal", "topics": ["Detail passes", "Depth and contrast", "Fixing mistakes", "Sealing and finishing", "Complete project"]}
+    {"week": 1, "title": "Foundations and control", "topics": ["Tools, tips, and wood types", "Heat control", "Grain and prep", "Start practice board"]},
+    {"week": 2, "title": "Shading, texture, and value", "topics": ["Gradients and texture", "Tip selection", "Finish practice board", "Start coaster set"]},
+    {"week": 3, "title": "Composition and coaster set", "topics": ["Design transfer and composition", "Burn order", "Complete coaster set"]},
+    {"week": 4, "title": "Cutting board and sealing", "topics": ["Detail and contrast passes", "Complete cutting board", "Sealing and food-safe finish"]}
   ]'::jsonb,
   13500, 10, 4, 120, 'active'
 )
