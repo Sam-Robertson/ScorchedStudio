@@ -1,9 +1,9 @@
-// lib/customer-identity.ts — server-only
+// lib/customer-identity.ts - server-only
 //
 // The customers table holds credentials only (email + password_hash), no
 // name column. Rather than add one and a migration Sam has to run before the
 // nav works, the display name is read from whatever the customer last told
-// us on a course enrollment or a booking — both already collect a name and
+// us on a course enrollment or a booking. Both already collect a name and
 // both key on email, the same identity convention the account pages use.
 import { getSupabase } from "@/lib/supabase";
 

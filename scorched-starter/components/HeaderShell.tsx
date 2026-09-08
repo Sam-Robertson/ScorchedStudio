@@ -149,7 +149,7 @@ type MeResponse =
   | { authenticated: false }
   | { authenticated: true; email: string; name: string | null; initials: string };
 
-// Session state is fetched rather than server-rendered on purpose — see the
+// Session state is fetched rather than server-rendered on purpose; see the
 // comment in app/api/account/me/route.ts. `null` means "not known yet", which
 // renders a same-size placeholder so the nav doesn't shift once it resolves.
 function useCustomerSession() {
@@ -170,7 +170,7 @@ function useCustomerSession() {
       cancelled = true;
     };
     // Re-checked on navigation so logging in or out updates the nav without a
-    // hard reload — the root layout never remounts on a client-side route change.
+    // hard reload. The root layout never remounts on a client-side route change.
   }, [pathname]);
 
   return { me, setMe };

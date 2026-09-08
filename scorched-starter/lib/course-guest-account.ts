@@ -1,4 +1,4 @@
-// lib/course-guest-account.ts — server-only
+// lib/course-guest-account.ts - server-only
 //
 // Course enrolment used to be gated behind "log in first". Now the account is
 // folded into the purchase form: a visitor supplies name/email/password
@@ -15,7 +15,7 @@ import {
   verifyCustomerSessionToken,
 } from "@/lib/customer-session";
 
-// Matches app/api/account/signup/route.ts — same 30 days as the session TTL
+// Matches app/api/account/signup/route.ts: same 30 days as the session TTL
 // in lib/customer-session.ts.
 const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

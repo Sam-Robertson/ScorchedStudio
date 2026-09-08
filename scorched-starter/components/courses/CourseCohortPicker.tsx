@@ -21,7 +21,7 @@ function formatCents(cents: number): string {
 
 // Every session in a cohort normally runs at the same time, so printing it on
 // all four dates is just noise. Returns the one shared time range to show once
-// above the dates, or null if a cohort ever has a session that differs — in
+// above the dates, or null if a cohort ever has a session that differs, in
 // which case each row carries its own time again rather than quietly lying.
 function uniformSessionTime(sessions: CohortSessionRecord[]): string | null {
   if (sessions.length === 0) return null;

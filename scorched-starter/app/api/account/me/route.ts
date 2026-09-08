@@ -5,7 +5,7 @@
 // layout, so a cookies() call there would opt every route on the site into
 // dynamic rendering, including the statically generated blog pages.
 //
-// Returns 200 either way — a logged-out visitor is the normal case here, not
+// Returns 200 either way. A logged-out visitor is the normal case here, not
 // an error, and a 401 on every page load just fills their console.
 import { NextRequest, NextResponse } from "next/server";
 import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
