@@ -31,42 +31,6 @@ function uniformSessionTime(sessions: CohortSessionRecord[]): string | null {
   return sessions.every((s) => range(s) === first) ? first : null;
 }
 
-// Shown in place of the enroll/waitlist form until the visitor has a
-// verified account — the checkout and waitlist routes require the same
-// session server-side, so this is a UX convenience, not the real gate.
-function LoginGate({ cohortLabel }: { cohortLabel: string }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentUrl = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-  const redirect = encodeURIComponent(currentUrl);
-
-  return (
-    <div className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
-      <div>
-        <h3 className="font-semibold text-neutral-900 mb-1">Log in to enroll in {cohortLabel}</h3>
-        <p className={`${vulfMono.className} text-xs text-neutral-500`}>
-          Courses require an account so you can manage your enrollment later.
-        </p>
-      </div>
-
-      <div className="flex gap-3">
-        <Link
-          href={`/account/login?redirect=${redirect}`}
-          className="flex-1 text-center rounded-xl bg-brand text-white py-3 font-semibold hover:opacity-90 transition-opacity"
-        >
-          Log In
-        </Link>
-        <Link
-          href={`/account/signup?redirect=${redirect}`}
-          className="flex-1 text-center rounded-xl border border-black/20 text-neutral-900 py-3 font-semibold hover:bg-black/5 transition-colors"
-        >
-          Create Account
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 export default function CourseCohortPicker({
   cohorts,
   initialCohortId,
@@ -81,9 +45,23 @@ export default function CourseCohortPicker({
   const [fullOverride, setFullOverride] = useState<Record<string, boolean>>({});
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLoginLink, setShowLoginLink] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
+
+  // A logged-in customer keeps their session email; a guest is creating the
+  // account inline, so the field they typed is the one to confirm back to them.
+  const isGuest = !accountEmail;
+  const effectiveEmail = accountEmail ?? email.trim();
+
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const loginRedirect = encodeURIComponent(
+    `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`
+  );
 
   const selected = cohorts.find((c) => c.id === selectedId) ?? null;
   const isFull = selected ? fullOverride[selected.id] ?? (selected.availability?.is_full ?? true) : false;
@@ -93,10 +71,24 @@ export default function CourseCohortPicker({
     if (!selected) return;
     setError(null);
 
+    setShowLoginLink(false);
+
     if (!name.trim()) {
       setError("Name is required.");
       return;
     }
+    if (isGuest) {
+      if (!email.trim()) {
+        setError("Email is required.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Choose a password of at least 8 characters.");
+        return;
+      }
+    }
+
+    const account = isGuest ? { email: email.trim(), password } : {};
 
     setLoading(true);
     try {
@@ -104,10 +96,11 @@ export default function CourseCohortPicker({
         const res = await fetch("/api/courses/waitlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined }),
+          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined, ...account }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
+          if (data.requiresLogin) setShowLoginLink(true);
           setError(data.error || "Something went wrong joining the waitlist. Please try again.");
           return;
         }
@@ -116,11 +109,14 @@ export default function CourseCohortPicker({
         const res = await fetch("/api/courses/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined }),
+          body: JSON.stringify({ cohort_id: selected.id, name, phone: phone || undefined, ...account }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.url) {
-          if (data.full) {
+          if (data.requiresLogin) {
+            setShowLoginLink(true);
+            setError(data.error || "Log in to enroll.");
+          } else if (data.full) {
             // Someone else filled the last seat while this page was open,
             // switch this cohort to waitlist mode instead of just erroring.
             setFullOverride((prev) => ({ ...prev, [selected.id]: true }));
@@ -145,7 +141,7 @@ export default function CourseCohortPicker({
       <div className="rounded-2xl border border-black/10 bg-white p-6 text-center">
         <p className="font-semibold text-neutral-900 mb-1">You&apos;re on the waitlist</p>
         <p className={`${vulfMono.className} text-sm text-neutral-500 break-words`}>
-          We&apos;ll email you at {accountEmail} if a seat opens up in the {selected?.label} cohort.
+          We&apos;ll email you at {effectiveEmail} if a seat opens up in the {selected?.label} cohort.
         </p>
       </div>
     );
@@ -197,26 +193,74 @@ export default function CourseCohortPicker({
         })}
       </div>
 
-      {selected && !accountEmail && <LoginGate cohortLabel={selected.label} />}
-
-      {selected && accountEmail && (
+      {selected && (
         <form onSubmit={handleSubmit} className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">
           <h3 className="font-semibold text-neutral-900">
             {isFull ? `Join the waitlist for ${selected.label}` : `Enroll in ${selected.label}`}
           </h3>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600">
+              {error}
+              {showLoginLink && (
+                <>
+                  {" "}
+                  <Link href={`/account/login?redirect=${loginRedirect}`} className="underline underline-offset-2 font-semibold">
+                    Log in
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
 
           <div>
             <label className={labelCls}>Name</label>
             <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
+
           <div>
             <label className={labelCls}>Email</label>
-            <p className={`${vulfMono.className} text-sm text-neutral-500 break-words px-4 py-3 rounded-lg bg-neutral-50 border border-black/10`}>
-              {accountEmail}
-            </p>
+            {isGuest ? (
+              <input
+                className={inputCls}
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            ) : (
+              <p className={`${vulfMono.className} text-sm text-neutral-500 break-words px-4 py-3 rounded-lg bg-neutral-50 border border-black/10`}>
+                {accountEmail}
+              </p>
+            )}
           </div>
+
+          {/* Account creation folded into the purchase form: a first-time
+              customer never has to think about signing up, they just end up
+              with an account they can log back into. */}
+          {isGuest && (
+            <div>
+              <label className={labelCls}>Create a password</label>
+              <input
+                className={inputCls}
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+              <p className={`${vulfMono.className} text-[11px] text-neutral-400 mt-1`}>
+                At least 8 characters. We&apos;ll set up your account so you can manage this
+                enrollment later.{" "}
+                <Link href={`/account/login?redirect=${loginRedirect}`} className="underline underline-offset-2">
+                  Already have an account?
+                </Link>
+              </p>
+            </div>
+          )}
+
           <div>
             <label className={labelCls}>Phone (optional)</label>
             <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />

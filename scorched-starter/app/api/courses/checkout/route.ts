@@ -1,9 +1,9 @@
 // app/api/courses/checkout/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { getCohortAvailability, getCohortWithCourse } from "@/lib/courses";
-import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
+import { attachCustomerSession, resolveCustomerForCourseAction } from "@/lib/course-guest-account";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -11,16 +11,12 @@ const schema = z.object({
   cohort_id: z.string().uuid(),
   name: z.string().min(1),
   phone: z.string().optional(),
+  // Guest checkout: ignored when the request already carries a session.
+  email: z.string().email().optional(),
+  password: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get(CUSTOMER_SESSION_COOKIE)?.value;
-  const customerSession = token ? verifyCustomerSessionToken(token) : null;
-  if (!customerSession) {
-    return Response.json({ error: "Please log in to enroll in a course.", requiresLogin: true }, { status: 401 });
-  }
-  const email = customerSession.email;
-
   const raw = await req.json();
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
@@ -28,15 +24,26 @@ export async function POST(req: NextRequest) {
   }
   const { cohort_id, name, phone } = parsed.data;
 
-  const found = await getCohortWithCourse(cohort_id);
-  if (!found) {
+  // Validate the cohort before creating an account, so a bad link can't leave
+  // a stranded customer row behind.
+  const preflight = await getCohortWithCourse(cohort_id);
+  if (!preflight) {
     return Response.json({ error: "Cohort not found." }, { status: 404 });
   }
-  const { cohort, course } = found;
-
-  if (cohort.status !== "open") {
+  if (preflight.cohort.status !== "open") {
     return Response.json({ error: "This cohort isn't open for enrollment." }, { status: 409 });
   }
+
+  const resolved = await resolveCustomerForCourseAction(req, {
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
+  if (!resolved.ok) {
+    return Response.json(resolved.body, { status: resolved.status });
+  }
+  const email = resolved.email;
+
+  const { cohort, course } = preflight;
 
   // Best-effort check to fail fast for the common case — this narrows the
   // oversell window (two people checking out for the last seat at once) to
@@ -76,5 +83,6 @@ export async function POST(req: NextRequest) {
     cancel_url: `${baseUrl}/courses/${course.slug}`,
   });
 
-  return Response.json({ url: session.url });
+  const response = NextResponse.json({ url: session.url });
+  return resolved.issueSession ? attachCustomerSession(response, email) : response;
 }
