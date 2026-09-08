@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
 
@@ -12,7 +13,6 @@ import { vulfMono } from "@/app/fonts";
 import type { LocationRecord } from "@/lib/locations";
 
 const membershipLinks = [
-  { href: "/account/login", label: "Sign In" },
   { href: "/memberships", label: "Membership Info" },
 ];
 
@@ -27,7 +27,6 @@ const moreLinks = [
 ];
 
 const REST_OF_MOBILE_NAV = [
-  { href: "/account/login", label: "Membership Sign In" },
   { href: "/memberships", label: "Memberships" },
   { href: "/group-events", label: "Group Events" },
   { href: "/courses", label: "Courses" },
@@ -144,6 +143,118 @@ function NavDropdown({
   );
 }
 
+/* -------------------- ACCOUNT -------------------- */
+
+type MeResponse =
+  | { authenticated: false }
+  | { authenticated: true; email: string; name: string | null; initials: string };
+
+// Session state is fetched rather than server-rendered on purpose — see the
+// comment in app/api/account/me/route.ts. `null` means "not known yet", which
+// renders a same-size placeholder so the nav doesn't shift once it resolves.
+function useCustomerSession() {
+  const pathname = usePathname();
+  const [me, setMe] = useState<MeResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/account/me")
+      .then((r) => (r.ok ? r.json() : { authenticated: false }))
+      .then((data: MeResponse) => {
+        if (!cancelled) setMe(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMe({ authenticated: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Re-checked on navigation so logging in or out updates the nav without a
+    // hard reload — the root layout never remounts on a client-side route change.
+  }, [pathname]);
+
+  return { me, setMe };
+}
+
+function AccountMenu({ compact = false }: { compact?: boolean }) {
+  const { me, setMe } = useCustomerSession();
+  const { open, setOpen, menuRef, triggerRef } = useDropdown();
+  const router = useRouter();
+
+  const size = compact ? "w-8 h-8 text-[11px]" : "w-9 h-9 text-[12px]";
+
+  if (me === null) {
+    return <div className={clsx("shrink-0 rounded-full", size)} aria-hidden />;
+  }
+
+  if (!me.authenticated) {
+    return (
+      <Link
+        href="/account/login"
+        className={clsx(
+          "shrink-0 whitespace-nowrap transition-opacity hover:opacity-80",
+          compact ? "text-[13px]" : "text-[15px] leading-[1.1]"
+        )}
+      >
+        Sign In
+      </Link>
+    );
+  }
+
+  async function handleLogout() {
+    await fetch("/api/account/logout", { method: "POST" });
+    setOpen(false);
+    setMe({ authenticated: false });
+    router.push("/");
+    router.refresh();
+  }
+
+  return (
+    <div className="relative shrink-0" ref={menuRef}>
+      <button
+        ref={triggerRef}
+        onClick={() => setOpen((s) => !s)}
+        className={clsx(
+          "flex items-center justify-center rounded-full bg-green text-white font-semibold tracking-[0.02em] transition-opacity hover:opacity-90",
+          size
+        )}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account menu for ${me.email}`}
+      >
+        {me.initials}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-2 min-w-[220px] rounded-md border border-black/10 bg-white shadow-lg p-2"
+        >
+          <div className="px-3 py-2 border-b border-black/10 mb-1">
+            {me.name && <p className="text-[13px] font-semibold text-neutral-900 truncate">{me.name}</p>}
+            <p className="text-[11px] text-neutral-500 truncate">{me.email}</p>
+          </div>
+          <Link
+            href="/account"
+            className="block px-3 py-2 rounded-md text-[14px] leading-tight hover:bg-black/5"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            My Account
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="block w-full text-left px-3 py-2 rounded-md text-[14px] leading-tight hover:bg-black/5"
+            role="menuitem"
+          >
+            Log Out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* -------------------- DESKTOP -------------------- */
 function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label: string }[] }) {
   const pathname = usePathname();
@@ -211,13 +322,16 @@ function DesktopHeader({ locationLinks }: { locationLinks: { href: string; label
           <NavDropdown label="More" links={moreLinks} isActive={isActive} />
         </div>
 
-        {/* CTA */}
-        <Link
-          href="/book"
-          className="shrink-0 inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
-        >
-          BOOK&nbsp;NOW
-        </Link>
+        {/* Account + CTA */}
+        <div className="flex items-center gap-4 shrink-0">
+          <AccountMenu />
+          <Link
+            href="/book"
+            className="shrink-0 inline-flex items-center justify-center rounded-md px-5 h-9 text-[13px] font-semibold tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity"
+          >
+            BOOK&nbsp;NOW
+          </Link>
+        </div>
       </nav>
     </div>
   );
@@ -286,6 +400,10 @@ function MobileHeader() {
             priority
           />
         </Link>
+
+        <div className="ml-3 flex items-center">
+          <AccountMenu compact />
+        </div>
       </Container>
 
       <div

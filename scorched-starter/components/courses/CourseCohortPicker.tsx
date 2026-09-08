@@ -19,6 +19,18 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// Every session in a cohort normally runs at the same time, so printing it on
+// all four dates is just noise. Returns the one shared time range to show once
+// above the dates, or null if a cohort ever has a session that differs — in
+// which case each row carries its own time again rather than quietly lying.
+function uniformSessionTime(sessions: CohortSessionRecord[]): string | null {
+  if (sessions.length === 0) return null;
+  const range = (s: CohortSessionRecord) =>
+    `${formatSessionTime(s.start_time)}–${formatSessionTime(s.end_time)}`;
+  const first = range(sessions[0]);
+  return sessions.every((s) => range(s) === first) ? first : null;
+}
+
 // Shown in place of the enroll/waitlist form until the visitor has a
 // verified account — the checkout and waitlist routes require the same
 // session server-side, so this is a UX convenience, not the real gate.
@@ -147,6 +159,7 @@ export default function CourseCohortPicker({
           const full = fullOverride[cohort.id] ?? (cohort.availability?.is_full ?? true);
           const seatsRemaining = cohort.availability?.seats_remaining ?? 0;
           const active = selectedId === cohort.id;
+          const sharedTime = uniformSessionTime(cohort.sessions);
           return (
             <button
               key={cohort.id}
@@ -166,10 +179,15 @@ export default function CourseCohortPicker({
                   {full ? "Full" : `${seatsRemaining} seat${seatsRemaining === 1 ? "" : "s"} left`}
                 </span>
               </div>
+              {sharedTime && (
+                <p className={`${vulfMono.className} text-xs text-neutral-500 mb-1`}>{sharedTime}</p>
+              )}
               <ul className={`${vulfMono.className} text-xs text-neutral-500 space-y-1 mb-3`}>
                 {cohort.sessions.map((s) => (
                   <li key={s.id}>
-                    {formatSessionDate(s.session_date)}, {formatSessionTime(s.start_time)}–{formatSessionTime(s.end_time)}
+                    {formatSessionDate(s.session_date)}
+                    {/* Only repeat the time on a session that breaks the pattern. */}
+                    {!sharedTime && `, ${formatSessionTime(s.start_time)}–${formatSessionTime(s.end_time)}`}
                   </li>
                 ))}
               </ul>

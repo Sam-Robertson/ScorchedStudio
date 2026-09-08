@@ -62,12 +62,12 @@ export default async function CourseDetailPage({
       <section className="py-6">
         <Container>
           <h2 className="h3 font-bold mb-4">Curriculum</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-10">
             {course.curriculum.map((week) => (
               <div key={week.week} className="rounded-xl border border-black/10 bg-white p-3">
                 <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-0.5`}>WEEK {week.week}</p>
                 <h3 className="text-sm font-semibold text-neutral-900 mb-1.5">{week.title}</h3>
-                <ul className={`${vulfMono.className} text-xs text-neutral-600 list-disc list-inside space-y-0.5`}>
+                <ul className={`${vulfMono.className} text-[11px] leading-[1.45] text-neutral-600 space-y-0.5`}>
                   {week.topics.map((topic, i) => (
                     <li key={i}>{topic}</li>
                   ))}
