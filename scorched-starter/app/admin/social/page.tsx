@@ -396,6 +396,17 @@ function MediaUpload({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+
+  // Close the full-size image view on Escape while it is open.
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomed(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomed]);
 
   const upload = useCallback(
     async (file: File) => {
@@ -496,12 +507,19 @@ function MediaUpload({
             className="w-full rounded-xl border border-black/10 max-h-64 bg-black"
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.media_url}
-            alt="Post media"
-            className="w-full rounded-xl border border-black/10 max-h-64 object-contain bg-neutral-50"
-          />
+          <button
+            type="button"
+            onClick={() => setZoomed(true)}
+            aria-label="View full size"
+            className="block w-full cursor-zoom-in rounded-xl"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.media_url}
+              alt="Post media"
+              className="w-full rounded-xl border border-black/10 max-h-64 object-contain bg-neutral-50"
+            />
+          </button>
         )}
 
         <div className="flex gap-2">
@@ -541,6 +559,29 @@ function MediaUpload({
             e.target.value = "";
           }}
         />
+
+        {zoomed && post.media_type !== "video" && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+            onMouseDown={(e) => e.target === e.currentTarget && setZoomed(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomed(false)}
+              aria-label="Close full size view"
+              className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.media_url}
+              alt="Post media, full size"
+              className="max-h-full max-w-full cursor-zoom-out rounded-lg object-contain"
+              onClick={() => setZoomed(false)}
+            />
+          </div>
+        )}
       </div>
     );
   }
