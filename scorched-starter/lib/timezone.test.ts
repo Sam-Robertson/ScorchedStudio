@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { todayInDenverYmd, denverDayRangeUTC } from "./timezone.ts";
+import { todayInDenverYmd, yesterdayInDenverYmd, denverDayRangeUTC } from "./timezone.ts";
 
 // The bug these guard against: the UTC date rolls over at 6pm Denver (MDT) or
 // 5pm (MST), so a UTC-derived "today" reads as tomorrow for the studio's whole
@@ -34,4 +34,17 @@ test("denverDayRangeUTC brackets a real Denver day in both offsets", () => {
   // The 8:15pm waiver that a "To: Sep 9" filter used to drop
   const evening = new Date("2026-09-10T02:15:00Z");
   assert.ok(evening >= new Date(summer.startUTC) && evening < new Date(summer.endUTC));
+});
+
+// The daily report cron runs at 08:00 UTC and reports the Denver day that just
+// finished, so this is the day it names and queries.
+test("yesterdayInDenverYmd rolls back a whole Denver day", () => {
+  // 2am Denver on Sep 10 (MDT) reports Sep 9
+  assert.equal(yesterdayInDenverYmd(new Date("2026-09-10T08:00:00Z")), "2026-09-09");
+  // 1am Denver on Jan 15 (MST), same cron hour, reports Jan 14
+  assert.equal(yesterdayInDenverYmd(new Date("2026-01-15T08:00:00Z")), "2026-01-14");
+  // Month boundary
+  assert.equal(yesterdayInDenverYmd(new Date("2026-10-01T08:00:00Z")), "2026-09-30");
+  // Year boundary
+  assert.equal(yesterdayInDenverYmd(new Date("2026-01-01T08:00:00Z")), "2025-12-31");
 });

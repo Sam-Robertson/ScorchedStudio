@@ -5,6 +5,7 @@
 import { NextRequest } from "next/server";
 import { Resend } from "resend";
 import { getSupabase } from "@/lib/supabase";
+import { denverDayRangeUTC, yesterdayInDenverYmd } from "@/lib/timezone";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -34,15 +35,22 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Today's date in UTC (Vercel runs in UTC)
-  const todayUTC = new Date().toISOString().split("T")[0];
+  // Yesterday's Denver day, whole and finished. The cron fires at 08:00 UTC,
+  // which is 1am or 2am in Denver depending on daylight saving, so the day
+  // being reported is always closed by the time this runs.
+  //
+  // It used to query the UTC day and label the email with the Denver date.
+  // Those disagree: the run at 03:00 UTC was 9pm Denver the evening before,
+  // so a report headed "September 9" held only the bookings taken between
+  // 6pm and 9pm that night.
+  const reportYmd = yesterdayInDenverYmd();
+  const { startUTC, endUTC } = denverDayRangeUTC(reportYmd);
 
-  // Fetch bookings created today
   const { data: bookings, error } = await getSupabase()
     .from("bookings")
     .select("*")
-    .gte("created_at", `${todayUTC}T00:00:00.000Z`)
-    .lt("created_at", `${todayUTC}T23:59:59.999Z`)
+    .gte("created_at", startUTC)
+    .lt("created_at", endUTC)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -55,14 +63,16 @@ export async function GET(req: NextRequest) {
   const totalPeople = confirmed.reduce((s: number, b: { party_size: number }) => s + b.party_size, 0);
   const totalRevenue = confirmed.reduce((s: number, b: { amount_paid: number }) => s + b.amount_paid, 0);
 
-  const reportDate = new Date().toLocaleDateString("en-US", {
+  // Noon UTC is safely inside the Denver day in either offset, so this labels
+  // the day that was actually queried.
+  const reportDate = new Date(`${reportYmd}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric", year: "numeric",
     timeZone: "America/Denver",
   });
 
   // Skip sending if nothing happened today
   if (confirmed.length === 0 && cancelled.length === 0) {
-    console.log("DAILY_REPORT: No activity today, skipping email.");
+    console.log(`DAILY_REPORT: No activity on ${reportYmd}, skipping email.`);
     return Response.json({ sent: false, reason: "No activity" });
   }
 

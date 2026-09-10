@@ -16,12 +16,7 @@ import { getDecryptedAccessToken, syncTransactions, type PlaidTransaction } from
 import { classifyUnreviewed } from "@/lib/accounting/classify-job";
 import { postSquareRevenueForDay, postStripeRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
 import { postDepreciationForMonth } from "@/lib/accounting/depreciation-job";
-import { todayInDenver } from "@/lib/timezone";
-
-function yesterdayInDenver(): string {
-  const { y, m, d } = todayInDenver();
-  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
-}
+import { todayInDenver, yesterdayInDenverYmd } from "@/lib/timezone";
 
 type BankAccountRow = { id: string; plaid_account_id: string; ledger_account_id: string; default_location_id: string | null };
 
@@ -109,7 +104,7 @@ export async function GET(req: NextRequest) {
 
     const classifyResult = await classifyUnreviewed(sb);
 
-    const revenueDate = yesterdayInDenver();
+    const revenueDate = yesterdayInDenverYmd();
     const revenueResults: Record<string, unknown> = {};
     for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
       try {

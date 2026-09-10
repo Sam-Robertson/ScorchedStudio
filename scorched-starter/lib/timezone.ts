@@ -39,6 +39,13 @@ export function todayInDenverYmd(now: Date = new Date()): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+// The Denver calendar day before `now`, as "YYYY-MM-DD". Date.UTC normalizes
+// the d-1 across month and year boundaries.
+export function yesterdayInDenverYmd(now: Date = new Date()): string {
+  const { y, m, d } = todayInDenver(now);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+}
+
 // "YYYY-MM" for the previous calendar month in Denver. Deliberately the
 // previous *calendar* month, not "the most recent month with data" — if an
 // upload is skipped, callers should see "no data for <month>" rather than
