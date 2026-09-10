@@ -9,6 +9,7 @@ import { AdminSessionProvider, type LocationKey, type Role } from "@/lib/adminSe
 import clsx from "clsx";
 import {
   AlertTriangle,
+  ArrowLeft,
   BarChart2,
   Boxes,
   Briefcase,
@@ -189,6 +190,17 @@ function SidebarContent({
         <p className={clsx(vulfMono.className, "text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5")}>
           {location ? LOCATION_NAME[location] : "Admin"}
         </p>
+        <Link
+          href="/"
+          onClick={onNavClick}
+          className={clsx(
+            vulfMono.className,
+            "mt-3 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-neutral-400 hover:text-[#884A20] transition-colors"
+          )}
+        >
+          <ArrowLeft className="w-3 h-3" />
+          Back to site
+        </Link>
       </div>
 
       {/* Nav links */}
@@ -271,13 +283,14 @@ function AdminShell({
 
   return (
     <>
-      {/* ── Desktop sidebar — fixed below the sticky public header (h-16 = 4rem) */}
-      <aside className="hidden md:flex flex-col fixed top-16 left-0 h-[calc(100vh-4rem)] w-56 bg-white border-r border-black/10 z-30 overflow-hidden">
+      {/* ── Desktop sidebar — full height: the public header hides on /admin,
+          so there's no offset to leave room for. */}
+      <aside className="hidden md:flex flex-col fixed top-0 left-0 h-screen w-56 bg-white border-r border-black/10 z-30 overflow-hidden">
         <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} />
       </aside>
 
       {/* ── Mobile top bar */}
-      <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-black/10 bg-white sticky top-14 z-20">
+      <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-black/10 bg-white sticky top-0 z-20">
         <button
           onClick={() => setDrawerOpen(true)}
           className="p-1.5 rounded-lg hover:bg-black/5 -ml-1.5"

@@ -28,6 +28,7 @@ const bookNowCls =
   "inline-flex items-center justify-center rounded-md h-9 text-[13px] font-semibold shrink-0 tracking-[0.18em] bg-green text-white hover:opacity-90 transition-opacity";
 
 export default function Header() {
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const me = useCustomerSession();
 
@@ -37,6 +38,11 @@ export default function Header() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Admin has its own sidebar nav and runs as a full-height shell, same
+  // reasoning as FooterShell. Its sidebar is positioned from the top of the
+  // viewport, so this can't render there without overlapping it.
+  if (pathname?.startsWith("/admin")) return null;
 
   return (
     <header
