@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
     let totalItems = 0;
     let totalOrderRevenueCents = 0;
     const itemRevenueCents = new Map<string, number>();
+    const itemQty = new Map<string, number>();
     let daysWithOrderData = 0;
     const dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[] = [];
 
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
           // when the cashier left one, else label them for what they are.
           const name = li.name ?? (li.note?.trim() || "Custom Amount");
           itemRevenueCents.set(name, (itemRevenueCents.get(name) ?? 0) + cents);
+          itemQty.set(name, (itemQty.get(name) ?? 0) + qty);
         }
         totalOrderRevenueCents += orderCents;
         dayCents += orderCents;
@@ -116,10 +118,28 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const topItems = [...itemRevenueCents.entries()]
-      .map(([name, cents]) => ({ name, revenue: Math.round(cents) / 100 }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
+    // Union of the top 15 by each metric, not a revenue-ranked top 10: a
+    // cheap high-volume item can lead on count while sitting well outside
+    // the top 10 by revenue, so a revenue-truncated list would quietly show
+    // the wrong bars once the client switches to count. The client sorts by
+    // whichever metric is active and takes its own top 10.
+    const allItems = [...itemRevenueCents.entries()].map(([name, cents]) => ({
+      name,
+      revenue: Math.round(cents) / 100,
+      // Square quantities can be fractional (weight, partial units), so this
+      // is summed as a float and only rounded for display.
+      quantity: Math.round((itemQty.get(name) ?? 0) * 100) / 100,
+    }));
+    const topItems: typeof allItems = [];
+    const seen = new Set<string>();
+    for (const item of [
+      ...[...allItems].sort((a, b) => b.revenue - a.revenue).slice(0, 15),
+      ...[...allItems].sort((a, b) => b.quantity - a.quantity).slice(0, 15),
+    ]) {
+      if (seen.has(item.name)) continue;
+      seen.add(item.name);
+      topItems.push(item);
+    }
 
     return Response.json({
       daily,
@@ -128,6 +148,7 @@ export async function GET(req: NextRequest) {
         totalOrders,
         avgOrderValue: totalOrders > 0 ? Math.round((totalOrderRevenueCents / totalOrders)) / 100 : 0,
         avgItemsPerOrder: totalOrders > 0 ? Math.round((totalItems / totalOrders) * 10) / 10 : 0,
+        totalItems: Math.round(totalItems * 100) / 100,
         daysWithOrderData,
       },
       topItems,

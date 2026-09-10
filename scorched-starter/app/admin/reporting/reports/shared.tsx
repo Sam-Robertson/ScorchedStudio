@@ -41,8 +41,8 @@ export type CostsResponse = {
 export type SalesResponse = {
   daily: { date: string; netSales: number }[];
   revenueByDayOfWeek: { day: string; revenue: number }[];
-  orderStats: { totalOrders: number; avgOrderValue: number; avgItemsPerOrder: number; daysWithOrderData: number };
-  topItems: { name: string; revenue: number }[];
+  orderStats: { totalOrders: number; avgOrderValue: number; avgItemsPerOrder: number; totalItems: number; daysWithOrderData: number };
+  topItems: { name: string; revenue: number; quantity: number }[];
   dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[];
   dataStartsAt?: string;
 };
