@@ -12,6 +12,8 @@ const infoLinks = [
   { href: '/contact', label: 'Contact Us' },
   { href: '/blog', label: 'Blog' },
   { href: '/careers', label: 'Careers' },
+  { href: '/scorched-vip', label: 'Scorched VIP' },
+  { href: 'https://app.squareup.com/gift/ML3N1RN3EGATW/order', label: 'Gift Cards', external: true },
 ];
 
 const socialLinks = [
@@ -123,7 +125,14 @@ export default function FooterShell({ locations }: { locations: LocationRecord[]
             <h3 className={headingCls}>Information</h3>
             <div className="space-y-2">
               {infoLinks.map((l) => (
-                <a key={l.href} href={l.href} className={linkCls}>{l.label}</a>
+                <a
+                  key={l.href}
+                  href={l.href}
+                  className={linkCls}
+                  {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                >
+                  {l.label}
+                </a>
               ))}
             </div>
           </div>
@@ -133,7 +142,7 @@ export default function FooterShell({ locations }: { locations: LocationRecord[]
             <div className="space-y-4">
               {locations.map((loc) => (
                 <div key={loc.key}>
-                  <a href={`/locations/${loc.key}`} className="text-sm text-white font-medium hover:underline underline-offset-2">
+                  <a href={`/locations#${loc.key}`} className="text-sm text-white font-medium hover:underline underline-offset-2">
                     {loc.name}
                   </a>
                   {loc.is_bookable ? (

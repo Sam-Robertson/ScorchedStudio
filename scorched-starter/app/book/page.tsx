@@ -114,12 +114,16 @@ export default function BookPage() {
   const [location, setLocation] = useState<"orem" | "slc">("orem");
 
   useEffect(() => {
+    // /locations links straight to a location's booking flow, so a valid
+    // ?location= wins over the default first bookable location.
+    const requested = new URLSearchParams(window.location.search).get("location");
     fetch("/api/locations")
       .then((r) => (r.ok ? r.json() : null))
       .then((rows: LocationOption[] | null) => {
         if (rows && rows.length > 0) {
           setBookableLocations(rows);
-          setLocation(rows[0].key);
+          const match = rows.find((row) => row.key === requested);
+          setLocation(match ? match.key : rows[0].key);
         }
       })
       .catch(() => {});
