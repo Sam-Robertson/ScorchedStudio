@@ -26,6 +26,7 @@ function cents(m: Money): number {
 type SquareLineItem = {
   item_type?: string;
   gross_sales_money?: Money;
+  total_discount_money?: Money;
 };
 
 type SquareOrder = {
@@ -169,14 +170,27 @@ export async function getSquareDailySettlement(locationId: string, dateStr: stri
 
   let grossSalesCents = 0;
   let discountsCents = 0;
+  let giftCardDiscountCents = 0;
   let taxCents = 0;
   let tipsCents = 0;
   for (const o of orders) {
+    // A gift card line is kept out of gross sales as a liability, so its
+    // discount has to stay out of `discounts` too. Subtracting one without
+    // the other drove net sales negative on days when cards were comped:
+    // 71 giveaway cards at 100% off once posted as -$1,344 of net sales.
+    let orderGiftCardDiscountCents = 0;
     for (const li of o.line_items ?? []) {
-      if (li.item_type === "GIFT_CARD") continue; // liability, not revenue — see file header
+      if (li.item_type === "GIFT_CARD") {
+        orderGiftCardDiscountCents += cents(li.total_discount_money);
+        continue; // liability, not revenue — see file header
+      }
       grossSalesCents += cents(li.gross_sales_money);
     }
-    discountsCents += cents(o.total_discount_money);
+    // Order-level total minus the gift card share, rather than a sum of line
+    // discounts: an order-level discount Square doesn't apportion to lines
+    // would vanish from a line-by-line sum.
+    discountsCents += cents(o.total_discount_money) - orderGiftCardDiscountCents;
+    giftCardDiscountCents += orderGiftCardDiscountCents;
     taxCents += cents(o.total_tax_money);
     tipsCents += cents(o.total_tip_money);
   }
@@ -200,6 +214,11 @@ export async function getSquareDailySettlement(locationId: string, dateStr: stri
     if (a.type === "ACTIVATE") giftCardSalesCents += cents(a.activate_activity_details?.amount_money);
     else if (a.type === "REDEEM") giftCardRedeemedCents += cents(a.redeem_activity_details?.amount_money);
   }
+  // Activations count the face value loaded onto the card; a comped card
+  // loads value without taking any cash. The settlement template treats
+  // gift card sales as cash into the clearing account, so net the discount
+  // out or the clearing leg stops matching the day's actual deposits.
+  giftCardSalesCents = Math.max(0, giftCardSalesCents - giftCardDiscountCents);
 
   const netSalesCents = grossSalesCents - discountsCents - returnsCents;
 
