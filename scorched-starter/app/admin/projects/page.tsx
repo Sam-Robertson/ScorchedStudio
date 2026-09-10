@@ -20,6 +20,7 @@ import {
   GripVertical,
   Search,
   SlidersHorizontal,
+  ThumbsUp,
 } from "lucide-react";
 import type { TaskRecord, CommentRecord } from "@/lib/supabase";
 
@@ -591,6 +592,7 @@ function DetailPanel({
                 {comments.map((comment) => {
                   const reactedByMe = comment.reactions.some((r) => r.author === currentUser && r.emoji === "👍");
                   const reactors = comment.reactions.filter((r) => r.emoji === "👍").map((r) => r.author);
+                  const hasReactions = reactors.length > 0;
                   return (
                     <div key={comment.id} className="rounded-xl bg-neutral-50 border border-black/8 px-4 py-3">
                       <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-2`}>
@@ -602,15 +604,19 @@ function DetailPanel({
                       <button
                         onClick={() => toggleReaction(comment.id)}
                         disabled={pendingReactions.has(comment.id)}
-                        title={reactors.length ? reactors.join(", ") : "Mark as seen"}
+                        title={hasReactions ? reactors.join(", ") : "Mark as seen"}
                         className={`mt-2 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
                           reactedByMe
                             ? "bg-[#519A70]/10 border-[#519A70]/30 text-[#519A70]"
-                            : "bg-white border-black/10 text-neutral-400 hover:text-neutral-600 hover:border-black/20"
+                            : hasReactions
+                            ? "bg-white border-black/10 text-neutral-600 hover:border-black/20"
+                            : "bg-white border-black/10 text-neutral-300 hover:text-neutral-500 hover:border-black/20"
                         }`}
                       >
-                        <span>👍</span>
-                        {reactors.length > 0 && <span>{reactors.length}</span>}
+                        {/* With no reactions yet this is an outline icon, so it reads as a button
+                            rather than as a thumbs up someone already left. */}
+                        {hasReactions ? <span>👍</span> : <ThumbsUp className="w-3.5 h-3.5" />}
+                        {hasReactions && <span>{reactors.length}</span>}
                       </button>
                     </div>
                   );
