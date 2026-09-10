@@ -179,7 +179,7 @@ INSERT INTO courses (name, slug, description, curriculum, default_price_cents, d
 VALUES (
   'Pyrography 101',
   'pyrography-101',
-  'A 4-week introduction to woodburning. Start with tool control on a practice board, then burn and seal a coaster set and a cutting board to take home.',
+  'A 4-week introduction to woodburning. Learn heat control, shading, and food-safe sealing, then take home a finished coaster set and cutting board.',
   '[
     {"week": 1, "title": "Foundations and control", "topics": ["Tools, tips, and wood types", "Heat control", "Grain and prep", "Start practice board"]},
     {"week": 2, "title": "Shading, texture, and value", "topics": ["Gradients and texture", "Tip selection", "Finish practice board", "Start coaster set"]},
