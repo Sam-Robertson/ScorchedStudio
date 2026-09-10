@@ -98,6 +98,15 @@ export function formatSessionDate(sessionDate: string): string {
   });
 }
 
+// "2026-09-29" -> "Sep 29". For cohort cards, where the weekday is already the
+// cohort label and the year is carried by the confirmation email.
+export function formatSessionDateShort(sessionDate: string): string {
+  return new Date(sessionDate + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 // "18:00:00" -> "6:00 PM"
 export function formatSessionTime(hhmmss: string): string {
   const [h, m] = hhmmss.split(":").map(Number);

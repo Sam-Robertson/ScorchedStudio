@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { CohortAvailability, CohortSessionRecord, CohortRecord } from "@/lib/courses";
-import { formatSessionDate, formatSessionTime } from "@/lib/courses";
+import { formatSessionDate, formatSessionDateShort, formatSessionTime } from "@/lib/courses";
 
 type CohortWithDetail = CohortRecord & {
   sessions: CohortSessionRecord[];
@@ -178,15 +178,24 @@ export default function CourseCohortPicker({
               {sharedTime && (
                 <p className={`${vulfMono.className} text-xs text-neutral-500 mb-1`}>{sharedTime}</p>
               )}
-              <ul className={`${vulfMono.className} text-xs text-neutral-500 space-y-1 mb-3`}>
-                {cohort.sessions.map((s) => (
-                  <li key={s.id}>
-                    {formatSessionDate(s.session_date)}
-                    {/* Only repeat the time on a session that breaks the pattern. */}
-                    {!sharedTime && `, ${formatSessionTime(s.start_time)}–${formatSessionTime(s.end_time)}`}
-                  </li>
-                ))}
-              </ul>
+              {sharedTime ? (
+                // The cohort label already names the weekday, so the dates only
+                // need month and day to stay on one line.
+                <p className={`${vulfMono.className} text-xs text-neutral-500 mb-3`}>
+                  {cohort.sessions.map((s) => formatSessionDateShort(s.session_date)).join(", ")}
+                </p>
+              ) : (
+                // Times differ across this cohort, so each session gets its own
+                // row with the time spelled out rather than a tidy summary.
+                <ul className={`${vulfMono.className} text-xs text-neutral-500 space-y-1 mb-3`}>
+                  {cohort.sessions.map((s) => (
+                    <li key={s.id}>
+                      {formatSessionDate(s.session_date)},{" "}
+                      {formatSessionTime(s.start_time)}–{formatSessionTime(s.end_time)}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p className="text-lg font-bold">{formatCents(cohort.price_cents)}</p>
             </button>
           );
