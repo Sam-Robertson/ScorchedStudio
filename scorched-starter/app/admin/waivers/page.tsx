@@ -1,7 +1,7 @@
 "use client";
 
 // app/admin/waivers/page.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
@@ -61,63 +61,114 @@ export default function AdminWaiversPage() {
 
 const PAGE_SIZE = 30;
 
+type Query = {
+  search: string;
+  dateFrom: string;
+  dateTo: string;
+  location: "" | "orem" | "slc";
+  sortField: SortField;
+  sortDir: SortDir;
+  page: number;
+};
+
+const INITIAL_QUERY: Query = {
+  search: "",
+  dateFrom: "",
+  dateTo: "",
+  location: "",
+  sortField: "signed_at",
+  sortDir: "desc",
+  page: 1,
+};
+
 function WaiversDashboard({ token }: { token: string }) {
   const { role } = useAdminSession();
-  const [waivers, setWaivers] = useState<WaiverRecord[]>([]);
+  const [rows, setRows] = useState<WaiverRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [locationFilter, setLocationFilter] = useState<"" | "orem" | "slc">("");
-  const [sortField, setSortField] = useState<SortField>("signed_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<WaiverRecord | null>(null);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState<Query>(INITIAL_QUERY);
+  // The text box updates on every keystroke; `query.search` trails it by a
+  // debounce so typing doesn't fire a request per character.
+  const [searchInput, setSearchInput] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  // Bumped after a delete: the rows live on the server now, so the page has to
+  // be refetched rather than spliced locally.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Any change other than the page itself returns to page 1, folded into the
+  // same update so a filter change renders (and fetches) once, not twice.
+  const update = useCallback((patch: Partial<Query>) => {
+    setQuery((q) => ({ ...q, ...patch, page: patch.page ?? 1 }));
+  }, []);
 
   useEffect(() => {
-    fetch("/api/admin/waivers", {
+    const t = setTimeout(() => {
+      setQuery((q) => (q.search === searchInput ? q : { ...q, search: searchInput, page: 1 }));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    // Cancel the in-flight request so a slow earlier response can't land on
+    // top of a newer one.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const params = new URLSearchParams({
+      page: String(query.page),
+      pageSize: String(PAGE_SIZE),
+      sort: query.sortField,
+      dir: query.sortDir,
+    });
+    if (query.search) params.set("search", query.search);
+    if (query.dateFrom) params.set("dateFrom", query.dateFrom);
+    if (query.dateTo) params.set("dateTo", query.dateTo);
+    if (query.location) params.set("location", query.location);
+
+    setLoading(true);
+    fetch(`/api/admin/waivers?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
-      .then((data) => { setWaivers(data); setLoading(false); })
-      .catch((e) => { setError(String(e)); setLoading(false); });
-  }, [token]);
+      .then((data) => {
+        setRows(data.rows);
+        setTotal(data.total);
+        setGrandTotal(data.grandTotal);
+        setError(null);
+        setLoading(false);
+        // Deleting the last row of the last page would otherwise strand you on
+        // an empty one.
+        if (data.rows.length === 0 && query.page > 1) {
+          setQuery((q) => ({ ...q, page: Math.max(1, q.page - 1) }));
+        }
+      })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        setError(String(e));
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [token, query, reloadKey]);
 
   const handleSort = useCallback(
     (field: SortField) => {
-      if (field === sortField) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      else { setSortField(field); setSortDir("asc"); }
+      setQuery((q) =>
+        field === q.sortField
+          ? { ...q, sortDir: q.sortDir === "asc" ? "desc" : "asc", page: 1 }
+          : { ...q, sortField: field, sortDir: "asc", page: 1 }
+      );
     },
-    [sortField]
+    []
   );
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return waivers
-      .filter((w) => {
-        const nameMatch = `${w.first_name} ${w.last_name}`.toLowerCase().includes(q);
-        const emailMatch = w.email.toLowerCase().includes(q);
-        if (q && !nameMatch && !emailMatch) return false;
-        if (dateFrom && new Date(w.signed_at) < new Date(dateFrom)) return false;
-        if (dateTo && new Date(w.signed_at) > new Date(dateTo + "T23:59:59")) return false;
-        if (locationFilter && w.location !== locationFilter) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const av = a[sortField] ?? "";
-        const bv = b[sortField] ?? "";
-        return sortDir === "asc"
-          ? String(av).localeCompare(String(bv))
-          : String(bv).localeCompare(String(av));
-      });
-  }, [waivers, search, dateFrom, dateTo, sortField, sortDir, locationFilter]);
-
-  // Reset to page 1 whenever filters or sort change
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, sortField, sortDir, locationFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const page = query.page;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const SortBtn = ({ field, label }: { field: SortField; label: string }) => (
     <button
@@ -126,7 +177,7 @@ function WaiversDashboard({ token }: { token: string }) {
     >
       {label}
       <span className="text-[10px] opacity-50">
-        {sortField === field ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+        {query.sortField === field ? (query.sortDir === "asc" ? "↑" : "↓") : "↕"}
       </span>
     </button>
   );
@@ -140,7 +191,7 @@ function WaiversDashboard({ token }: { token: string }) {
           <h1 className="h2 font-bold">Waivers</h1>
           {!loading && !error && (
             <p className={`${vulfMono.className} text-sm text-neutral-500 mt-1`}>
-              {filtered.length} of {waivers.length} total
+              {total} of {grandTotal} total
               {totalPages > 1 && ` · page ${page} of ${totalPages}`}
             </p>
           )}
@@ -164,31 +215,31 @@ function WaiversDashboard({ token }: { token: string }) {
           type="search"
           placeholder="Search by name or email…"
           className={`${inputCls} flex-1`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
         <div className="flex gap-2 items-center">
           <label className="text-xs text-neutral-500 whitespace-nowrap">From</label>
-          <input type="date" className={inputCls} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <input type="date" className={inputCls} value={query.dateFrom} onChange={(e) => update({ dateFrom: e.target.value })} />
         </div>
         <div className="flex gap-2 items-center">
           <label className="text-xs text-neutral-500 whitespace-nowrap">To</label>
-          <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <input type="date" className={inputCls} value={query.dateTo} onChange={(e) => update({ dateTo: e.target.value })} />
         </div>
         {role === "admin" && (
           <select
             className={`${inputCls} sm:w-auto`}
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
+            value={query.location}
+            onChange={(e) => update({ location: e.target.value as "" | "orem" | "slc" })}
           >
             <option value="">All locations</option>
             <option value="orem">Orem</option>
             <option value="slc">Salt Lake City</option>
           </select>
         )}
-        {(search || dateFrom || dateTo || locationFilter) && (
+        {(searchInput || query.dateFrom || query.dateTo || query.location) && (
           <button
-            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setLocationFilter(""); setPage(1); }}
+            onClick={() => { setSearchInput(""); setQuery(INITIAL_QUERY); }}
             className="text-xs text-neutral-400 underline underline-offset-2 whitespace-nowrap hover:text-neutral-700"
           >
             Clear filters
@@ -211,10 +262,10 @@ function WaiversDashboard({ token }: { token: string }) {
         <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
           {/* Mobile card list */}
           <div className="sm:hidden divide-y divide-black/5">
-            {filtered.length === 0 && (
+            {rows.length === 0 && (
               <p className={`${vulfMono.className} px-4 py-10 text-center text-neutral-400 text-sm`}>No waivers found.</p>
             )}
-            {paginated.map((w) => (
+            {rows.map((w) => (
               <div
                 key={w.id}
                 className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 active:bg-neutral-100"
@@ -242,14 +293,14 @@ function WaiversDashboard({ token }: { token: string }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
+              {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-neutral-400">
                     No waivers found.
                   </td>
                 </tr>
               )}
-              {paginated.map((w) => (
+              {rows.map((w) => (
                 <tr
                   key={w.id}
                   className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
@@ -276,11 +327,11 @@ function WaiversDashboard({ token }: { token: string }) {
       {!loading && !error && totalPages > 1 && (
         <div className={`${vulfMono.className} flex items-center justify-between mt-4 text-sm`}>
           <p className="text-xs text-neutral-400">
-            {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
           </p>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => update({ page: Math.max(1, page - 1) })}
               disabled={page === 1}
               className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
             >
@@ -299,7 +350,7 @@ function WaiversDashboard({ token }: { token: string }) {
                 ) : (
                   <button
                     key={p}
-                    onClick={() => setPage(p as number)}
+                    onClick={() => update({ page: p as number })}
                     className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${
                       page === p
                         ? "bg-[#884A20] text-white"
@@ -311,7 +362,7 @@ function WaiversDashboard({ token }: { token: string }) {
                 )
               )}
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => update({ page: Math.min(totalPages, page + 1) })}
               disabled={page === totalPages}
               className="rounded-lg border border-black/20 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-default"
             >
@@ -327,9 +378,9 @@ function WaiversDashboard({ token }: { token: string }) {
           waiver={selected}
           token={token}
           onClose={() => setSelected(null)}
-          onDelete={(id) => {
-            setWaivers((prev) => prev.filter((w) => w.id !== id));
+          onDelete={() => {
             setSelected(null);
+            setReloadKey((k) => k + 1);
           }}
         />
       )}
