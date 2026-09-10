@@ -19,15 +19,24 @@ export function formatDenverDate(iso: string): string {
 
 // Today's calendar date in the studio's timezone — a report run at 11pm Denver
 // shouldn't be compared against "today" in UTC, which is already tomorrow.
-export function todayInDenver(): { y: number; m: number; d: number } {
+export function todayInDenver(now: Date = new Date()): { y: number; m: number; d: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: STUDIO_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(now);
   const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
   return { y: get("year"), m: get("month"), d: get("day") };
+}
+
+// Today's calendar date in the studio's timezone as "YYYY-MM-DD". The UTC date
+// rolls over at 5pm (MST) or 6pm (MDT) Denver, so a bare
+// toISOString().slice(0, 10) reads as tomorrow for the studio's whole evening,
+// which is exactly when it gets compared against a same-day booking.
+export function todayInDenverYmd(now: Date = new Date()): string {
+  const { y, m, d } = todayInDenver(now);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 // "YYYY-MM" for the previous calendar month in Denver. Deliberately the

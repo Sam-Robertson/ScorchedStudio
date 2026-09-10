@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
 import { getSupabase } from "@/lib/supabase";
 import { getLocationByKey } from "@/lib/locations";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   const locationRecord = await getLocationByKey(location);
   const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 type Booking = {
   id: string;
@@ -159,7 +160,7 @@ function ManagePageInner() {
       .finally(() => setSlotsLoading(false));
   }, [newDate]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
 
   return (
     <main className="pb-20">

@@ -1,6 +1,7 @@
 // app/api/bookings/manage/route.ts
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 export async function GET(req: NextRequest) {
   const email = new URL(req.url).searchParams.get("email")?.toLowerCase().trim();
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Email required" }, { status: 400 });
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
 
   const { data, error } = await getSupabase()
     .from("bookings")

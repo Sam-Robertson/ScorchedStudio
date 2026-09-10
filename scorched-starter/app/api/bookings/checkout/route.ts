@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE, PRICE_PER_PERSON_CENTS } from "@/lib/booking-utils";
 import { getSupabase } from "@/lib/supabase";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { date, time_slot, party_size, name, email, phone } = parsed.data;
 
   // Reject past dates
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }

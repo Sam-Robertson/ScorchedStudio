@@ -23,6 +23,7 @@ import PlOverviewView from "./reports/PlOverviewView";
 import PlDetailsView from "./reports/PlDetailsView";
 import SalesOverviewView from "./reports/SalesOverviewView";
 import CostsView from "./reports/CostsView";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 // Full-cents formatter kept for Normalized EBITDA (add-back amounts are
 // entered to the cent); the report tables use shared fmtMoney0.
@@ -270,7 +271,7 @@ function monthLabel(period_month: string) {
 }
 
 function BalanceSheetView({ token }: { token: string }) {
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(todayInDenverYmd());
   const { data, loading, error } = useReport(
     `/api/admin/accounting/reports/balance-sheet?asOf=${asOf}`,
     token,

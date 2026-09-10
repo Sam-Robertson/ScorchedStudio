@@ -11,6 +11,7 @@ import InboxTab from "./InboxTab";
 import RulesTab from "./RulesTab";
 import ReconcileTab from "./ReconcileTab";
 import TaxExportTab from "./TaxExportTab";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -130,7 +131,7 @@ function JournalTab({ token, accounts }: { token: string; accounts: Account[] })
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
 
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [entryDate, setEntryDate] = useState(() => todayInDenverYmd());
   const [memo, setMemo] = useState("");
   const [location, setLocation] = useState<"" | "orem" | "slc">("");
   const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()]);
@@ -160,7 +161,7 @@ function JournalTab({ token, accounts }: { token: string; accounts: Account[] })
   }
 
   function resetForm() {
-    setEntryDate(new Date().toISOString().slice(0, 10));
+    setEntryDate(todayInDenverYmd());
     setMemo("");
     setLocation("");
     setLines([emptyLine(), emptyLine()]);

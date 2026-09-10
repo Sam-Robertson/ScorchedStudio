@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE, PRICE_PER_PERSON_CENTS } from "@/lib/booking-utils";
 import { getLocationByKey } from "@/lib/locations";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   const locationRecord = await getLocationByKey(location);
   const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }

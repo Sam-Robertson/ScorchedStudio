@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
 import { getLocationByKey } from "@/lib/locations";
+import { denverDayRangeUTC, todayInDenverYmd } from "@/lib/timezone";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -15,12 +16,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // Returns true if the booking appointment hasn't started yet.
 function isEditable(bookingDate: string, timeSlot: string): boolean {
   const now = new Date();
-  const todayUTC = now.toISOString().split("T")[0];
+  const todayDenver = todayInDenverYmd();
 
-  if (bookingDate > todayUTC) return true;
-  if (bookingDate < todayUTC) return false;
+  if (bookingDate > todayDenver) return true;
+  if (bookingDate < todayDenver) return false;
 
-  // Same calendar date — compare against slot start time in MT (UTC-7)
+  // Same calendar date — compare against the slot's start time in Denver
   const match = timeSlot.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
   if (!match) return false;
 
@@ -30,9 +31,10 @@ function isEditable(bookingDate: string, timeSlot: string): boolean {
   if (ampm === "PM" && hours !== 12) hours += 12;
   if (ampm === "AM" && hours === 12) hours = 0;
 
-  // MT = UTC-7; shift slot time to UTC
-  const slotUTC = new Date(`${bookingDate}T00:00:00Z`);
-  slotUTC.setUTCHours(hours + 7, minutes, 0, 0);
+  // Offset from the day's real Denver midnight rather than a hardcoded UTC-7,
+  // which is an hour off for the seven months the studio is on MDT.
+  const dayStartUTC = new Date(denverDayRangeUTC(bookingDate).startUTC);
+  const slotUTC = new Date(dayStartUTC.getTime() + (hours * 60 + minutes) * 60_000);
 
   return now < slotUTC;
 }
@@ -177,7 +179,7 @@ export async function PATCH(
   // ── Update ───────────────────────────────────────────────────────────────────
   const { date, time_slot, party_size } = parsed.data;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }

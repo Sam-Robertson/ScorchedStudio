@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancel") }),
@@ -53,7 +54,7 @@ export async function PATCH(
   // ── Update ───────────────────────────────────────────────────────────────────
   const { date, time_slot, party_size } = parsed.data;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInDenverYmd();
   if (date < today) {
     return Response.json({ error: "Cannot book a date in the past." }, { status: 400 });
   }

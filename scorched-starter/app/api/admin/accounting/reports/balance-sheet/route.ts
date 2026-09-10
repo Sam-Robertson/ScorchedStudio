@@ -3,13 +3,14 @@
 import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const sb = getSupabase();
     const { searchParams } = new URL(req.url);
-    const asOf = searchParams.get("asOf") ?? new Date().toISOString().slice(0, 10);
+    const asOf = searchParams.get("asOf") ?? todayInDenverYmd();
 
     const { data, error } = await sb.rpc("balance_sheet", { as_of: asOf });
     if (error) throw new Error(error.message);
