@@ -3,6 +3,7 @@ import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
 import { markdownToHtml } from "@/lib/markdown";
+import JobApplicationForm from "@/components/forms/JobApplicationForm";
 import type { JobOpeningRecord } from "@/lib/supabase";
 
 export const metadata = {
@@ -82,12 +83,7 @@ export default async function CareersPage() {
                     className="prose prose-neutral prose-sm max-w-none mt-3"
                     dangerouslySetInnerHTML={{ __html: descriptionHtml[i] }}
                   />
-                  <a
-                    href="/contact"
-                    className="inline-block mt-4 text-sm font-semibold text-brand underline underline-offset-4 hover:opacity-80"
-                  >
-                    Apply →
-                  </a>
+                  <JobApplicationForm jobId={job.id} jobTitle={job.title} />
                 </div>
               ))}
             </div>
