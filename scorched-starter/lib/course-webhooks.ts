@@ -11,8 +11,10 @@ import {
   formatSessionDate,
   formatSessionTime,
   getCohortWithCourse,
+  getEnrollmentByCheckoutSession,
   getSessionsForCohort,
 } from "@/lib/courses";
+import { notifyCourseEnrollment } from "@/lib/course-signup-notify";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -41,6 +43,17 @@ export async function handleCourseCheckoutCompleted(session: Stripe.Checkout.Ses
 
   const paymentIntentId = idOf(session.payment_intent);
   const amountPaidCents = session.amount_total ?? 0;
+
+  // enroll_in_cohort returns the existing row on a retried delivery, so look
+  // first to know whether this enrollment is new, and only tell staff about
+  // new ones. If the lookup fails, treat it as new: a duplicate staff email
+  // is harmless, a missed signup or a blocked enrollment is not.
+  let isRetry = false;
+  try {
+    isRetry = (await getEnrollmentByCheckoutSession(session.id)) !== null;
+  } catch (err) {
+    console.error("COURSE_RETRY_PROBE_ERROR", session.id, err);
+  }
 
   const enrollment = await enrollInCohort({
     cohort_id: cohortId,
@@ -134,4 +147,6 @@ export async function handleCourseCheckoutCompleted(session: Stripe.Checkout.Ses
       </div>
     `,
   }).catch((err) => console.error("COURSE_CONFIRMATION_EMAIL_ERROR", session.id, err));
+
+  if (!isRetry) await notifyCourseEnrollment({ course, cohort, enrollment });
 }

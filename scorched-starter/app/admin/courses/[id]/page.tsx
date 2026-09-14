@@ -11,6 +11,10 @@ import type { CohortRecord, CourseRecord } from "@/lib/courses";
 import { CourseModal, type CourseModalMode } from "@/components/admin/CourseModal";
 import CohortDetailModal from "@/components/admin/CohortDetailModal";
 
+// The cohorts API adds the confirmed seat count; cohorts created or edited in
+// this session come back without it until the next load.
+type CohortWithCount = CohortRecord & { confirmed_count?: number };
+
 const inputCls = "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
 
 const COHORT_STATUS_BADGE: Record<CohortRecord["status"], string> = {
@@ -119,7 +123,7 @@ export default function AdminCourseDetailPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [course, setCourse] = useState<CourseRecord | null>(null);
-  const [cohorts, setCohorts] = useState<CohortRecord[]>([]);
+  const [cohorts, setCohorts] = useState<CohortWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState<CourseModalMode | null>(null);
   const [newCohortOpen, setNewCohortOpen] = useState(false);
@@ -129,6 +133,9 @@ export default function AdminCourseDetailPage() {
     const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
+    // ?cohort= opens that cohort's roster directly (signup email, Recent signups list).
+    const cohortParam = new URLSearchParams(window.location.search).get("cohort");
+    if (cohortParam) setSelectedCohortId(cohortParam);
   }, [router]);
 
   function load(t: string) {
@@ -199,7 +206,7 @@ export default function AdminCourseDetailPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-neutral-900">{cohort.label}</p>
                     <p className={`${vulfMono.className} text-xs text-neutral-400`}>
-                      {fmtCents(cohort.price_cents)} · capacity {cohort.capacity} · {cohort.location === "orem" ? "Orem" : "Salt Lake City"}
+                      {cohort.confirmed_count ?? 0}/{cohort.capacity} enrolled · {fmtCents(cohort.price_cents)} · {cohort.location === "orem" ? "Orem" : "Salt Lake City"}
                     </p>
                   </div>
                   <span className={`${vulfMono.className} shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${COHORT_STATUS_BADGE[cohort.status]}`}>
@@ -237,7 +244,7 @@ export default function AdminCourseDetailPage() {
           cohortId={selectedCohortId}
           token={token}
           onClose={() => setSelectedCohortId(null)}
-          onChanged={(cohort) => setCohorts((prev) => prev.map((c) => (c.id === cohort.id ? cohort : c)))}
+          onChanged={(cohort) => setCohorts((prev) => prev.map((c) => (c.id === cohort.id ? { ...c, ...cohort } : c)))}
         />
       )}
     </section>

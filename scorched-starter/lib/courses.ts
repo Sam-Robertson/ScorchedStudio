@@ -293,6 +293,76 @@ export async function listEnrollmentsForCohort(cohortId: string): Promise<Course
   return data as CourseEnrollmentRecord[];
 }
 
+// The webhook checks this before calling enroll_in_cohort, which hands back
+// the existing row on a retried delivery, to tell a new enrollment from a retry.
+export async function getEnrollmentByCheckoutSession(
+  checkoutSessionId: string
+): Promise<CourseEnrollmentRecord | null> {
+  const { data, error } = await getSupabase()
+    .from("course_enrollments")
+    .select("*")
+    .eq("stripe_checkout_session_id", checkoutSessionId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as CourseEnrollmentRecord | null;
+}
+
+export type RecentEnrollment = CourseEnrollmentRecord & {
+  course_id: string;
+  course_name: string;
+  cohort_label: string;
+};
+
+// Newest enrollments across every course, for the admin Courses page.
+export async function listRecentEnrollments(limit: number): Promise<RecentEnrollment[]> {
+  const { data, error } = await getSupabase()
+    .from("course_enrollments")
+    .select("*, course_cohorts(label, course_id, courses(name))")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  type Row = CourseEnrollmentRecord & {
+    course_cohorts: { label: string; course_id: string; courses: { name: string } | null } | null;
+  };
+  return (data as Row[]).map(({ course_cohorts, ...enrollment }) => ({
+    ...enrollment,
+    course_id: course_cohorts?.course_id ?? "",
+    course_name: course_cohorts?.courses?.name ?? "",
+    cohort_label: course_cohorts?.label ?? "",
+  }));
+}
+
+export type CohortSummary = Pick<CohortRecord, "id" | "course_id" | "label" | "status" | "capacity"> & {
+  confirmed_count: number;
+};
+
+// Every cohort with its confirmed seat count, so the admin course list can
+// show fill levels without opening each course.
+export async function listCohortSummaries(): Promise<CohortSummary[]> {
+  const supabase = getSupabase();
+  const [cohortsRes, availabilityRes] = await Promise.all([
+    supabase
+      .from("course_cohorts")
+      .select("id, course_id, label, status, capacity")
+      .order("created_at", { ascending: true }),
+    supabase.from("course_cohort_availability").select("cohort_id, confirmed_count"),
+  ]);
+  if (cohortsRes.error) throw cohortsRes.error;
+  if (availabilityRes.error) throw availabilityRes.error;
+
+  const counts = new Map(
+    (availabilityRes.data as Pick<CohortAvailability, "cohort_id" | "confirmed_count">[]).map((a) => [
+      a.cohort_id,
+      Number(a.confirmed_count),
+    ])
+  );
+  return (cohortsRes.data as Omit<CohortSummary, "confirmed_count">[]).map((c) => ({
+    ...c,
+    confirmed_count: counts.get(c.id) ?? 0,
+  }));
+}
+
 // Customer-facing /account dashboard — all enrollments tied to a verified email.
 export async function getEnrollmentsByEmail(email: string): Promise<CourseEnrollmentRecord[]> {
   const { data, error } = await getSupabase()

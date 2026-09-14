@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-session";
-import { createCohort, getCohortsForCourse } from "@/lib/courses";
+import { createCohort, getAvailabilityForCohorts, getCohortsForCourse } from "@/lib/courses";
 import { getSupabase } from "@/lib/supabase";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +12,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   try {
     const cohorts = await getCohortsForCourse(id);
-    return Response.json(cohorts);
+    const availability = await getAvailabilityForCohorts(cohorts.map((c) => c.id));
+    const counts = new Map(availability.map((a) => [a.cohort_id, Number(a.confirmed_count)]));
+    return Response.json(cohorts.map((c) => ({ ...c, confirmed_count: counts.get(c.id) ?? 0 })));
   } catch (err) {
     console.error("ADMIN_COURSE_COHORTS_GET_ERROR", err);
     return Response.json({ error: "Failed to fetch cohorts" }, { status: 500 });
