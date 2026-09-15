@@ -6,17 +6,36 @@
 // bank_transactions, and runs the categorization rules engine on anything
 // newly posted (non-pending) and unreviewed.
 //
-// Also posts yesterday's Square and Stripe revenue settlements (see
+// Also posts Square and Stripe revenue settlements for yesterday and any
+// recent day that has not posted yet (see
 // lib/accounting/revenue-job.ts) in the same invocation, rather than
 // registering more Vercel Cron entries — Hobby plans cap the cron count,
 // and this project already uses both of its slots (this one + daily-report).
 import { NextRequest } from "next/server";
 import { getSupabase } from "@/lib/supabase";
-import { getDecryptedAccessToken, syncTransactions, type PlaidTransaction } from "@/lib/plaid";
+import { getDecryptedAccessToken, PlaidApiError, syncTransactions, type PlaidTransaction } from "@/lib/plaid";
 import { classifyUnreviewed } from "@/lib/accounting/classify-job";
 import { postSquareRevenueForDay, postStripeRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
 import { postDepreciationForMonth } from "@/lib/accounting/depreciation-job";
+import { notifyBankNeedsLogin } from "@/lib/bank-connection-notify";
 import { todayInDenver, yesterdayInDenverYmd } from "@/lib/timezone";
+
+// Vercel's Hobby-plan ceiling for one function run.
+export const maxDuration = 60;
+
+// Revenue catch-up: how far back to look for days that never posted, and
+// when to stop starting new ones. The budget is checked before each day, and
+// one day (Square plus Stripe) can take several seconds, so it sits far under
+// maxDuration. A run cut off between a day's journal entry and its settlement
+// record would leave the next run unaware and posting that day twice.
+const REVENUE_LOOKBACK_DAYS = 14;
+const REVENUE_TIME_BUDGET_MS = 25_000;
+
+// "2026-09-14", 2 -> "2026-09-12". Pure calendar arithmetic on the date.
+function daysBefore(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - n)).toISOString().slice(0, 10);
+}
 
 type BankAccountRow = { id: string; plaid_account_id: string; ledger_account_id: string; default_location_id: string | null };
 
@@ -83,11 +102,15 @@ export async function GET(req: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const startedAt = Date.now();
 
   try {
     const sb = getSupabase();
 
-    const { data: items, error: itemsErr } = await sb.from("plaid_items").select("id, item_id, sync_cursor").eq("status", "ok");
+    const { data: items, error: itemsErr } = await sb
+      .from("plaid_items")
+      .select("id, item_id, institution_name, sync_cursor")
+      .eq("status", "ok");
     if (itemsErr) throw new Error(itemsErr.message);
 
     const { data: bankAccounts, error: baErr } = await sb
@@ -99,26 +122,54 @@ export async function GET(req: NextRequest) {
     const results: Record<string, unknown> = {};
     for (const item of items ?? []) {
       const byPlaidId = new Map((bankAccounts ?? []).filter((b) => b.plaid_item_id === item.id).map((b) => [b.plaid_account_id, b]));
-      results[item.item_id] = await syncOneItem(sb, item, byPlaidId);
+      // Each bank syncs on its own: one failing must not stop the others or
+      // the revenue posting below. A lapsed Chase login once stalled every
+      // bank feed and all revenue for eleven days (September 2026).
+      try {
+        results[item.item_id] = await syncOneItem(sb, item, byPlaidId);
+      } catch (err) {
+        if (err instanceof PlaidApiError && err.code === "ITEM_LOGIN_REQUIRED") {
+          // Skipped from now on (only status "ok" items sync) until someone
+          // reconnects it from the Bank Accounts tab.
+          const { error: statusErr } = await sb.from("plaid_items").update({ status: "login_required" }).eq("id", item.id);
+          if (statusErr) console.error("PLAID_SYNC_STATUS_UPDATE_ERROR", item.item_id, statusErr.message);
+          await notifyBankNeedsLogin(item.institution_name);
+          results[item.item_id] = { status: "login_required" };
+        } else {
+          console.error("PLAID_SYNC_ITEM_ERROR", item.item_id, err);
+          results[item.item_id] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+        }
+      }
     }
 
     const classifyResult = await classifyUnreviewed(sb);
 
-    const revenueDate = yesterdayInDenverYmd();
+    // Yesterday and every recent day that has not posted yet, newest first,
+    // so days missed while this job was failing fill themselves in. Days
+    // already posted are a cheap skip (revenue-job.ts).
+    const yesterday = yesterdayInDenverYmd();
     const revenueResults: Record<string, unknown> = {};
-    for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
-      try {
-        revenueResults[`square:${locationKey}`] = await postSquareRevenueForDay(squareLocationId, locationKey, revenueDate);
-      } catch (err) {
-        console.error("SQUARE_REVENUE_CRON_ERROR", locationKey, err);
-        revenueResults[`square:${locationKey}`] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+    for (let back = 0; back < REVENUE_LOOKBACK_DAYS; back++) {
+      const date = daysBefore(yesterday, back);
+      if (Date.now() - startedAt > REVENUE_TIME_BUDGET_MS) {
+        revenueResults.stoppedEarly = `time budget reached at ${date}; older days post on a later run`;
+        break;
       }
-    }
-    try {
-      revenueResults.stripe = await postStripeRevenueForDay(revenueDate);
-    } catch (err) {
-      console.error("STRIPE_REVENUE_CRON_ERROR", err);
-      revenueResults.stripe = { status: "error", message: err instanceof Error ? err.message : String(err) };
+      for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
+        const key = `square:${locationKey}:${date}`;
+        try {
+          revenueResults[key] = await postSquareRevenueForDay(squareLocationId, locationKey, date);
+        } catch (err) {
+          console.error("SQUARE_REVENUE_CRON_ERROR", key, err);
+          revenueResults[key] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+        }
+      }
+      try {
+        revenueResults[`stripe:${date}`] = await postStripeRevenueForDay(date);
+      } catch (err) {
+        console.error("STRIPE_REVENUE_CRON_ERROR", date, err);
+        revenueResults[`stripe:${date}`] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+      }
     }
 
     const { y: depYear, m: depMonth } = todayInDenver();
@@ -133,7 +184,7 @@ export async function GET(req: NextRequest) {
     return Response.json({
       synced: results,
       ...classifyResult,
-      revenue: { date: revenueDate, results: revenueResults },
+      revenue: { through: yesterday, results: revenueResults },
       depreciation: depreciationResult,
     });
   } catch (err) {

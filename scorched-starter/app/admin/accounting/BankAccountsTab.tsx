@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { vulfMono } from "@/app/fonts";
 import { Link2, RefreshCw } from "lucide-react";
@@ -18,7 +18,7 @@ type BankAccount = {
   kind: string | null;
   active: boolean;
   accounts: { code: string; name: string } | null;
-  plaid_items: { institution_name: string; last_synced_at: string | null; status: string } | null;
+  plaid_items: { id: string; institution_name: string; last_synced_at: string | null; status: string } | null;
   locations: { key: string; name: string } | null;
 };
 
@@ -27,6 +27,9 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  // Set while Link is open in update mode for an existing connection. A ref,
+  // not state, so Plaid's onSuccess callback always reads the current value.
+  const reconnectItemId = useRef<string | null>(null);
 
   const [pending, setPending] = useState<{ plaidItemId: string; institutionName: string; accounts: DiscoveredAccount[] } | null>(null);
   const [mapping, setMapping] = useState<Record<string, { ledgerAccountCode: string; defaultLocation: "" | "orem" | "slc" }>>({});
@@ -51,6 +54,18 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
     onSuccess: async (publicToken, metadata) => {
       setError(null);
       try {
+        if (reconnectItemId.current) {
+          const res = await fetch("/api/admin/accounting/plaid/reconnected", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ plaidItemId: reconnectItemId.current }),
+          });
+          const body = await res.json();
+          if (body.error) throw new Error(body.error);
+          reconnectItemId.current = null;
+          load();
+          return;
+        }
         const res = await fetch("/api/admin/accounting/plaid/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -70,10 +85,17 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
 
   useEffect(() => { if (linkToken && ready) open(); }, [linkToken, ready, open]);
 
-  async function startLink() {
+  // With a plaidItemId, reconnects that existing connection instead of
+  // linking a new one.
+  async function startLink(plaidItemId?: string) {
     setError(null);
+    reconnectItemId.current = plaidItemId ?? null;
     try {
-      const res = await fetch("/api/admin/accounting/plaid/link-token", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/admin/accounting/plaid/link-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(plaidItemId ? { plaidItemId } : {}),
+      });
       const body = await res.json();
       if (body.error) throw new Error(body.error);
       setLinkToken(body.linkToken);
@@ -117,12 +139,22 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
 
   const mappableAccounts = accounts.filter((a) => a.active && (a.type === "asset" || a.type === "liability"));
 
+  // One entry per connection, not per account: Chase Checking and Chase Ink
+  // share a single login.
+  const needsLogin = [
+    ...new Map(
+      bankAccounts
+        .filter((b) => b.plaid_items?.status === "login_required")
+        .map((b) => [b.plaid_items!.id, b.plaid_items!])
+    ).values(),
+  ];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-neutral-500">Chase Checking, Chase Ink, both Amex cards, and both U.S. Bank cards, synced daily via Plaid.</p>
         <button
-          onClick={startLink}
+          onClick={() => startLink()}
           className={`${vulfMono.className} flex items-center gap-1.5 rounded-xl bg-[#884A20] px-4 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90`}
         >
           <Link2 className="w-3.5 h-3.5" />
@@ -131,6 +163,21 @@ export default function BankAccountsTab({ token, accounts }: { token: string; ac
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-6">{error}</p>}
+
+      {needsLogin.map((item) => (
+        <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 mb-6">
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">{item.institution_name}</span> needs you to log in again. Its transactions
+            stop syncing until you do.
+          </p>
+          <button
+            onClick={() => startLink(item.id)}
+            className={`${vulfMono.className} shrink-0 rounded-xl bg-[#884A20] px-4 py-2 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90`}
+          >
+            RECONNECT
+          </button>
+        </div>
+      ))}
 
       {pending && (
         <div className="rounded-2xl border border-[#884A20]/30 bg-[#F6E4E1]/40 p-5 sm:p-6 mb-6">

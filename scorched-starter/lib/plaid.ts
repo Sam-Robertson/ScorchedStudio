@@ -13,6 +13,19 @@ function plaidBaseUrl() {
     : "https://sandbox.plaid.com";
 }
 
+// Carries Plaid's error_code so callers can tell "someone has to log in to
+// the bank again" (ITEM_LOGIN_REQUIRED) apart from a transient failure.
+export class PlaidApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(status: number, code: string | null, message: string) {
+    super(`PLAID_API_ERROR ${status} ${code ?? ""}: ${message}`);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function plaidFetch<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const clientId = process.env.PLAID_CLIENT_ID;
   const secret = process.env.PLAID_SECRET;
@@ -26,12 +39,25 @@ async function plaidFetch<T>(path: string, body: Record<string, unknown>): Promi
 
   const json = await res.json();
   if (!res.ok) {
-    throw new Error(`PLAID_API_ERROR ${res.status} ${json.error_code ?? ""}: ${json.error_message ?? JSON.stringify(json)}`);
+    throw new PlaidApiError(res.status, json.error_code ?? null, json.error_message ?? JSON.stringify(json));
   }
   return json as T;
 }
 
-export async function createLinkToken(userId: string): Promise<{ link_token: string; expiration: string }> {
+// Pass an item's access token to open Link in update mode, which logs back
+// in to an existing connection in place: same item, accounts, and sync
+// cursor, so nothing needs remapping and no duplicate item is created.
+// Plaid wants products left off in update mode.
+export async function createLinkToken(userId: string, accessToken?: string): Promise<{ link_token: string; expiration: string }> {
+  if (accessToken) {
+    return plaidFetch("/link/token/create", {
+      user: { client_user_id: userId },
+      client_name: "Scorched Studio Accounting",
+      country_codes: ["US"],
+      language: "en",
+      access_token: accessToken,
+    });
+  }
   return plaidFetch("/link/token/create", {
     user: { client_user_id: userId },
     client_name: "Scorched Studio Accounting",

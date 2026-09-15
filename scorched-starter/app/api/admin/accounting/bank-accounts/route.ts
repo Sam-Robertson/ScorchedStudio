@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const sb = getSupabase();
     const { data, error } = await sb
       .from("bank_accounts")
-      .select("*, accounts(code,name), plaid_items(institution_name,last_synced_at,status), locations(key,name)")
+      .select("*, accounts(code,name), plaid_items(id,institution_name,last_synced_at,status), locations(key,name)")
       .order("created_at");
     if (error) {
       console.error("ACCOUNTING_BANK_ACCOUNTS_GET_ERROR", error);
