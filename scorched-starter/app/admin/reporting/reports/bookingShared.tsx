@@ -34,7 +34,9 @@ export const SOURCE_COLORS: Record<string, string> = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type TimeFrame = "week" | "month" | "year";
+// How big each bar is: one day (last 7 days), one Sunday-start week (last 8
+// weeks), or one calendar month (last 12 months).
+export type TimeFrame = "day" | "week" | "month";
 export type BookingLocation = "all" | "orem" | "slc";
 
 // The online booking widget (this `bookings` table's source) went live this
@@ -58,13 +60,13 @@ export function addDays(d: Date, n: number) {
 export function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  if (tf === "week") {
+  if (tf === "day") {
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(today, i - 6);
       return { key: toDateStr(d), label: d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }) };
     });
   }
-  if (tf === "month") {
+  if (tf === "week") {
     const out: { key: string; label: string }[] = [];
     for (let i = 7; i >= 0; i--) {
       const ws = addDays(today, -(i * 7 + today.getDay()));
@@ -72,19 +74,38 @@ export function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
     }
     return out;
   }
-  return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
-    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
-  });
+  // Months before online booking launched are left off: the bookings table
+  // has no rows then, so those bars would read as zero rather than unknown.
+  const [launchYear, launchMonth] = ONLINE_BOOKING_LAUNCH.split("-").map(Number);
+  const out: { key: string; label: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    if (d.getFullYear() * 12 + d.getMonth() < launchYear * 12 + launchMonth - 1) continue;
+    out.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) });
+  }
+  return out;
 }
 
 export function bucketKey(createdAt: string, tf: TimeFrame): string {
   const d = new Date(createdAt);
-  if (tf === "week") return toDateStr(d);
-  if (tf === "year") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  if (tf === "day") return toDateStr(d);
+  if (tf === "month") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const sun = addDays(d, -d.getDay());
   sun.setHours(0, 0, 0, 0);
   return toDateStr(sun);
+}
+
+// The span of time a toggle setting covers, for labelling cards that follow it.
+export const TIMEFRAME_WINDOW: Record<TimeFrame, string> = {
+  day: "last 7 days",
+  week: "last 8 weeks",
+  month: "last 12 months",
+};
+
+/** Bookings made inside the window the chart shows for this toggle setting. */
+export function bookingsInTimeFrame(bookings: BookingRecord[], tf: TimeFrame): BookingRecord[] {
+  const keys = new Set(getBuckets(tf).map((b) => b.key));
+  return bookings.filter((b) => keys.has(bucketKey(b.created_at, tf)));
 }
 
 export function fmt$(cents: number) {
@@ -131,7 +152,7 @@ export function ChartTooltip({ active, payload, label }: {
 export function TfToggle({ value, onChange }: { value: TimeFrame; onChange: (tf: TimeFrame) => void }) {
   return (
     <div className="flex rounded-lg border border-black/15 overflow-hidden self-start sm:self-auto">
-      {(["week", "month", "year"] as TimeFrame[]).map((tf) => (
+      {(["day", "week", "month"] as TimeFrame[]).map((tf) => (
         <button key={tf} onClick={() => onChange(tf)}
           className={`${vulfMono.className} px-4 py-1.5 text-xs capitalize transition-colors ${value === tf ? "bg-[#884A20] text-white" : "text-neutral-500 hover:bg-neutral-50"}`}>
           {tf}

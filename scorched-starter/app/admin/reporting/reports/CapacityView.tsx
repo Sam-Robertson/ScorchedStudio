@@ -27,7 +27,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
   estimatedLoading: boolean;
 }) {
   const [capDays, setCapDays] = useState<30 | 60 | 90>(30);
-  const [repeatTf, setRepeatTf] = useState<TimeFrame>("month");
+  const [repeatTf, setRepeatTf] = useState<TimeFrame>("week");
 
   const confirmed = useMemo(() => bookings.filter((b) => b.status === "confirmed"), [bookings]);
   const cancelled = useMemo(() => bookings.filter((b) => b.status === "cancelled"), [bookings]);

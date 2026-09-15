@@ -18,7 +18,8 @@ import {
 } from "./shared";
 import {
   REFERRAL_OPTIONS, SOURCE_COLORS, TimeFrame, TfToggle, ChartTooltip,
-  buildSourceChart, bookingsInRange, rangeBounds, topChannel, fmt$, ONLINE_BOOKING_LAUNCH,
+  buildSourceChart, bookingsInRange, bookingsInTimeFrame, rangeBounds, topChannel, fmt$, ONLINE_BOOKING_LAUNCH,
+  TIMEFRAME_WINDOW,
 } from "./bookingShared";
 
 const MARKETING_CODE = "6200";
@@ -42,7 +43,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
   estimated: EstimatedBookingsResponse | null;
   estimatedLoading: boolean;
 }) {
-  const [sourceTf, setSourceTf] = useState<TimeFrame>("month");
+  const [sourceTf, setSourceTf] = useState<TimeFrame>("week");
   const [hiddenSources, setHiddenSources] = useState<Set<string>>(new Set());
   const [sortCol, setSortCol] = useState<SortCol>("count");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -125,9 +126,17 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
   const activeSourcesList = useMemo(() => [...activeSources], [activeSources]);
   const sourceChartData = useMemo(() => buildSourceChart(rangedConfirmed, sourceTf, activeSources), [rangedConfirmed, sourceTf, activeSources]);
 
+  // The breakdown table follows the chart's Day/Week/Month toggle and source
+  // pills, so the two cards always describe the same bookings.
+  const tableBookings = useMemo(
+    () => bookingsInTimeFrame(rangedBookings, sourceTf).filter((b) => !hiddenSources.has(b.referral_source || "(not recorded)")),
+    [rangedBookings, sourceTf, hiddenSources],
+  );
+  const tableConfirmedCount = useMemo(() => tableBookings.filter((b) => b.status === "confirmed").length, [tableBookings]);
+
   const { sourceRows, otherDetails } = useMemo(() => {
     const data: Record<string, { conf: number; canc: number; seats: number; rev: number }> = {};
-    for (const b of rangedBookings) {
+    for (const b of tableBookings) {
       const src = b.referral_source || "(not recorded)";
       if (!data[src]) data[src] = { conf: 0, canc: 0, seats: 0, rev: 0 };
       if (b.status === "confirmed") { data[src].conf++; data[src].seats += b.party_size; data[src].rev += b.amount_paid ?? 0; }
@@ -145,9 +154,9 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
       else { const ta = a.conf + a.canc, tb = b.conf + b.canc; av = ta > 0 ? a.canc / ta : 0; bv = tb > 0 ? b.canc / tb : 0; }
       return sortDir === "desc" ? bv - av : av - bv;
     });
-    const others = rangedBookings.filter((b) => b.referral_source === "Other" && b.referral_other).map((b) => b.referral_other!);
+    const others = tableBookings.filter((b) => b.referral_source === "Other" && b.referral_other).map((b) => b.referral_other!);
     return { sourceRows: rows, otherDetails: others };
-  }, [rangedBookings, sortCol, sortDir]);
+  }, [tableBookings, sortCol, sortDir]);
 
   function toggleSource(src: string) {
     setHiddenSources((prev) => { const n = new Set(prev); if (n.has(src)) { n.delete(src); } else { n.add(src); } return n; });
@@ -296,8 +305,8 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
       </Section>
 
       {/* Source breakdown table */}
-      <Section title="Breakdown by source">
-        {rangedBookings.length === 0 ? (
+      <Section title={`Breakdown by source, ${TIMEFRAME_WINDOW[sourceTf]}`}>
+        {tableBookings.length === 0 ? (
           <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>No bookings in this range.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -315,7 +324,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
               <tbody>
                 {sourceRows.map((row) => {
                   const total = row.conf + row.canc;
-                  const pct = rangedConfirmed.length > 0 ? Math.round((row.conf / rangedConfirmed.length) * 100) : 0;
+                  const pct = tableConfirmedCount > 0 ? Math.round((row.conf / tableConfirmedCount) * 100) : 0;
                   const avgPty = row.conf > 0 ? (row.seats / row.conf).toFixed(1) : "--";
                   const avgRev = row.conf > 0 ? fmt$(Math.round(row.rev / row.conf)) : "--";
                   const cancelPct = total > 0 ? Math.round((row.canc / total) * 100) : 0;
