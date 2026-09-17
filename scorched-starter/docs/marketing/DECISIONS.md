@@ -98,3 +98,14 @@ answering questions mid-build.
 - `NoPhoneColumnError` is declared with an explicit field rather than a constructor parameter property, because the test runner uses node's strip-only TypeScript mode which rejects those.
 - The Sendblue bulk contact endpoint takes `phone` with camelCase names, while the single-contact endpoint takes `number` in snake_case. Easy to get wrong; noted at the call site.
 - Contacts go up in batches of 100 with a pause between calls, since the contacts API allows 100 requests per 10 seconds per account.
+
+## Phase 6 admin UI
+
+- Lives at `/admin/marketing` behind the existing `requireAdmin` session, added to the admin nav alongside Careers.
+- The confirm dialog states the channel and a live recipient count from the same query that decides who actually receives the message, not a cached number.
+- When `MARKETING_LIVE` is off, the UI says so explicitly after a send rather than reporting success, so a suppressed run is never mistaken for a real one.
+- Campaign content is locked once the status leaves draft or scheduled. Half the list already has the old wording by then, and editing would make the two halves differ.
+- Only a draft can be deleted; anything that has started must be cancelled, so its queue and stats survive.
+- Pause and cancel need no special handling: the worker's claim filters on `campaigns.status = 'sending'`, so flipping the status stops it on the next run.
+- The composer shows the exact final message including the auto-appended STOP notice, and counts characters against that rather than the raw body, since the notice is what pushes a message over 160.
+- SMS opt-outs on the campaign page are attributed by time (an opt-out within 48 hours from someone the campaign was sent to). The provider gives no campaign attribution, so this is an estimate and is labelled as one.

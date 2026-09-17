@@ -22,6 +22,7 @@ import {
   GraduationCap,
   KanbanSquare,
   Landmark,
+  Megaphone,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -52,6 +53,7 @@ const ADMIN_NAV = [
   { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
   { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
   { href: "/admin/courses",   label: "Courses",    icon: GraduationCap },
+  { href: "/admin/marketing", label: "Marketing",  icon: Megaphone },
   { href: "/admin/careers",   label: "Careers",    icon: Briefcase },
   { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
 ];
