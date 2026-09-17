@@ -44,3 +44,12 @@ answering questions mid-build.
 - There is no `/terms` page on this site, so the SMS messaging terms live in the privacy policy under `#sms-terms` and both links beside the checkbox point into it. Privacy sections 5 through 10 were renumbered to 6 through 11 to make room.
 - Added Sendblue to the privacy policy's list of service providers, alongside the explicit statement that mobile opt-in data is never shared for marketing, which is the line carriers look for.
 - `recordConsent` merges two subscriber rows when a submission matches one by email and a different one by phone. Email and phone are independently unique, so without a merge that submission would fail on a unique violation. The older row survives and consent history moves onto it before the loser is deleted.
+
+## Phase 3 email
+
+- `/unsubscribe/[token]` is a route handler, not a page. App Router pages serve GET only, and RFC 8058 one-click needs GET and POST on the same URL.
+- An unknown unsubscribe token renders the same confirmation as a real one. The token is the only credential, so the response must not reveal whether it exists. A second click is also a success, since mail clients retry the one-click POST.
+- Bounces and complaints update `email_status` but do **not** write a `consent_events` row. That table records what a person chose; a bounce is the provider reporting a dead address, which is a different kind of fact.
+- The template renders once per recipient rather than once per campaign, because the unsubscribe link carries that person's token and must never be shared.
+- Marketing email sends from `RESEND_MARKETING_FROM` on the `news.` subdomain, entirely separate from the `bookings@scorchedstudio.com` used by waiver and booking mail, so a spam complaint on a campaign cannot hurt transactional delivery.
+- Pure helpers (`chunk`, `unsubscribeHeaders`, segment matching) live in their own modules away from anything importing through the `@/` alias, because the test runner cannot resolve that alias.
