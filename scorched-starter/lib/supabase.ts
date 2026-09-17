@@ -228,3 +228,119 @@ export type SocialPostRecord = {
   created_at: string;
   updated_at: string;
 };
+
+// --- Marketing (email + SMS) ---------------------------------------------
+// Backed by supabase-marketing-setup.sql. Status and source columns are TEXT
+// with CHECK constraints in the database, so these unions are the only thing
+// keeping call sites honest; keep them in step with that file.
+
+export type EmailStatus = "subscribed" | "unsubscribed" | "bounced" | "complained" | "none";
+export type SmsStatus = "subscribed" | "unsubscribed" | "invalid" | "none";
+export type MarketingChannel = "email" | "sms";
+
+export type ConsentSource =
+  | "waiver"
+  | "booking"
+  | "footer_form"
+  | "popup"
+  | "import_legacy_sms"
+  | "import_legacy_newsletter"
+  | "inbound_keyword"
+  | "unsubscribe_link"
+  | "admin";
+
+export type SubscriberRecord = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email_status: EmailStatus;
+  sms_status: SmsStatus;
+  unsubscribe_token: string;
+  tags: string[];
+  last_sms_contact_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConsentEventRecord = {
+  id: string;
+  subscriber_id: string;
+  channel: MarketingChannel;
+  action: "opt_in" | "opt_out";
+  source: ConsentSource;
+  consent_text: string;
+  ip: string | null;
+  user_agent: string | null;
+  occurred_at: string;
+  created_at: string;
+};
+
+export type CampaignStatus =
+  | "draft"
+  | "scheduled"
+  | "sending"
+  | "paused"
+  | "sent"
+  | "cancelled";
+
+// Tag filter for a campaign. "any" matches a subscriber carrying at least one
+// of the tags, "all" requires every one. An empty tags array means everyone
+// subscribed on that channel.
+export type CampaignSegment = {
+  tags?: string[];
+  match?: "any" | "all";
+};
+
+export type CampaignRecord = {
+  id: string;
+  channel: MarketingChannel;
+  name: string;
+  subject: string | null;
+  body: string;
+  media_url: string | null;
+  segment: CampaignSegment;
+  status: CampaignStatus;
+  scheduled_for: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SmsQueueStatus = "pending" | "sending" | "sent" | "delivered" | "failed" | "skipped";
+
+export type SmsQueueRecord = {
+  id: string;
+  campaign_id: string;
+  subscriber_id: string;
+  to_number: string;
+  body: string;
+  status: SmsQueueStatus;
+  is_new_contact: boolean;
+  provider_message_handle: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  attempts: number;
+  send_after: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SmsMessageRecord = {
+  id: string;
+  provider_message_handle: string | null;
+  direction: "inbound" | "outbound";
+  from_number: string | null;
+  to_number: string | null;
+  content: string | null;
+  media_url: string | null;
+  service: "iMessage" | "SMS" | "RCS" | null;
+  status: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  raw_payload: unknown;
+  occurred_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
