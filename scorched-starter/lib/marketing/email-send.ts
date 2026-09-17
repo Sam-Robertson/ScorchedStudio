@@ -94,6 +94,11 @@ export async function sendCampaignEmails(
           subject: m.subject,
           html: m.html,
           headers: m.headers,
+          // Resend echoes tags back on every webhook, which is how each
+          // delivery event is attributed to a campaign. Batch send has no
+          // per-campaign stats endpoint, so without this the admin page could
+          // only ever show bounces and complaints.
+          tags: [{ name: "campaign_id", value: campaign.id }],
         }))
       );
       if (res.error) {

@@ -68,3 +68,21 @@ answering questions mid-build.
 - Keyword matching requires the whole message to be the keyword. "Can I stop by on Saturday?" is a customer question, and treating it as an opt-out would silently drop the conversation. Tested explicitly.
 - Used plain `fetch` rather than the `sendblue` npm SDK: the surface needed is three endpoints, and fetch keeps the request shape next to the docs it was written from.
 - The `/api/cron/sms-worker` schedule (`*/5 * * * *`) needs a Vercel plan that allows sub-daily crons. Flagged in SETUP.md.
+
+## Merge bug found in review (fixed)
+
+- `mergeSubscribers` as first written could never have succeeded. It did `UPDATE consent_events SET subscriber_id`, which the append-only trigger rejects, and then deleted the losing subscriber, whose `ON DELETE CASCADE` fires the child row's BEFORE DELETE trigger too. My original comment claiming a cascade skips child triggers was simply wrong about Postgres. Every merge would have thrown: silently swallowed on the waiver and booking paths, a 500 on the footer.
+- Fixed by moving the whole merge into a `merge_subscribers` plpgsql function. It runs in one transaction, so the moves and the delete either all land or none do, and it sets a transaction-local `marketing.merging` flag that the append-only trigger honours. Even mid-merge only `subscriber_id` may change: channel, action, source, wording and timestamps stay frozen, so the consent record is still tamper-proof.
+- The merge also deletes the losing row's queue entries for any campaign the survivor is already queued on, since `UNIQUE (campaign_id, subscriber_id)` forbids both. Dropping the duplicate is correct, it is the same person either way.
+- `mergeEmailStatus` and `mergeSmsStatus` in `consent-rules.ts` are now the documented mirror of the SQL's CASE expressions, kept because the tests pin the intended semantics.
+
+## Email stats without Broadcasts
+
+- Choosing batch send over Broadcasts cost the per-campaign stats endpoint. Rather than ship a campaign page with three of five numbers blank, each batch send is tagged `campaign_id`, Resend echoes tags on every webhook, and an `email_events` table records them. Opens and clicks are counted per distinct recipient, since one person opening six times is one open to anyone reading the number.
+- Unsubscribes are counted from `consent_events`, not from Resend, because the unsubscribe link is ours.
+
+## Enqueue
+
+- `enqueueSmsCampaign` is the only place a campaign becomes sendable. It applies `withStopNotice` and computes `is_new_contact` once, freezing the body into each queue row so editing a draft mid-drip cannot change what half the list already received.
+- Enqueue flips the campaign to `sending`, which is what the worker's claim filters on. Pause and cancel flip it back and the worker stops on its next run with no other coordination.
+- Enqueue is idempotent via `ON CONFLICT DO NOTHING` on the unique pair, so a retry after a partial failure adds only what is missing.

@@ -178,6 +178,35 @@ CREATE INDEX IF NOT EXISTS sms_messages_from_idx ON sms_messages (from_number, c
 CREATE INDEX IF NOT EXISTS sms_messages_direction_idx ON sms_messages (direction, created_at DESC);
 
 -- ---------------------------------------------------------------------------
+-- email_events: per-message delivery events from the Resend webhook.
+--
+-- Needed because we send campaigns through the batch endpoint rather than
+-- Broadcasts, and batch has no per-campaign stats endpoint. Each send is
+-- tagged with its campaign id, Resend echoes tags back on every webhook, and
+-- these rows are what the admin campaign page counts.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS email_events (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id       UUID        REFERENCES campaigns (id) ON DELETE SET NULL,
+  subscriber_id     UUID        REFERENCES subscribers (id) ON DELETE SET NULL,
+  email             TEXT,
+  event_type        TEXT        NOT NULL CHECK (event_type IN (
+                      'sent', 'delivered', 'delivery_delayed', 'opened', 'clicked',
+                      'bounced', 'complained', 'failed', 'suppressed'
+                    )),
+  provider_email_id TEXT,
+  occurred_at       TIMESTAMPTZ,
+  raw_payload       JSONB,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Resend retries webhooks, and an open or click can genuinely happen twice.
+  -- Counting distinct recipients per event type is what the stats do, so one
+  -- row per message per event type is the right grain.
+  CONSTRAINT email_events_once UNIQUE (provider_email_id, event_type)
+);
+
+CREATE INDEX IF NOT EXISTS email_events_campaign_idx ON email_events (campaign_id, event_type);
+
+-- ---------------------------------------------------------------------------
 -- updated_at maintenance
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION marketing_touch_updated_at() RETURNS TRIGGER
@@ -204,10 +233,49 @@ CREATE TRIGGER sms_messages_touch BEFORE UPDATE ON sms_messages
 
 -- ---------------------------------------------------------------------------
 -- consent_events is append only, enforced here rather than by convention.
+--
+-- One exception has to exist: when two subscriber rows turn out to be the same
+-- person, their consent history has to move onto the surviving row. That is
+-- not an edit of what anyone consented to, it is a re-pointing of who the row
+-- belongs to, so merge_subscribers() below opens a narrow gate for it with a
+-- transaction-local flag.
+--
+-- Everything else still raises, including a plain UPDATE from application code.
 -- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION consent_events_merge_in_progress() RETURNS BOOLEAN
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+  -- The `true` second argument makes this return NULL instead of raising when
+  -- the setting was never set, which is the normal case.
+  RETURN COALESCE(current_setting('marketing.merging', true), '') = 'on';
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION consent_events_is_append_only() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
 BEGIN
+  IF consent_events_merge_in_progress() THEN
+    -- Even mid-merge, only the owner may change. The consent facts themselves
+    -- (channel, action, source, wording, timestamps) stay frozen.
+    IF TG_OP = 'UPDATE' THEN
+      IF NEW.channel      IS DISTINCT FROM OLD.channel
+      OR NEW.action       IS DISTINCT FROM OLD.action
+      OR NEW.source       IS DISTINCT FROM OLD.source
+      OR NEW.consent_text IS DISTINCT FROM OLD.consent_text
+      OR NEW.ip           IS DISTINCT FROM OLD.ip
+      OR NEW.user_agent   IS DISTINCT FROM OLD.user_agent
+      OR NEW.occurred_at  IS DISTINCT FROM OLD.occurred_at
+      OR NEW.created_at   IS DISTINCT FROM OLD.created_at THEN
+        RAISE EXCEPTION 'consent_events: only subscriber_id may change during a merge';
+      END IF;
+      RETURN NEW;
+    END IF;
+    -- A cascade from deleting the losing subscriber. Postgres fires child row
+    -- triggers for ON DELETE CASCADE, so this has to be allowed explicitly;
+    -- by this point merge_subscribers has already moved the rows worth keeping.
+    RETURN OLD;
+  END IF;
+
   RAISE EXCEPTION 'consent_events is append only: % is not permitted', TG_OP;
 END;
 $$;
@@ -217,11 +285,91 @@ DROP TRIGGER IF EXISTS consent_events_no_delete ON consent_events;
 
 CREATE TRIGGER consent_events_no_update BEFORE UPDATE ON consent_events
   FOR EACH ROW EXECUTE FUNCTION consent_events_is_append_only();
--- Note: this deliberately does not fire for the ON DELETE CASCADE from
--- subscribers, because a cascade deletes the parent row first. Deleting a
--- subscriber is an admin action that is not exposed in the UI.
 CREATE TRIGGER consent_events_no_delete BEFORE DELETE ON consent_events
   FOR EACH ROW EXECUTE FUNCTION consent_events_is_append_only();
+
+-- ---------------------------------------------------------------------------
+-- merge_subscribers: fold the losing row into the surviving one.
+--
+-- Email and phone are independently unique, so a form submission carrying both
+-- can match two different existing rows (someone signed up by email years ago,
+-- and we know their phone separately). Without a merge that submission fails on
+-- a unique violation.
+--
+-- This runs as one function, so it is one transaction: the flag, the moves and
+-- the delete either all happen or none do. Doing it as separate statements from
+-- application code would leave a half-merged person behind on any failure.
+--
+-- Statuses merge pessimistically. Any opt-out on either side wins, because the
+-- safe failure is sending too little.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION merge_subscribers(p_survivor UUID, p_loser UUID)
+RETURNS subscribers
+LANGUAGE plpgsql AS $$
+DECLARE
+  survivor subscribers;
+  loser    subscribers;
+  result   subscribers;
+BEGIN
+  IF p_survivor = p_loser THEN
+    SELECT * INTO result FROM subscribers WHERE id = p_survivor;
+    RETURN result;
+  END IF;
+
+  SELECT * INTO survivor FROM subscribers WHERE id = p_survivor FOR UPDATE;
+  SELECT * INTO loser    FROM subscribers WHERE id = p_loser    FOR UPDATE;
+
+  IF survivor.id IS NULL OR loser.id IS NULL THEN
+    RAISE EXCEPTION 'merge_subscribers: both rows must exist';
+  END IF;
+
+  PERFORM set_config('marketing.merging', 'on', true); -- true = transaction local
+
+  -- Drop the loser's queue rows for any campaign the survivor is already
+  -- queued on, since UNIQUE (campaign_id, subscriber_id) forbids both.
+  -- Losing a duplicate queue row is right: it is the same person either way.
+  DELETE FROM sms_queue q
+   WHERE q.subscriber_id = p_loser
+     AND EXISTS (
+       SELECT 1 FROM sms_queue s
+        WHERE s.subscriber_id = p_survivor
+          AND s.campaign_id = q.campaign_id
+     );
+
+  UPDATE sms_queue      SET subscriber_id = p_survivor WHERE subscriber_id = p_loser;
+  UPDATE consent_events SET subscriber_id = p_survivor WHERE subscriber_id = p_loser;
+
+  -- Free the unique values before the survivor claims them.
+  DELETE FROM subscribers WHERE id = p_loser;
+
+  UPDATE subscribers
+     SET email      = COALESCE(survivor.email, loser.email),
+         phone      = COALESCE(survivor.phone, loser.phone),
+         first_name = COALESCE(survivor.first_name, loser.first_name),
+         last_name  = COALESCE(survivor.last_name, loser.last_name),
+         email_status = CASE
+           WHEN 'complained'   IN (survivor.email_status, loser.email_status) THEN 'complained'
+           WHEN 'bounced'      IN (survivor.email_status, loser.email_status) THEN 'bounced'
+           WHEN 'unsubscribed' IN (survivor.email_status, loser.email_status) THEN 'unsubscribed'
+           WHEN 'subscribed'   IN (survivor.email_status, loser.email_status) THEN 'subscribed'
+           ELSE 'none'
+         END,
+         sms_status = CASE
+           WHEN 'unsubscribed' IN (survivor.sms_status, loser.sms_status) THEN 'unsubscribed'
+           WHEN 'invalid'      IN (survivor.sms_status, loser.sms_status) THEN 'invalid'
+           WHEN 'subscribed'   IN (survivor.sms_status, loser.sms_status) THEN 'subscribed'
+           ELSE 'none'
+         END,
+         tags = ARRAY(SELECT DISTINCT unnest(survivor.tags || loser.tags)),
+         last_sms_contact_at = GREATEST(survivor.last_sms_contact_at, loser.last_sms_contact_at)
+   WHERE id = p_survivor
+  RETURNING * INTO result;
+
+  PERFORM set_config('marketing.merging', 'off', true);
+
+  RETURN result;
+END;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- claim_sms_queue_batch: the worker's atomic claim.
@@ -314,6 +462,7 @@ ALTER TABLE consent_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaigns      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sms_queue      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sms_messages   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_events   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE marketing_worker_locks ENABLE ROW LEVEL SECURITY;
 
 -- ---------------------------------------------------------------------------

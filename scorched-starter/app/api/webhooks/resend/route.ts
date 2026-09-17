@@ -14,10 +14,43 @@ import { getSupabase } from "@/lib/supabase";
 import type { EmailStatus, SubscriberRecord } from "@/lib/supabase";
 import { syncSubscriberToResend } from "@/lib/marketing/resend-audience";
 
+type ResendTag = { name?: string; value?: string };
+
 type ResendEvent = {
   type?: string;
-  data?: { to?: string[] | string; email_id?: string };
+  created_at?: string;
+  data?: {
+    to?: string[] | string;
+    email_id?: string;
+    created_at?: string;
+    tags?: ResendTag[] | Record<string, string>;
+  };
 };
+
+// Every event worth counting on the campaign page, mapped to the short name
+// stored in email_events.
+const TRACKED_EVENTS: Record<string, string> = {
+  "email.sent": "sent",
+  "email.delivered": "delivered",
+  "email.delivery_delayed": "delivery_delayed",
+  "email.opened": "opened",
+  "email.clicked": "clicked",
+  "email.bounced": "bounced",
+  "email.complained": "complained",
+  "email.failed": "failed",
+  "email.suppressed": "suppressed",
+};
+
+// Tags come back either as an array of {name, value} or as a plain object,
+// depending on the event. Handle both rather than guessing.
+function campaignIdFrom(event: ResendEvent): string | null {
+  const tags = event.data?.tags;
+  if (!tags) return null;
+  if (Array.isArray(tags)) {
+    return tags.find((t) => t?.name === "campaign_id")?.value ?? null;
+  }
+  return tags["campaign_id"] ?? null;
+}
 
 // Only the events that change whether we may send. Everything else is
 // acknowledged and ignored rather than 404'd, so Resend does not retry.
@@ -55,13 +88,38 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const nextStatus = event.type ? STATUS_BY_EVENT[event.type] : undefined;
-  if (!nextStatus) return Response.json({ ok: true, ignored: event.type ?? null });
+  const eventType = event.type ? TRACKED_EVENTS[event.type] : undefined;
+  if (!eventType) return Response.json({ ok: true, ignored: event.type ?? null });
 
   const emails = recipientsOf(event);
   if (emails.length === 0) return Response.json({ ok: true, ignored: "no recipient" });
 
   const sb = getSupabase();
+  const campaignId = campaignIdFrom(event);
+  const occurredAt = event.created_at ?? event.data?.created_at ?? null;
+
+  // Recorded for every tracked event, which is what the admin campaign page
+  // counts. Upserted because Resend retries and a repeat must not inflate the
+  // numbers.
+  if (event.data?.email_id) {
+    const { error: eventError } = await sb.from("email_events").upsert(
+      {
+        campaign_id: campaignId,
+        email: emails[0],
+        event_type: eventType,
+        provider_email_id: event.data.email_id,
+        occurred_at: occurredAt,
+        raw_payload: event,
+      },
+      { onConflict: "provider_email_id,event_type", ignoreDuplicates: true }
+    );
+    if (eventError) console.error("EMAIL_EVENT_LOG_ERROR", eventError);
+  }
+
+  const nextStatus = event.type ? STATUS_BY_EVENT[event.type] : undefined;
+  // Only a bounce or a complaint changes whether we may send again. An open or
+  // a click is a statistic, not a consent change.
+  if (!nextStatus) return Response.json({ ok: true, recorded: eventType });
 
   for (const email of emails) {
     const { data, error } = await sb

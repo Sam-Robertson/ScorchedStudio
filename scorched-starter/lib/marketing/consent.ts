@@ -13,12 +13,7 @@ import type {
   SubscriberRecord,
 } from "@/lib/supabase";
 import { normalizePhone } from "./phone";
-import {
-  mergeEmailStatus,
-  mergeSmsStatus,
-  nextEmailStatus,
-  nextSmsStatus,
-} from "./consent-rules";
+import { nextEmailStatus, nextSmsStatus } from "./consent-rules";
 
 export type ConsentChannelInput = {
   channel: MarketingChannel;
@@ -84,60 +79,31 @@ async function findExisting(
   };
 }
 
-// Two rows turn out to be the same person. Keep the older row as the survivor
-// (it holds the earliest consent date and any token already mailed out), move
-// the loser's consent history and queue rows onto it, then delete the loser.
+// Two rows turn out to be the same person. The whole merge happens inside one
+// Postgres function so it is one transaction: moving the consent history,
+// re-pointing queue rows, and deleting the losing row either all land or none
+// do. Doing it as separate statements from here would leave a half-merged
+// person behind on any failure.
 //
-// Statuses merge pessimistically: if either side had opted out of a channel,
-// the merged row stays opted out until this submission explicitly opts back in.
+// It also has to be a function because consent_events is append only at the
+// database level. merge_subscribers opens a narrow, transaction-local gate that
+// lets a row change owner while its consent facts stay frozen.
 async function mergeSubscribers(
   survivor: SubscriberRecord,
   loser: SubscriberRecord
 ): Promise<SubscriberRecord> {
-  const sb = getSupabase();
+  const { data, error } = await getSupabase().rpc("merge_subscribers", {
+    p_survivor: survivor.id,
+    p_loser: loser.id,
+  });
 
-  const mergedEmailStatus = mergeEmailStatus(survivor.email_status, loser.email_status);
-  const mergedSmsStatus = mergeSmsStatus(survivor.sms_status, loser.sms_status);
+  if (error) throw new Error(`subscriber merge failed: ${error.message}`);
 
-  // Move the audit trail before deleting, so the cascade cannot eat it.
-  const { error: moveConsent } = await sb
-    .from("consent_events")
-    .update({ subscriber_id: survivor.id })
-    .eq("subscriber_id", loser.id);
-  if (moveConsent) throw new Error(`consent merge failed: ${moveConsent.message}`);
-
-  const { error: moveQueue } = await sb
-    .from("sms_queue")
-    .update({ subscriber_id: survivor.id })
-    .eq("subscriber_id", loser.id);
-  if (moveQueue) throw new Error(`queue merge failed: ${moveQueue.message}`);
-
-  const lastContact = [survivor.last_sms_contact_at, loser.last_sms_contact_at]
-    .filter((v): v is string => Boolean(v))
-    .sort()
-    .pop();
-
-  const { error: delErr } = await sb.from("subscribers").delete().eq("id", loser.id);
-  if (delErr) throw new Error(`merge cleanup failed: ${delErr.message}`);
-
-  const { data, error } = await sb
-    .from("subscribers")
-    .update({
-      email: survivor.email ?? loser.email,
-      phone: survivor.phone ?? loser.phone,
-      first_name: survivor.first_name ?? loser.first_name,
-      last_name: survivor.last_name ?? loser.last_name,
-      email_status: mergedEmailStatus,
-      sms_status: mergedSmsStatus,
-      tags: Array.from(new Set([...survivor.tags, ...loser.tags])),
-      last_sms_contact_at: lastContact ?? null,
-    })
-    .eq("id", survivor.id)
-    .select()
-    .single();
-
-  if (error) throw new Error(`merge update failed: ${error.message}`);
-  return data as SubscriberRecord;
+  // The function returns a single subscribers row; PostgREST may present it
+  // either bare or wrapped in an array depending on the client version.
+  const merged = (Array.isArray(data) ? data[0] : data) as SubscriberRecord | null;
+  if (!merged) throw new Error("subscriber merge returned no row");
+  return merged;
 }
 
 export async function recordConsent(input: RecordConsentInput): Promise<RecordConsentResult> {
