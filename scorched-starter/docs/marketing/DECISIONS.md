@@ -53,3 +53,18 @@ answering questions mid-build.
 - The template renders once per recipient rather than once per campaign, because the unsubscribe link carries that person's token and must never be shared.
 - Marketing email sends from `RESEND_MARKETING_FROM` on the `news.` subdomain, entirely separate from the `bookings@scorchedstudio.com` used by waiver and booking mail, so a spam complaint on a campaign cannot hurt transactional delivery.
 - Pure helpers (`chunk`, `unsubscribeHeaders`, segment matching) live in their own modules away from anything importing through the `@/` alias, because the test runner cannot resolve that alias.
+
+## Phase 4 SMS
+
+- **Found and fixed a real concurrency bug while testing.** The atomic row claim stops the same person being texted twice, but it does not stop two overlapping cron runs each reading "0 new contacts sent this hour" before either claims, and then each spending the full hourly allowance. That doubles the real send rate and earns 429s. Added `marketing_worker_locks` plus `acquire_marketing_worker_lock`, a single-runner lease taken by one conditional UPDATE. The lease expires on its own so a crashed run does not wedge the queue. Both failure modes now have a test.
+- Quiet hours are checked before the lease is taken, so a night run does not hold a lease it never needed, and nothing is claimed at all, which keeps rows out of `sending` overnight.
+- The worker claims established contacts first, then spends new-contact budget. Established contacts cost nothing from the capped pool, so draining them first gets more out per run.
+- `isStillSubscribed` fails closed. If the consent status cannot be read, nothing is sent. A marketing text after an opt-out is the single most damaging thing this system could do.
+- Consent is re-checked per message, not per batch, because someone can text STOP between the claim and the send.
+- Status callbacks use `shouldAdvanceStatus` so an out-of-order callback cannot drag a row backwards. Nothing overwrites `delivered`, and nothing revives a `skipped` row.
+- Sendblue echoes the registered secret in `sb-signing-secret` rather than signing a digest of the body, so the webhook does a constant-time equality check rather than the HMAC verification the Square webhook uses.
+- The webhook logs and swallows handler errors after persisting, returning 2xx regardless. A 500 makes Sendblue retry the whole payload, and a retry storm is worse than one dropped forward.
+- Inbound messages are upserted on `provider_message_handle`, so a Sendblue retry does not create duplicate log rows.
+- Keyword matching requires the whole message to be the keyword. "Can I stop by on Saturday?" is a customer question, and treating it as an opt-out would silently drop the conversation. Tested explicitly.
+- Used plain `fetch` rather than the `sendblue` npm SDK: the surface needed is three endpoints, and fetch keeps the request shape next to the docs it was written from.
+- The `/api/cron/sms-worker` schedule (`*/5 * * * *`) needs a Vercel plan that allows sub-daily crons. Flagged in SETUP.md.

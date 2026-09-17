@@ -260,6 +260,53 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- marketing_worker_locks: a lease so only one SMS worker run is in flight.
+--
+-- The atomic row claim stops the same person being texted twice, but it does
+-- not stop two overlapping runs each reading "0 new contacts sent this hour"
+-- before either has claimed anything, and then each spending the full hourly
+-- allowance. That doubles the send rate and earns 429s from Sendblue.
+--
+-- A lease fixes it: acquiring is a single conditional UPDATE, so exactly one
+-- run wins. It expires on its own, so a run that crashes mid-flight does not
+-- wedge the queue until someone notices.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS marketing_worker_locks (
+  name         TEXT        PRIMARY KEY,
+  locked_until TIMESTAMPTZ NOT NULL DEFAULT to_timestamp(0),
+  locked_at    TIMESTAMPTZ
+);
+
+INSERT INTO marketing_worker_locks (name) VALUES ('sms_worker')
+  ON CONFLICT (name) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION acquire_marketing_worker_lock(
+  p_name    TEXT,
+  p_seconds INT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql AS $$
+DECLARE
+  acquired BOOLEAN;
+BEGIN
+  UPDATE marketing_worker_locks
+     SET locked_until = now() + make_interval(secs => p_seconds),
+         locked_at    = now()
+   WHERE name = p_name
+     AND locked_until < now()
+  RETURNING true INTO acquired;
+
+  RETURN COALESCE(acquired, false);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION release_marketing_worker_lock(p_name TEXT) RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE marketing_worker_locks SET locked_until = to_timestamp(0) WHERE name = p_name;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- RLS: on for every table, with no policies. Service role only.
 -- ---------------------------------------------------------------------------
 ALTER TABLE subscribers    ENABLE ROW LEVEL SECURITY;
@@ -267,6 +314,7 @@ ALTER TABLE consent_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaigns      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sms_queue      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sms_messages   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE marketing_worker_locks ENABLE ROW LEVEL SECURITY;
 
 -- ---------------------------------------------------------------------------
 -- Backfill the existing footer list.
