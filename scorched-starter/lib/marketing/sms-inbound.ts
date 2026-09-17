@@ -10,10 +10,7 @@
 // provider: the status vocabulary differs, so the status mapper is passed in.
 import { Resend } from "resend";
 import { getSupabase } from "@/lib/supabase";
-import type { SmsQueueRecord, SubscriberRecord } from "@/lib/supabase";
-import { classifyInbound } from "./sms-keywords";
-import { shouldAdvanceStatus } from "./sms-status";
-import { SMS_START_CONSENT_TEXT, SMS_STOP_CONSENT_TEXT } from "./consent-copy";
+import type { SmsQueueStatus, SubscriberRecord } from "@/lib/supabase";
 import { marketingIsLive, logSuppressedSend } from "./config";
 import type { InboundMessage, SmsQueueStatusMapper } from "./sms-provider";
 
@@ -86,7 +83,7 @@ export async function setSmsStatus(
 
 // People reply to marketing texts with real questions. Without this they go
 // into a table nobody reads.
-async function forwardToHuman(msg: InboundMessage): Promise<void> {
+export async function forwardToHuman(msg: InboundMessage): Promise<void> {
   if (!marketingIsLive()) {
     logSuppressedSend("sms-reply-forward", { from: msg.fromNumber, content: msg.content });
     return;
@@ -116,88 +113,86 @@ async function forwardToHuman(msg: InboundMessage): Promise<void> {
   }
 }
 
-export type InboundOutcome = "opt_out" | "opt_in" | "help" | "forwarded" | "ignored";
+// Wiring only. The rules live in sms-inbound-core.ts, which takes these as
+// injected dependencies so they can be tested without a database.
+import {
+  applyStatusUpdate,
+  decideInbound,
+  type InboundDeps,
+  type InboundOutcome,
+  type StatusDeps,
+} from "./sms-inbound-core";
 
-export async function handleInboundSms(msg: InboundMessage): Promise<InboundOutcome> {
-  if (!msg.fromNumber) return "ignored";
+export type { InboundOutcome };
 
-  const subscriber = await findSubscriberByPhone(msg.fromNumber);
-  const intent = classifyInbound(msg.content);
+const inboundDeps: InboundDeps = {
+  findSubscriberIdByPhone: async (phone) => (await findSubscriberByPhone(phone))?.id ?? null,
 
-  // The provider's own opt-out flag wins even when the text does not look like
-  // a keyword to us. On Telnyx that flag comes from autoresponse_type, and it
-  // is what actually blocks delivery, so our record has to follow it rather
-  // than argue with it. Their keyword list is not identical to ours.
-  if (intent === "opt_out" || msg.optedOut) {
-    if (subscriber) await setSmsStatus(subscriber, "unsubscribed", SMS_STOP_CONSENT_TEXT);
-    return "opt_out";
-  }
+  setSmsStatus: async (subscriberId, status, consentText) => {
+    const sb = getSupabase();
 
-  if (intent === "opt_in") {
-    if (subscriber) await setSmsStatus(subscriber, "subscribed", SMS_START_CONSENT_TEXT);
-    return "opt_in";
-  }
+    const { error } = await sb
+      .from("subscribers")
+      .update({ sms_status: status, last_sms_contact_at: new Date().toISOString() })
+      .eq("id", subscriberId);
+    if (error) {
+      console.error("SMS_STATUS_UPDATE_ERROR", error);
+      return;
+    }
 
-  // Any other inbound message still counts as contact. Nothing on the Telnyx
-  // path budgets against this, but the column stays meaningful and the
-  // Sendblue path needs it if it is ever revived.
-  if (subscriber) {
+    const { error: logError } = await sb.from("consent_events").insert({
+      subscriber_id: subscriberId,
+      channel: "sms",
+      action: status === "subscribed" ? "opt_in" : "opt_out",
+      source: "inbound_keyword",
+      consent_text: consentText,
+    });
+    if (logError) console.error("CONSENT_LOG_ERROR", logError);
+  },
+
+  touchLastContact: async (subscriberId) => {
     const { error } = await getSupabase()
       .from("subscribers")
       .update({ last_sms_contact_at: new Date().toISOString() })
-      .eq("id", subscriber.id);
+      .eq("id", subscriberId);
     if (error) console.error("LAST_CONTACT_UPDATE_ERROR", error);
-  }
+  },
 
-  // Both providers answer HELP with their own auto-reply, so it needs no
-  // human. A real question does.
-  if (intent === "other") {
-    await forwardToHuman(msg);
-    return "forwarded";
-  }
-  return "help";
+  forwardToHuman,
+};
+
+const statusDeps: StatusDeps = {
+  findQueueRowByHandle: async (handle) => {
+    const { data, error } = await getSupabase()
+      .from("sms_queue")
+      .select("id,status")
+      .eq("provider_message_handle", handle)
+      .maybeSingle();
+    if (error) {
+      console.error("QUEUE_LOOKUP_ERROR", error);
+      return null;
+    }
+    return (data as QueueRow | null) ?? null;
+  },
+
+  updateQueueRow: async (id, status, errorCode, errorMessage) => {
+    const { error } = await getSupabase()
+      .from("sms_queue")
+      .update({ status, error_code: errorCode, error_message: errorMessage })
+      .eq("id", id);
+    if (error) console.error("QUEUE_STATUS_UPDATE_ERROR", error);
+  },
+};
+
+type QueueRow = { id: string; status: SmsQueueStatus };
+
+export function handleInboundSms(msg: InboundMessage): Promise<InboundOutcome> {
+  return decideInbound(msg, inboundDeps);
 }
 
-// Moves a queue row along as delivery statuses arrive. The status vocabulary is
-// provider-specific, so the mapper is injected.
-export async function handleSmsStatusUpdate(
+export function handleSmsStatusUpdate(
   msg: InboundMessage,
   mapStatus: SmsQueueStatusMapper
 ): Promise<"updated" | "ignored"> {
-  if (!msg.messageHandle) return "ignored";
-
-  const mapped = mapStatus(msg.status);
-  if (!mapped) return "ignored";
-
-  const sb = getSupabase();
-  const { data, error } = await sb
-    .from("sms_queue")
-    .select("*")
-    .eq("provider_message_handle", msg.messageHandle)
-    .maybeSingle();
-
-  if (error) {
-    console.error("QUEUE_LOOKUP_ERROR", error);
-    return "ignored";
-  }
-  const row = data as SmsQueueRecord | null;
-  if (!row) return "ignored";
-
-  // Callbacks arrive out of order; a late 'queued' must not undo a delivery.
-  if (!shouldAdvanceStatus(row.status, mapped)) return "ignored";
-
-  const { error: updateError } = await sb
-    .from("sms_queue")
-    .update({
-      status: mapped,
-      error_code: msg.errorCode,
-      error_message: msg.errorMessage,
-    })
-    .eq("id", row.id);
-
-  if (updateError) {
-    console.error("QUEUE_STATUS_UPDATE_ERROR", updateError);
-    return "ignored";
-  }
-  return "updated";
+  return applyStatusUpdate(msg, mapStatus, statusDeps);
 }

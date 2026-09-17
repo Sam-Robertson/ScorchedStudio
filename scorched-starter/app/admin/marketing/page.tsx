@@ -381,7 +381,11 @@ function CampaignsTab() {
         body.live
           ? confirming.channel === "sms"
             ? `Queued ${body.queued} texts at up to ${body.estimate?.perDay ?? 0} a day, finishing ${
-                (body.estimate?.estimatedDays ?? 1) <= 1 ? "today" : `in about ${body.estimate.estimatedDays} days`
+                (body.estimate?.estimatedDays ?? 1) < 0
+                  ? "never at the current rate, check SMS_MAX_PER_MINUTE and quiet hours"
+                  : (body.estimate?.estimatedDays ?? 1) <= 1
+                    ? "today"
+                    : `in about ${body.estimate.estimatedDays} days`
               }.`
             : `Sent to ${body.sent} of ${body.attempted}.`
           : "MARKETING_LIVE is off, so nothing was actually sent. The run was logged instead."
@@ -489,9 +493,11 @@ function CampaignsTab() {
                 <div>
                   <div className="text-neutral-400">finishes in</div>
                   <div>
-                    {stats[c.id].sms!.estimate.estimatedDays <= 1
-                      ? "today"
-                      : `${stats[c.id].sms!.estimate.estimatedDays} days`}
+                    {stats[c.id].sms!.estimate.estimatedDays < 0
+                      ? "never at this rate"
+                      : stats[c.id].sms!.estimate.estimatedDays <= 1
+                        ? "today"
+                        : `${stats[c.id].sms!.estimate.estimatedDays} days`}
                   </div>
                 </div>
               </div>

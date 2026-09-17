@@ -83,9 +83,6 @@ importers:
       svix:
         specifier: ^2.5.0
         version: 2.5.0
-      telnyx:
-        specifier: ^7.21.0
-        version: 7.21.0(ws@8.20.0)
       zod:
         specifier: ^4.1.12
         version: 4.3.6
@@ -2605,14 +2602,6 @@ packages:
   tapable@2.3.2:
     resolution: {integrity: sha512-1MOpMXuhGzGL5TTCZFItxCc0AARf1EZFQkGqMm7ERKj8+Hgr5oLvJOVFcC+lRmR8hCe2S3jC4T5D7Vg/d7/fhA==}
     engines: {node: '>=6'}
-
-  telnyx@7.21.0:
-    resolution: {integrity: sha512-qRzvhFnkdYH+ijbQNIgMLYGhHfH7T+1CSMuSNaIcXy8nprEwaJ35XK+2Hg8lTkJWKbsYzY46wbXwLgNlC4qWww==}
-    peerDependencies:
-      ws: ^8.18.0
-    peerDependenciesMeta:
-      ws:
-        optional: true
 
   tiny-invariant@1.3.3:
     resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
@@ -5470,10 +5459,6 @@ snapshots:
   tailwindcss@4.2.2: {}
 
   tapable@2.3.2: {}
-
-  telnyx@7.21.0(ws@8.20.0):
-    optionalDependencies:
-      ws: 8.20.0
 
   tiny-invariant@1.3.3: {}
 

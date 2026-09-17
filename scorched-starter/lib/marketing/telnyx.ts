@@ -8,10 +8,12 @@
 // guards for two-way conversational messaging and unworkable for the one-way
 // broadcast this system does. A registered 10DLC long code has none of them.
 //
-// Sending goes through plain fetch rather than the `telnyx` SDK. The SDK is
-// current and typed, and it IS used for webhook signature verification where
-// the crypto is worth not hand-rolling, but the send path is one POST and
-// fetch keeps the request shape next to the docs it was written from.
+// Uses plain fetch, not the `telnyx` SDK. The SDK is current and typed, but the
+// send path is one POST, and its webhook helper reads TELNYX_PUBLIC_KEY from
+// the environment itself and documents no timestamp tolerance, which is the
+// half that stops a captured webhook being replayed. Both are done here and in
+// telnyx-webhook.ts instead, so the whole rule is visible and unit testable.
+// The dependency was therefore removed rather than left installed and unused.
 import {
   logSuppressedSend,
   marketingIsLive,
@@ -81,6 +83,8 @@ export class TelnyxProvider implements SmsProvider {
         body: args.body,
         mediaUrl: args.mediaUrl ?? null,
       });
+      // The prefix only makes a dry-run row obvious when reading sms_queue by
+      // hand. Nothing branches on it; the worker is told through `suppressed`.
       return {
         ok: true,
         messageHandle: `suppressed-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,

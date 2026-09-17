@@ -157,3 +157,11 @@ answering questions mid-build.
 - The Sendblue bulk-contact and opt-out calls are replaced by `syncContactsToProvider`, which on Telnyx is a no-op with an explanation: there is no contact list, and the opt-out list populates itself from inbound STOP. The function is kept rather than deleted so reviving Sendblue means filling in one branch instead of rediscovering the step.
 - Dry run stays the default and `--apply` is still required.
 - The re-intro copy is 128 characters, one GSM-7 segment, straight apostrophes only. A multi-part re-introduction from an unrecognised number is exactly what gets reported as spam.
+
+## Review pass on the swap
+
+- **The Sendblue path was silently broken by the throughput switch.** `runSmsWorker` computed `maxThisRun` from `SMS_MAX_PER_MINUTE` and hardcoded `blockedReason: null` for whichever provider was selected, so setting `SMS_PROVIDER=sendblue` would have sent at 12 a minute with no new-contact accounting and no consecutive-outbound stop, straight past the limits that motivated leaving it. `pacingFor()` now branches on the provider and Sendblue keeps its quota accounting. Requirement was that Sendblue stay revivable, and it now actually is rather than only appearing to be.
+- **The extracted inbound handling was not testable**, which is what requirement 10 asked for. `sms-inbound.ts` reached Supabase and Resend through the `@/` alias, which the test runner cannot resolve, so the STOP, START and delivery-status cases had no coverage. Split into `sms-inbound-core.ts` (rules, injected dependencies, relative imports) and `sms-inbound.ts` (wiring), matching what `sms-worker-core.ts` already did. Seventeen tests cover the four cases named in the task plus the ones around them.
+- Removed the `telnyx` npm dependency after deciding not to use its webhook helper. Leaving an unused package installed invites someone to assume it is load-bearing.
+- `estimateThroughputCompletion` returned `Infinity` when the cap or the sending window is zero, which `JSON.stringify` turns into `null` on the way to the admin UI and would have rendered as "0 days", reading as "already finished". Returns -1 now, and the UI says "never at this rate".
+- The `suppressed-` message handle prefix is decorative; the `suppressed` flag is what the worker reads. Said so in a comment in both providers so nobody starts depending on the string.

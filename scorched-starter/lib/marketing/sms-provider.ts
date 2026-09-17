@@ -54,7 +54,9 @@ export type InboundMessage = {
 // Maps a provider's own status string onto our queue status. Each provider
 // has its own vocabulary, so the shared webhook handling takes this as an
 // argument rather than trying to understand both.
-export type SmsQueueStatusMapper = (status: string | null | undefined) => import("@/lib/supabase").SmsQueueStatus | null;
+import type { SmsQueueStatus } from "../supabase.ts";
+
+export type SmsQueueStatusMapper = (status: string | null | undefined) => SmsQueueStatus | null;
 
 export interface SmsProvider {
   readonly name: string;

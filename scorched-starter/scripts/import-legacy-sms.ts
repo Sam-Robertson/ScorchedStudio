@@ -218,9 +218,11 @@ async function syncContactsToProvider(rows: Row[], apply: boolean): Promise<void
 
   if (provider === "telnyx") {
     const optedOut = rows.filter((r) => r.unsubscribed).length;
+    // Nothing to push either way, so apply changes only the wording. Said out
+    // loud rather than silently ignoring the flag.
     console.log(
-      `  Telnyx: no contact list to sync. ${rows.length - optedOut} subscribed and ${optedOut} ` +
-        `opted out recorded in Supabase only.`
+      `  Telnyx: no contact list to sync, so ${apply ? "nothing was pushed" : "nothing would be pushed"}. ` +
+        `${rows.length - optedOut} subscribed and ${optedOut} opted out recorded in Supabase only.`
     );
     console.log(
       "  Note: Telnyx's own opt-out list starts empty. Anyone on the legacy opt-out list is " +

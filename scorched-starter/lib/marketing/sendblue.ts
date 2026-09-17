@@ -77,6 +77,10 @@ export class SendblueProvider implements SmsProvider {
     // so the rest of the pipeline can be exercised end to end without sending.
     if (!marketingIsLive()) {
       logSuppressedSend("sms", { to: args.to, body: args.body, mediaUrl: args.mediaUrl ?? null });
+      // The "suppressed-" prefix is only there to make a dry-run row obvious
+      // when reading sms_queue by hand. Nothing branches on it: the worker is
+      // told through the `suppressed` flag below, which is the load-bearing
+      // part, so this string can change freely.
       return {
         ok: true,
         messageHandle: `suppressed-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,

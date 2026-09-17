@@ -161,9 +161,11 @@ export function estimateThroughputCompletion(
   const perDay = Math.floor(maxPerMinute * 60 * sendingHoursPerDay(quietStart, quietEnd));
 
   if (perDay <= 0) {
-    // A cap of zero or a 24 hour quiet window means this never finishes. Saying
-    // so beats reporting "0 days" as though it were instant.
-    return { pending, perDay: 0, estimatedDays: Infinity, estimatedCompletion: null, limitedBy: "throughput" };
+    // A cap of zero, or a quiet window covering the whole day, means this never
+    // finishes. Reported as -1 rather than Infinity: it has to survive the trip
+    // through JSON to the admin UI, and JSON.stringify turns Infinity into
+    // null, which would render as "0 days" and read as "already done".
+    return { pending, perDay: 0, estimatedDays: -1, estimatedCompletion: null, limitedBy: "throughput" };
   }
 
   const days = Math.ceil(pending / perDay);

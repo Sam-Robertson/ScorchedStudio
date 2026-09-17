@@ -184,6 +184,8 @@ Set these in Vercel (Production, and Preview if you want previews to run the wor
 | `NEXT_PUBLIC_SITE_URL` | must be the real origin, used for unsubscribe links and webhook callbacks |
 | `MARKETING_LIVE` | **leave `false` until step 10 passes** |
 
+All five Telnyx variables must be set in Vercel before the first webhook arrives, not just the API key. `TELNYX_PUBLIC_KEY` in particular exists only in the local `.env` right now, and without it in the deployed environment **every webhook 401s**, which looks from the outside like "Telnyx is not sending anything" rather than a missing variable. If inbound texts and delivery receipts both go quiet, check this first.
+
 The Sendblue variables are optional and only read when `SMS_PROVIDER=sendblue`.
 
 ## 7. Webhooks
