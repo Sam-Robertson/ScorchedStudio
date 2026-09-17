@@ -19,7 +19,40 @@ function intFromEnv(name: string, fallback: number): number {
   return parsed;
 }
 
+// Which provider the active path uses. Sendblue stays in the tree for a
+// possible two-way iMessage feature later, but its Blue Ocean limits (50 new
+// contacts a day, 150 consecutive outbound without a reply) make it unusable
+// for one-way broadcast, which is what this system does.
+export type SmsProviderName = "telnyx" | "sendblue";
+
+export function smsProviderName(): SmsProviderName {
+  return process.env.SMS_PROVIDER === "sendblue" ? "sendblue" : "telnyx";
+}
+
+export function telnyxConfig() {
+  return {
+    apiKey: process.env.TELNYX_API_KEY ?? "",
+    publicKey: process.env.TELNYX_PUBLIC_KEY ?? "",
+    messagingProfileId: process.env.TELNYX_MESSAGING_PROFILE_ID ?? "",
+    fromNumber: process.env.TELNYX_FROM_NUMBER ?? "",
+  };
+}
+
+// Cost per SMS segment per recipient, used only for the estimate shown in the
+// composer. Telnyx's US 10DLC outbound rate is a fraction of a cent and varies
+// by carrier surcharge, so this is a planning figure, not a bill.
+export function smsCostPerSegment(): number {
+  const raw = process.env.SMS_COST_PER_SEGMENT;
+  if (!raw) return 0.004;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0.004;
+}
+
 export type SmsLimits = {
+  // Active path (Telnyx).
+  maxPerMinute: number;
+  // Sendblue only. Kept so the provider can be revived without re-deriving
+  // its rate limiting, but nothing on the Telnyx path reads these.
   newContactsPerDay: number;
   newContactsPerHour: number;
   burstPerSecond: number;
@@ -31,6 +64,10 @@ export type SmsLimits = {
 
 export function smsLimits(): SmsLimits {
   return {
+    // Throughput cap for the active (Telnyx) path. Deliberately conservative:
+    // a registered 10DLC campaign has a carrier-assigned throughput that starts
+    // low, and exceeding it gets messages filtered rather than queued.
+    maxPerMinute: intFromEnv("SMS_MAX_PER_MINUTE", 12),
     newContactsPerDay: intFromEnv("SMS_NEW_CONTACTS_PER_DAY", 50),
     newContactsPerHour: intFromEnv("SMS_NEW_CONTACTS_PER_HOUR", 15),
     burstPerSecond: intFromEnv("SMS_BURST_PER_SECOND", 10),

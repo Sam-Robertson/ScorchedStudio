@@ -118,3 +118,42 @@ answering questions mid-build.
 - **An SMS-only footer signup wrote to the email marketing table.** The `newsletter_subscribers` insert happened before the opt-in flags were read, so someone ticking only the SMS box landed on the email list having explicitly declined email. Now gated on `emailOptIn`.
 - **The consent backfill was not safe to re-run in the way that mattered.** SETUP.md says the migration can be re-run, and the `subscribers` insert is `ON CONFLICT DO NOTHING`, but the consent insert would manufacture a fresh `opt_in` row for anyone who had since unsubscribed, in the append-only table whose whole purpose is being the evidence that they opted in. Now restricted to rows still `subscribed`.
 - Smaller: the admin subscriber search matched `phone` literally, but the column is E.164, so a typed "801-361" found nothing; it now searches on digits. And `sent` and `failed` had equal rank in `shouldAdvanceStatus`, letting two out-of-order callbacks toggle a row indefinitely; `failed` now outranks `sent`, and `delivered` still outranks both.
+
+## Provider swap: Sendblue to Telnyx
+
+- **Why.** Sendblue's Blue Ocean limits (50 new contacts a day, 15 an hour, 150 consecutive outbound without a reply, and a cap on messages to a non-replying contact) are sensible guards for two-way conversational messaging and unworkable for one-way broadcast. A registered 10DLC long code has none of them. Sendblue stays in the tree, wired and tested, because it is genuinely better at two-way iMessage if that is ever wanted.
+- Provider is chosen by `SMS_PROVIDER` through `lib/marketing/sms-provider-registry.ts`, defaulting to Telnyx. The `SmsProvider` interface was already the seam, so nothing above it changed shape.
+- Telnyx credentials Sam supplied were verified with read-only `GET` calls only. They turned up that the messaging profile and number already exist: profile `Main` (`4001a0b1-...`) with its webhook already pointed at `/api/webhooks/telnyx`, and `+18015155172`, a Utah long code, active and assigned to that profile. All three are now in `.env`.
+- **The 10DLC API returns 403 `10038 Feature not permitted at this account level`.** Brand and campaign registration cannot start until the Telnyx account is upgraded. Until the campaign is approved, carriers filter this traffic, so this is the real gate on going live. Flagged at the top of SETUP.md's step 4.
+
+## Telnyx specifics found in the docs
+
+- Send is `POST https://api.telnyx.com/v2/messages` with Bearer auth. Status is reported **per recipient** inside `data.payload.to[0].status`, not at the top level as Sendblue did, and the sender on inbound is `data.payload.from.phone_number`. `mapTelnyxStatus` sits alongside `mapSendblueStatus` rather than one being generalised, because the vocabularies genuinely differ.
+- `delivery_unconfirmed` maps to `sent`, not `failed`. The message did leave Telnyx; calling it a failure would under-report delivery and invite a resend to someone who already got it.
+- Used plain `fetch` for sending but the `telnyx` SDK is **not** used for webhook verification either: its `webhooks.unwrap()` reads `TELNYX_PUBLIC_KEY` from the environment itself and documents no timestamp tolerance, and rejecting stale timestamps is the half that stops a captured webhook being replayed. Both halves are in `lib/marketing/telnyx-webhook.ts` where they are unit testable with no network and no env.
+- Signature is Ed25519 over `{timestamp}|{raw body}`, base64. The public key is base64 of 32 raw bytes, which node will not import directly, so it is wrapped in the fixed RFC 8410 SPKI prefix. Tolerance is 5 minutes, matching what Stripe and Svix use; Telnyx publishes no figure. Skew is checked in **both** directions, since accepting future timestamps would leave one captured webhook replayable indefinitely.
+- Telnyx auto-responds to STOP, START and HELP itself and maintains its own opt-out list at the **messaging profile** level, so one STOP blocks every number on the profile. The inbound webhook still arrives, carrying `autoresponse_type`, which is mapped onto the existing `InboundMessage.optedOut` hook. That flag is treated as authoritative because it is what actually blocks delivery.
+- Telnyx's keyword list (`stop, stopall, stop all, unsubscribe, cancel, end, quit`) is close to but not identical to ours: we also match `revoke` and `opt out`, they also match `stop all`. Ours stays wider, and theirs wins where it fires, so the two can only disagree in the direction of unsubscribing someone we would have kept.
+- Error `40300` "Blocked due to STOP message" is returned when sending to an opted-out number. Handled in the provider as a distinct `optedOut` outcome rather than a failure, so the worker can mark the queue row `skipped` and correct the subscriber to `unsubscribed` with a consent event. Retrying it would be pointless, and succeeding would be a compliance problem.
+
+## Worker: throughput instead of quotas
+
+- The new-contact hourly and daily budgeting and the 150-consecutive stop are gone from the active path, along with the two Supabase queries that fed them. `computeBudget` and its tests remain in `sms-budget.ts` for the Sendblue path; `WorkerSettings` now takes `maxThisRun` plus an optional `blockedReason`, so a provider with a ceiling of its own can still stop the run without that logic living in the core.
+- **`SMS_MAX_PER_MINUTE` is a sustained rate, not a per-run figure.** The cron fires every 5 minutes, so one run may send `maxPerMinute * 5`. Treating it as per-run would have delivered a fifth of what the setting appears to promise and made every completion estimate 5x wrong. `maxMessagesPerRun()` does that arithmetic and the admin estimate uses the same function.
+- The completion estimate accounts for quiet hours: with the default 20 to 9 window only 11 hours a day are sendable, and ignoring that would overstate throughput by more than double.
+- Default is 12 a minute, chosen low on purpose. A newly approved 10DLC campaign gets a low carrier-assigned throughput, and exceeding it means messages are filtered rather than queued. SETUP.md says to raise it once the assigned rate is known.
+- `claim_sms_queue_batch` keeps its `p_allow_new_contact` parameter and is now always passed `true`. The migration is left alone rather than edited, since Sam may already have run it.
+- Kept: quiet hours, the single-runner lease, atomic row claiming, backoff on 429 and 5xx, the per-send subscription recheck, scheduled campaign firing, and the rule that a suppressed send never stamps `last_sms_contact_at`.
+
+## Segments and cost
+
+- Segment counting moved to `lib/marketing/sms-segments.ts` and `message-rules.ts` now delegates to it, so there is one implementation. The old one assumed 160/153 unconditionally, which is wrong twice over: the nine GSM-7 extended characters (`^ { } [ ] ~ \ | €`) each cost **two** septets, so a 159 character message can be two segments; and one character outside GSM-7 forces the whole message to UCS-2 where the limit collapses to 70/67.
+- The order is classify-then-count, not count-then-branch. UCS-2 counts UTF-16 code units, which is why a non-BMP emoji correctly costs two.
+- The composer names the offending character rather than just warning, because an author cannot otherwise see why a short message became two segments. The most common real cause is a curly apostrophe pasted from a word processor.
+- Cost is per segment per recipient, from `SMS_COST_PER_SEGMENT` (default 0.004). It is a planning figure, not a bill: carrier surcharges vary. MMS gets a note that it bills higher and is not covered by the estimate.
+
+## Import script
+
+- The Sendblue bulk-contact and opt-out calls are replaced by `syncContactsToProvider`, which on Telnyx is a no-op with an explanation: there is no contact list, and the opt-out list populates itself from inbound STOP. The function is kept rather than deleted so reviving Sendblue means filling in one branch instead of rediscovering the step.
+- Dry run stays the default and `--apply` is still required.
+- The re-intro copy is 128 characters, one GSM-7 segment, straight apostrophes only. A multi-part re-introduction from an unrecognised number is exactly what gets reported as spam.

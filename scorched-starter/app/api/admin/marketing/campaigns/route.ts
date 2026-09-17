@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import type { CampaignRecord } from "@/lib/supabase";
 import { audienceCount } from "@/lib/marketing/audience";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
+import { smsCostPerSegment } from "@/lib/marketing/config";
 
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +21,9 @@ export async function GET(req: NextRequest) {
     const match = url.searchParams.get("match") === "all" ? "all" : "any";
     try {
       const count = await audienceCount(channel, { tags, match });
-      return Response.json({ count });
+      // Handed back with the count so the composer can price the send without
+      // the rate being duplicated client side.
+      return Response.json({ count, costPerSegment: smsCostPerSegment() });
     } catch (err) {
       return Response.json({ error: err instanceof Error ? err.message : "count failed" }, { status: 500 });
     }

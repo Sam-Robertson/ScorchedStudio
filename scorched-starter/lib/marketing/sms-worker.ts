@@ -1,19 +1,22 @@
 // lib/marketing/sms-worker.ts — server only
 //
-// Wires the pure worker in sms-worker-core to Supabase and Sendblue. The cron
-// route is a thin wrapper around runSmsWorker().
+// Wires the pure worker in sms-worker-core to Supabase and the configured SMS
+// provider. The cron route is a thin wrapper around runSmsWorker().
+//
+// Pacing is now a single throughput cap. The new-contact hourly and daily
+// counting, and the consecutive-outbound query that fed Sendblue's 150 message
+// ceiling, are gone from this path: Telnyx with a registered 10DLC long code
+// has neither limit, and leaving those queries in would have cost three round
+// trips per run to compute numbers nothing reads.
 import { getSupabase } from "@/lib/supabase";
 import type { SmsQueueRecord } from "@/lib/supabase";
 import { smsLimits, siteUrl } from "./config";
 import { denverHour } from "./quiet-hours";
+import { maxMessagesPerRun } from "./sms-budget";
 import { backoffMs, isRetryableError, MAX_ATTEMPTS } from "./sms-status";
-import { sendblue } from "./sendblue";
+import { smsProvider } from "./sms-provider-registry";
+import { SMS_STOP_CONSENT_TEXT } from "./consent-copy";
 import { runWorker, type QueueItem, type WorkerDeps, type WorkerRunResult } from "./sms-worker-core";
-
-// How much of the five minute cron interval one run is willing to spend
-// sending. Deliberately short of the whole window so a run cannot still be
-// going when the next one starts.
-const RUN_SECONDS = 60;
 
 function toItem(row: SmsQueueRecord): QueueItem {
   return {
@@ -27,73 +30,19 @@ function toItem(row: SmsQueueRecord): QueueItem {
   };
 }
 
-// Counts new-contact sends already made in the trailing windows. The worker
-// budgets against a rolling 24 hours even though Sendblue's daily window
-// resets at 3am ET, because rolling is the stricter reading and can never
-// overshoot the provider's own accounting.
-async function newContactsSent(sinceIso: string): Promise<number> {
-  const sb = getSupabase();
-  const { count, error } = await sb
-    .from("sms_queue")
-    .select("id", { count: "exact", head: true })
-    .eq("is_new_contact", true)
-    .in("status", ["sending", "sent", "delivered"])
-    .gte("updated_at", sinceIso);
-
-  if (error) throw new Error(`new contact count failed: ${error.message}`);
-  return count ?? 0;
-}
-
-// How many outbound messages have gone out on the line since the most recent
-// inbound message. Sendblue stops delivering past 150 of these and says the
-// limit cannot be disabled, so the worker has to track it rather than discover
-// it as silent failures.
-async function consecutiveOutboundWithoutReply(): Promise<number> {
-  const sb = getSupabase();
-
-  const { data: lastInbound, error: inboundErr } = await sb
-    .from("sms_messages")
-    .select("created_at")
-    .eq("direction", "inbound")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (inboundErr) throw new Error(`inbound lookup failed: ${inboundErr.message}`);
-
-  let query = sb
-    .from("sms_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("direction", "outbound");
-
-  if (lastInbound?.created_at) query = query.gt("created_at", lastInbound.created_at);
-
-  const { count, error } = await query;
-  if (error) throw new Error(`outbound count failed: ${error.message}`);
-  return count ?? 0;
-}
-
 export async function runSmsWorker(): Promise<WorkerRunResult> {
   const sb = getSupabase();
   const limits = smsLimits();
+  const provider = smsProvider();
   const now = new Date();
 
-  const hourAgo = new Date(now.getTime() - 3600_000).toISOString();
-  const dayAgo = new Date(now.getTime() - 86400_000).toISOString();
-
-  const [sentLastHour, sentLastDay, consecutive] = await Promise.all([
-    newContactsSent(hourAgo),
-    newContactsSent(dayAgo),
-    consecutiveOutboundWithoutReply(),
-  ]);
-
   const deps: WorkerDeps = {
-    // Single-runner lease. The lease expires on its own, so a run that crashes
+    // Single-runner lease. It expires on its own, so a run that crashes
     // mid-flight does not wedge the queue until someone notices.
     acquireLock: async () => {
       const { data, error } = await sb.rpc("acquire_marketing_worker_lock", {
         p_name: "sms_worker",
-        p_seconds: RUN_SECONDS * 2,
+        p_seconds: 120,
       });
       if (error) throw new Error(`lock acquire failed: ${error.message}`);
       return data === true;
@@ -106,10 +55,15 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
     // The atomic claim. claim_sms_queue_batch flips rows to 'sending' inside
     // the same statement that selects them, using FOR UPDATE SKIP LOCKED, so
     // two overlapping cron runs get disjoint sets.
-    claim: async (limit, allowNewContact) => {
+    //
+    // p_allow_new_contact is passed true unconditionally now. That parameter
+    // existed so the Sendblue path could drain established contacts before
+    // spending its new-contact quota; Telnyx draws no such distinction. The RPC
+    // signature is left alone rather than editing a migration Sam may have run.
+    claim: async (limit: number) => {
       const { data, error } = await sb.rpc("claim_sms_queue_batch", {
         p_limit: limit,
-        p_allow_new_contact: allowNewContact,
+        p_allow_new_contact: true,
         p_campaign_id: null,
       });
       if (error) throw new Error(`claim failed: ${error.message}`);
@@ -130,10 +84,10 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
     },
 
     send: async (item) =>
-      sendblue.send({
+      provider.send({
         to: item.toNumber,
         body: item.body,
-        statusCallback: `${siteUrl()}/api/webhooks/sendblue`,
+        statusCallback: `${siteUrl()}/api/webhooks/${provider.name}`,
       }),
 
     markSent: async (item, handle, status, suppressed) => {
@@ -141,9 +95,8 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
         .from("sms_queue")
         .update({ status: "sent", provider_message_handle: handle, error_code: null, error_message: null })
         .eq("id", item.id);
-      // A suppressed send writes no sms_messages row. That table feeds
-      // consecutiveOutboundWithoutReply, and counting messages nobody received
-      // would trip the 150 ceiling against a line that has sent nothing.
+      // A suppressed send writes no sms_messages row: nothing was delivered,
+      // and that log is meant to be what actually happened on the wire.
       if (status && !suppressed) {
         await sb.from("sms_messages").upsert(
           {
@@ -164,6 +117,35 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
         .from("sms_queue")
         .update({ status: "skipped", error_message: reason })
         .eq("id", item.id);
+    },
+
+    // The provider refused because this person is on its opt-out list and our
+    // record had not caught up. Correct both: the queue row is skipped rather
+    // than failed, and the subscriber is unsubscribed with a consent event, so
+    // Supabase stops disagreeing with the provider about who may be messaged.
+    markOptedOut: async (item, reason) => {
+      await sb
+        .from("sms_queue")
+        .update({ status: "skipped", error_message: reason })
+        .eq("id", item.id);
+
+      const { error } = await sb
+        .from("subscribers")
+        .update({ sms_status: "unsubscribed" })
+        .eq("id", item.subscriberId);
+      if (error) {
+        console.error("SMS_WORKER_OPTOUT_UPDATE_ERROR", error);
+        return;
+      }
+
+      const { error: logError } = await sb.from("consent_events").insert({
+        subscriber_id: item.subscriberId,
+        channel: "sms",
+        action: "opt_out",
+        source: "inbound_keyword",
+        consent_text: SMS_STOP_CONSENT_TEXT,
+      });
+      if (logError) console.error("SMS_WORKER_OPTOUT_LOG_ERROR", logError);
     },
 
     markFailed: async (item, errorCode, errorMessage) => {
@@ -191,16 +173,11 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
   };
 
   return runWorker(deps, {
-    budget: {
-      newContactsPerHour: limits.newContactsPerHour,
-      newContactsPerDay: limits.newContactsPerDay,
-      burstPerSecond: limits.burstPerSecond,
-      newContactsSentLastHour: sentLastHour,
-      newContactsSentLastDay: sentLastDay,
-      runSeconds: RUN_SECONDS,
-      maxConsecutiveNoReply: limits.maxConsecutiveNoReply,
-      consecutiveNoReply: consecutive,
-    },
+    // SMS_MAX_PER_MINUTE is a sustained rate, so one run may send that rate
+    // times the cron interval. Treating it as a per-run figure would deliver a
+    // fifth of what the setting appears to promise.
+    maxThisRun: maxMessagesPerRun(limits.maxPerMinute),
+    blockedReason: null,
     quietHoursStart: limits.quietHoursStart,
     quietHoursEnd: limits.quietHoursEnd,
     currentHour: denverHour(now),

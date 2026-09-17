@@ -84,3 +84,53 @@ export function backoffMs(attempts: number): number {
 }
 
 export const MAX_ATTEMPTS = 5;
+
+
+// ── Telnyx ───────────────────────────────────────────────────────────────────
+//
+// Telnyx reports status per recipient, nested at data.payload.to[0].status,
+// rather than as a top-level field the way Sendblue does.
+
+export const TELNYX_STATUSES = [
+  "queued",
+  "sending",
+  "sent",
+  "delivered",
+  "sending_failed",
+  "delivery_failed",
+  "delivery_unconfirmed",
+  "webhook_delivered",
+] as const;
+
+export type TelnyxStatus = (typeof TELNYX_STATUSES)[number];
+
+const TELNYX_MAP: Record<TelnyxStatus, SmsQueueStatus> = {
+  queued: "sending",
+  sending: "sending",
+  sent: "sent",
+  delivered: "delivered",
+  sending_failed: "failed",
+  delivery_failed: "failed",
+  // The carrier never confirmed either way. Treated as 'sent' rather than
+  // 'failed' because the message did leave Telnyx: calling it a failure would
+  // under-report delivery and, worse, invite a resend to someone who already
+  // got it.
+  delivery_unconfirmed: "sent",
+  // Only ever appears on inbound messages, describing our own webhook.
+  webhook_delivered: "sending",
+};
+
+export function mapTelnyxStatus(status: string | null | undefined): SmsQueueStatus | null {
+  if (!status) return null;
+  const key = status.trim().toLowerCase() as TelnyxStatus;
+  return TELNYX_MAP[key] ?? null;
+}
+
+// Telnyx error code for a recipient who has texted STOP. Opt-out is enforced at
+// the messaging profile level, so once someone stops on any number in the
+// profile, every number in it is blocked from reaching them.
+export const TELNYX_OPTED_OUT_CODE = "40300";
+
+export function isTelnyxOptedOutError(errorCode: string | null | undefined): boolean {
+  return String(errorCode ?? "").trim() === TELNYX_OPTED_OUT_CODE;
+}

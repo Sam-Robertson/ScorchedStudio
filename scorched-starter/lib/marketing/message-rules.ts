@@ -5,24 +5,16 @@
 // marketing message that does not identify the sender or explain how to stop
 // is what gets a number blocked.
 import { BUSINESS_NAME } from "./consent-copy.ts";
+import { analyzeSms, segmentCount } from "./sms-segments.ts";
+
+export { segmentCount };
 
 export const STOP_NOTICE = "Reply STOP to opt out";
 
-// A single SMS segment is 160 GSM-7 characters. Past that, carriers split the
-// message and bill per part, and the parts can arrive out of order.
-export const SINGLE_SEGMENT_LIMIT = 160;
-// Concatenated parts carry a header, leaving 153 usable characters each.
-export const CONCAT_SEGMENT_SIZE = 153;
-
-// iMessage has no practical length limit, but we cannot know which transport a
-// given recipient will get until after the send, so the counter always assumes
-// the SMS fallback.
-export function segmentCount(body: string): number {
-  const len = body.length;
-  if (len === 0) return 0;
-  if (len <= SINGLE_SEGMENT_LIMIT) return 1;
-  return Math.ceil(len / CONCAT_SEGMENT_SIZE);
-}
+// Segment counting lives in sms-segments.ts, which classifies the encoding
+// first. The naive version here counted characters and assumed 160/153, which
+// is wrong for any message containing an emoji (UCS-2 drops the limit to 70)
+// or one of the nine GSM-7 extended characters (each costs two septets).
 
 // Case-insensitive and tolerant of the variants an author might type, so the
 // composer does not append a second notice to a message that already has one.
@@ -59,12 +51,32 @@ export function validateSmsBody(body: string, name: string = BUSINESS_NAME): Mes
     });
   }
 
-  const segments = segmentCount(withStopNotice(trimmed));
-  if (segments > 1) {
+  const final = withStopNotice(trimmed);
+  const info = analyzeSms(final);
+
+  if (info.encoding === "UCS-2") {
     issues.push({
       field: "body",
       level: "warning",
-      message: `This is ${withStopNotice(trimmed).length} characters, which sends as ${segments} parts to anyone on SMS fallback.`,
+      message:
+        `${info.forcedUcs2By.slice(0, 5).join(" ")} cannot be sent as plain GSM-7, so the whole message ` +
+        `switches to UCS-2 and the limit drops from 160 characters to 70. Removing it would cut the cost.`,
+    });
+  } else if (info.doubleWidth.length > 0) {
+    issues.push({
+      field: "body",
+      level: "warning",
+      message: `${info.doubleWidth.join(" ")} each count as two characters toward the 160 limit.`,
+    });
+  }
+
+  if (info.segments > 1) {
+    issues.push({
+      field: "body",
+      level: "warning",
+      message:
+        `This is ${info.units} characters once the opt-out notice is added, so it sends as ` +
+        `${info.segments} segments and bills ${info.segments} times per recipient.`,
     });
   }
 

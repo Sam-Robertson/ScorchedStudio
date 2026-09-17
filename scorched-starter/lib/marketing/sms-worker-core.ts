@@ -1,15 +1,19 @@
 // lib/marketing/sms-worker-core.ts
 //
 // The worker's decision-making, with every dependency injected. No Supabase
-// import, so the project's test runner can drive it directly and prove that
-// two overlapping runs cannot send to the same person twice.
+// import, so the project's test runner can drive it directly.
 //
 // What this file does NOT prove: that Postgres FOR UPDATE SKIP LOCKED is
 // atomic. That cannot be tested without a database. The real guarantee is the
 // UNIQUE (campaign_id, subscriber_id) constraint plus the conditional claim in
-// claim_sms_queue_batch. This tests that, given an atomic claim, the budgeting
-// and the re-check logic are correct.
-import { computeBudget, type BudgetInputs } from "./sms-budget.ts";
+// claim_sms_queue_batch, with the single-runner lease on top. This tests that,
+// given an atomic claim, the pacing and the consent re-check are correct.
+//
+// Rate limiting is now a single throughput cap. The new-contact hourly and
+// daily budgeting, and the 150-consecutive-outbound stop, were Sendblue's
+// constraints; a registered 10DLC long code on Telnyx has neither. The caller
+// computes maxThisRun, and may pass a blockedReason if its provider has a
+// ceiling of its own, which keeps that logic out of here.
 import { isQuietHour } from "./quiet-hours.ts";
 
 export type QueueItem = {
@@ -26,15 +30,13 @@ export type WorkerDeps = {
   // Takes the single-runner lease. Returns false when another run already
   // holds it, in which case this run does nothing at all.
   //
-  // The row claim alone is not enough. It stops the same person being texted
-  // twice, but two overlapping runs can still each read "0 sent this hour"
-  // before either claims, and then each spend the full hourly allowance,
-  // doubling the real send rate.
+  // The row claim alone is not enough: two overlapping runs would each pace
+  // themselves against their own view of the queue and together exceed the cap.
   acquireLock: () => Promise<boolean>;
   releaseLock: () => Promise<void>;
   // Claims up to `limit` rows and flips them to 'sending' atomically. Returning
   // a row here means this run owns it and no other run will see it.
-  claim: (limit: number, allowNewContact: boolean) => Promise<QueueItem[]>;
+  claim: (limit: number) => Promise<QueueItem[]>;
   // Re-read of sms_status immediately before sending, because someone may have
   // texted STOP after the row was enqueued.
   isStillSubscribed: (subscriberId: string) => Promise<boolean>;
@@ -47,6 +49,8 @@ export type WorkerDeps = {
     httpStatus?: number;
     // True when MARKETING_LIVE was off and nothing actually left the building.
     suppressed?: boolean;
+    // The provider refused because this person is on its opt-out list.
+    optedOut?: boolean;
   }>;
   markSent: (
     item: QueueItem,
@@ -56,12 +60,20 @@ export type WorkerDeps = {
   ) => Promise<void>;
   markSkipped: (item: QueueItem, reason: string) => Promise<void>;
   markFailed: (item: QueueItem, errorCode: string | null, errorMessage: string | null) => Promise<void>;
+  // The provider says this person opted out. Corrects our record as well as the
+  // queue row, so Supabase stops disagreeing with the provider.
+  markOptedOut: (item: QueueItem, reason: string) => Promise<void>;
   retryLater: (item: QueueItem, sendAfter: Date, errorCode: string | null) => Promise<void>;
   markContacted: (subscriberId: string) => Promise<void>;
 };
 
 export type WorkerSettings = {
-  budget: BudgetInputs;
+  // How many messages this run may send, computed by the caller from the
+  // configured throughput cap and the cron interval.
+  maxThisRun: number;
+  // Set by a provider that has a hard ceiling of its own (Sendblue's
+  // consecutive-outbound rule). Null or absent on the Telnyx path.
+  blockedReason?: string | null;
   quietHoursStart: number;
   quietHoursEnd: number;
   currentHour: number;
@@ -78,6 +90,7 @@ export type WorkerRunResult = {
   claimed: number;
   sent: number;
   skipped: number;
+  optedOut: number;
   failed: number;
   retried: number;
   newContactsUsed: number;
@@ -95,16 +108,23 @@ export async function runWorker(
     claimed: 0,
     sent: 0,
     skipped: 0,
+    optedOut: 0,
     failed: 0,
     retried: 0,
     newContactsUsed: 0,
     suppressed: 0,
   };
 
-  // Quiet hours short-circuit before the lease is taken, so a run during the
-  // night does not hold the lease it never needed.
+  // Quiet hours short-circuit before the lease is taken, so a night run does
+  // not hold a lease it never needed, and nothing is claimed, which keeps rows
+  // out of 'sending' overnight.
   if (isQuietHour(settings.currentHour, settings.quietHoursStart, settings.quietHoursEnd)) {
     result.skippedForQuietHours = true;
+    return result;
+  }
+
+  if (settings.blockedReason) {
+    result.blockedReason = settings.blockedReason;
     return result;
   }
 
@@ -125,28 +145,12 @@ async function drain(
   settings: WorkerSettings,
   result: WorkerRunResult
 ): Promise<WorkerRunResult> {
+  if (settings.maxThisRun <= 0) return result;
 
-  const budget = computeBudget(settings.budget);
-  if (budget.blockedReason) {
-    result.blockedReason = budget.blockedReason;
-    return result;
-  }
-  if (budget.total <= 0) return result;
+  const claimed = await deps.claim(settings.maxThisRun);
+  result.claimed = claimed.length;
 
-  // Established contacts first: they cost nothing from the new-contact pool,
-  // so draining them before spending budget gets more messages out per run.
-  const established = await deps.claim(budget.total, false);
-  result.claimed += established.length;
-
-  const remaining = Math.max(0, budget.total - established.length);
-  const newAllowance = Math.min(remaining, budget.newContacts);
-  const fresh = newAllowance > 0 ? await deps.claim(newAllowance, true) : [];
-
-  // claim(limit, true) may also return established rows, so new contacts are
-  // counted from the rows themselves rather than assumed.
-  result.claimed += fresh.length;
-
-  for (const item of [...established, ...fresh]) {
+  for (const item of claimed) {
     // Re-checked per item, not per batch. Someone can text STOP between the
     // claim and this line, and a marketing text after an opt-out is exactly
     // the thing that gets a number blocked.
@@ -163,16 +167,24 @@ async function drain(
       await deps.markSent(item, send.messageHandle, send.status, send.suppressed === true);
 
       // Only a message that genuinely went out counts as contact. Stamping
-      // last_sms_contact_at on a suppressed run would mark the whole list as
-      // established for the next 30 days, so the real campaign afterwards
-      // would compute is_new_contact: false for everyone, skip the new-contact
-      // cap entirely, and fire at full burst into a list that is actually
-      // cold. That is precisely the 429 storm this design exists to avoid.
+      // last_sms_contact_at on a suppressed run would misreport every
+      // recipient as an established contact, which is still the honest meaning
+      // of the column and is what the Sendblue path budgeted against.
       if (!send.suppressed) await deps.markContacted(item.subscriberId);
 
       result.sent++;
       if (send.suppressed) result.suppressed++;
       if (item.isNewContact) result.newContactsUsed++;
+      continue;
+    }
+
+    // The provider knows this person opted out and we did not. That is our
+    // record being stale, not a delivery failure: the row is skipped and the
+    // subscriber corrected. Retrying would be pointless, and succeeding would
+    // be a compliance problem.
+    if (send.optedOut) {
+      await deps.markOptedOut(item, send.errorMessage ?? "recipient has opted out at the provider");
+      result.optedOut++;
       continue;
     }
 

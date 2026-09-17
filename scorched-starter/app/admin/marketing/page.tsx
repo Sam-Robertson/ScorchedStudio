@@ -10,7 +10,8 @@ import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { formatPhoneForDisplay } from "@/lib/marketing/phone";
 import { describeSegment } from "@/lib/marketing/segment";
-import { segmentCount, validateSmsBody, withStopNotice } from "@/lib/marketing/message-rules";
+import { validateSmsBody, withStopNotice } from "@/lib/marketing/message-rules";
+import { costEstimate, formatUsd } from "@/lib/marketing/sms-segments";
 import type {
   CampaignRecord,
   ConsentEventRecord,
@@ -68,8 +69,8 @@ function ConfirmSend({
         </p>
         {campaign.channel === "sms" && (
           <p className="text-xs text-neutral-500 mb-3">
-            Texts are dripped over hours or days to stay inside the provider&apos;s limits. You can
-            pause this at any time.
+            Texts are paced at the configured throughput and pause overnight for quiet hours. You
+            can pause the campaign at any time.
           </p>
         )}
         <div className="flex gap-2 justify-end mt-6">
@@ -319,7 +320,7 @@ function StatusPill({ status }: { status: string }) {
 type SmsStats = {
   pending: number; sending: number; sent: number; delivered: number;
   failed: number; skipped: number; total: number; optOutsWithin48h: number;
-  estimate: { estimatedDays: number; estimatedCompletion: string | null; newContactsPending: number };
+  estimate: { estimatedDays: number; estimatedCompletion: string | null; perDay: number };
 };
 type EmailStats = {
   sent: number; delivered: number; opened: number; clicked: number;
@@ -379,7 +380,9 @@ function CampaignsTab() {
       setNotice(
         body.live
           ? confirming.channel === "sms"
-            ? `Queued ${body.queued} texts. They will drip out over about ${body.estimate?.estimatedDays ?? 0} day(s).`
+            ? `Queued ${body.queued} texts at up to ${body.estimate?.perDay ?? 0} a day, finishing ${
+                (body.estimate?.estimatedDays ?? 1) <= 1 ? "today" : `in about ${body.estimate.estimatedDays} days`
+              }.`
             : `Sent to ${body.sent} of ${body.attempted}.`
           : "MARKETING_LIVE is off, so nothing was actually sent. The run was logged instead."
       );
@@ -485,7 +488,11 @@ function CampaignsTab() {
                 <div><div className="text-neutral-400">opt-outs 48h</div><div>{stats[c.id].sms!.optOutsWithin48h}</div></div>
                 <div>
                   <div className="text-neutral-400">finishes in</div>
-                  <div>{stats[c.id].sms!.estimate.estimatedDays} day(s)</div>
+                  <div>
+                    {stats[c.id].sms!.estimate.estimatedDays <= 1
+                      ? "today"
+                      : `${stats[c.id].sms!.estimate.estimatedDays} days`}
+                  </div>
                 </div>
               </div>
             )}
@@ -526,6 +533,8 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
   const [tags, setTags] = useState("");
   const [match, setMatch] = useState<"any" | "all">("any");
   const [count, setCount] = useState<number | null>(null);
+  const [costPerSegment, setCostPerSegment] = useState(0.004);
+  const [mediaUrl, setMediaUrl] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -536,6 +545,7 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
         const params = new URLSearchParams({ countFor: "preview", channel, tags, match });
         const body = await api(`/api/admin/marketing/campaigns?${params}`);
         setCount(body.count);
+        if (typeof body.costPerSegment === "number") setCostPerSegment(body.costPerSegment);
       } catch {
         setCount(null);
       }
@@ -545,6 +555,9 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
 
   const issues = channel === "sms" ? validateSmsBody(body) : [];
   const finalBody = channel === "sms" ? withStopNotice(body) : body;
+  // Costed against the message that actually goes out, which includes the
+  // auto-appended opt-out notice.
+  const cost = channel === "sms" ? costEstimate(finalBody, costPerSegment, count ?? 0) : null;
 
   async function save() {
     setSaving(true);
@@ -557,6 +570,7 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
           name,
           subject,
           body,
+          mediaUrl: mediaUrl.trim() || undefined,
           segment: { tags: tags.split(",").map((t) => t.trim()).filter(Boolean), match },
         }),
       });
@@ -602,11 +616,16 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
               Message {channel === "sms" && <span className="text-neutral-400">(markdown not supported in texts)</span>}
             </label>
             <textarea className={`${inputCls} min-h-[120px]`} value={body} onChange={(e) => setBody(e.target.value)} />
-            {channel === "sms" && (
+            {channel === "sms" && cost && (
               <div className="mt-1 space-y-1">
-                <p className={`${vulfMono.className} text-xs ${finalBody.length > 160 ? "text-amber-600" : "text-neutral-400"}`}>
-                  {finalBody.length} characters, {segmentCount(finalBody)} SMS part(s)
+                <p className={`${vulfMono.className} text-xs ${cost.segments > 1 ? "text-amber-600" : "text-neutral-400"}`}>
+                  {cost.units} {cost.encoding === "UCS-2" ? "UCS-2 units" : "GSM-7 characters"}
+                  {" · "}
+                  {cost.segments} segment{cost.segments === 1 ? "" : "s"}
+                  {" · "}
+                  limit {cost.encoding === "UCS-2" ? "70/67" : "160/153"}
                 </p>
+
                 {/* Shows exactly what will go out, including the opt-out
                     notice that gets appended automatically. */}
                 {body.trim() && (
@@ -614,11 +633,36 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
                     {finalBody}
                   </p>
                 )}
+
                 {issues.map((i, idx) => (
                   <p key={idx} className={`text-xs ${i.level === "error" ? "text-red-500" : "text-amber-600"}`}>
                     {i.message}
                   </p>
                 ))}
+
+                {count !== null && count > 0 && cost.segments > 0 && (
+                  <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+                    Estimated cost {formatUsd(cost.total)} ({formatUsd(cost.perMessage)} x {count} recipients)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {channel === "sms" && (
+              <div className="mt-3">
+                <label className={labelCls}>Image URL (optional, sends as MMS)</label>
+                <input
+                  className={inputCls}
+                  placeholder="https://scorchedstudio.com/images/promo.jpg"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                />
+                {mediaUrl.trim() && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Adding an image makes this an MMS, which bills at a higher per-message rate than
+                    SMS and is not covered by the estimate above. Keep the file under 1 MB.
+                  </p>
+                )}
               </div>
             )}
           </div>

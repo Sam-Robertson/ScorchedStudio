@@ -14,13 +14,13 @@ import { audienceFor } from "./audience";
 import { isNewContact } from "./consent-rules";
 import { withStopNotice } from "./message-rules";
 import { smsLimits } from "./config";
-import { estimateCompletion, type CompletionEstimate } from "./sms-budget";
+import { estimateThroughputCompletion, type ThroughputEstimate } from "./sms-budget";
 
 export type EnqueueResult = {
   queued: number;
   alreadyQueued: number;
   newContacts: number;
-  estimate: CompletionEstimate;
+  estimate: ThroughputEstimate;
 };
 
 export async function enqueueSmsCampaign(campaign: CampaignRecord): Promise<EnqueueResult> {
@@ -44,8 +44,15 @@ export async function enqueueSmsCampaign(campaign: CampaignRecord): Promise<Enqu
       is_new_contact: isNewContact(s.last_sms_contact_at, now),
     }));
 
+  const limits = smsLimits();
+
   if (rows.length === 0) {
-    return { queued: 0, alreadyQueued: 0, newContacts: 0, estimate: estimateCompletion(0, 0, 1, now) };
+    return {
+      queued: 0,
+      alreadyQueued: 0,
+      newContacts: 0,
+      estimate: estimateThroughputCompletion(0, limits.maxPerMinute, limits.quietHoursStart, limits.quietHoursEnd, now),
+    };
   }
 
   // UNIQUE (campaign_id, subscriber_id) makes this idempotent: re-running an
@@ -74,7 +81,16 @@ export async function enqueueSmsCampaign(campaign: CampaignRecord): Promise<Enqu
     queued,
     alreadyQueued: rows.length - queued,
     newContacts,
-    estimate: estimateCompletion(newContacts, rows.length - newContacts, smsLimits().newContactsPerDay, now),
+    // Paced purely by throughput now. On Sendblue this was governed by the
+    // new-contact quota, which for a cold list meant weeks; a registered 10DLC
+    // long code has no such quota, so the only limit is the configured rate.
+    estimate: estimateThroughputCompletion(
+      rows.length,
+      limits.maxPerMinute,
+      limits.quietHoursStart,
+      limits.quietHoursEnd,
+      now
+    ),
   };
 }
 
@@ -87,7 +103,7 @@ export type CampaignSmsStats = {
   skipped: number;
   total: number;
   optOutsWithin48h: number;
-  estimate: CompletionEstimate;
+  estimate: ThroughputEstimate;
 };
 
 export async function campaignSmsStats(campaignId: string): Promise<CampaignSmsStats> {
@@ -103,8 +119,7 @@ export async function campaignSmsStats(campaignId: string): Promise<CampaignSmsS
   const rows = (data ?? []) as Pick<SmsQueueRecord, "status" | "is_new_contact" | "subscriber_id">[];
 
   const count = (status: string) => rows.filter((r) => r.status === status).length;
-  const pendingNew = rows.filter((r) => r.status === "pending" && r.is_new_contact).length;
-  const pendingEstablished = rows.filter((r) => r.status === "pending" && !r.is_new_contact).length;
+  const pending = rows.filter((r) => r.status === "pending").length;
 
   // Opt-outs attributed to this campaign: an SMS opt-out from someone it was
   // sent to, inside 48 hours of the send. Attribution is by time rather than
@@ -133,6 +148,14 @@ export async function campaignSmsStats(campaignId: string): Promise<CampaignSmsS
     skipped: count("skipped"),
     total: rows.length,
     optOutsWithin48h,
-    estimate: estimateCompletion(pendingNew, pendingEstablished, smsLimits().newContactsPerDay),
+    estimate: (() => {
+      const limits = smsLimits();
+      return estimateThroughputCompletion(
+        pending,
+        limits.maxPerMinute,
+        limits.quietHoursStart,
+        limits.quietHoursEnd
+      );
+    })(),
   };
 }

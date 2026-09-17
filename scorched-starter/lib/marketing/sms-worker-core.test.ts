@@ -9,13 +9,14 @@ import { backoffMs, isRetryableError, MAX_ATTEMPTS } from "./sms-status.ts";
 // JavaScript is single threaded, not because this test verifies Postgres.
 // FOR UPDATE SKIP LOCKED cannot be exercised without a database. What these
 // tests do prove is that, GIVEN an atomic claim, the worker never sends to the
-// same row twice, always re-checks consent, and respects the budget. The real
+// same row twice, always re-checks consent, and respects the cap. The real
 // database-level guarantee is the UNIQUE (campaign_id, subscriber_id)
 // constraint plus the conditional update inside the RPC.
 class FakeQueue {
   rows: Array<QueueItem & { status: string }> = [];
   sentTo: string[] = [];
   contacted: string[] = [];
+  optedOut: string[] = [];
   lockHeld = false;
 
   constructor(count: number, isNewContact = true) {
@@ -33,12 +34,11 @@ class FakeQueue {
     }
   }
 
-  claim = async (limit: number, allowNewContact: boolean): Promise<QueueItem[]> => {
+  claim = async (limit: number): Promise<QueueItem[]> => {
     const claimed: QueueItem[] = [];
     for (const row of this.rows) {
       if (claimed.length >= limit) break;
       if (row.status !== "pending") continue;
-      if (!allowNewContact && row.isNewContact) continue;
       row.status = "sending";
       row.attempts += 1;
       claimed.push({ ...row });
@@ -75,6 +75,10 @@ function deps(queue: FakeQueue, over: Partial<WorkerDeps> = {}): WorkerDeps {
     markContacted: async (id: string) => { queue.contacted.push(id); },
     markSkipped: async (item) => { queue.find(item.id).status = "skipped"; },
     markFailed: async (item) => { queue.find(item.id).status = "failed"; },
+    markOptedOut: async (item) => {
+      queue.find(item.id).status = "skipped";
+      queue.optedOut.push(item.subscriberId);
+    },
     retryLater: async (item) => { queue.find(item.id).status = "pending"; },
     ...over,
   };
@@ -82,16 +86,10 @@ function deps(queue: FakeQueue, over: Partial<WorkerDeps> = {}): WorkerDeps {
 
 function settings(over: Partial<WorkerSettings> = {}): WorkerSettings {
   return {
-    budget: {
-      newContactsPerHour: 15,
-      newContactsPerDay: 50,
-      burstPerSecond: 10,
-      newContactsSentLastHour: 0,
-      newContactsSentLastDay: 0,
-      runSeconds: 60,
-      maxConsecutiveNoReply: 150,
-      consecutiveNoReply: 0,
-    },
+    // 12 a minute over a 5 minute cron interval, which is what the Telnyx
+    // path actually computes.
+    maxThisRun: 60,
+    blockedReason: null,
     quietHoursStart: 20,
     quietHoursEnd: 9,
     currentHour: 12,
@@ -116,16 +114,16 @@ test("two overlapping runs never send to the same person twice", async () => {
   assert.equal(a.sent + b.sent, queue.sentTo.length);
 });
 
-test("overlapping runs cannot each spend the full hourly allowance", async () => {
-  // Without the lease this is the real failure: both runs read "0 new contacts
-  // sent this hour" before either claims anything, so both send 15 and the
-  // hour's true total is 30, double the cap Sendblue enforces.
-  const queue = new FakeQueue(30);
+test("overlapping runs cannot each spend the full throughput allowance", async () => {
+  // Without the lease both runs pace themselves against their own view of the
+  // queue and together send double the cap, which for a 10DLC campaign means
+  // carrier filtering rather than a queue.
+  const queue = new FakeQueue(200);
   const d = deps(queue);
 
   const [a, b] = await Promise.all([runWorker(d, settings()), runWorker(d, settings())]);
 
-  assert.equal(queue.sentTo.length, 15, "the hourly cap was exceeded across concurrent runs");
+  assert.equal(queue.sentTo.length, 60, "the per-run cap was exceeded across concurrent runs");
   assert.ok(a.lockedOut || b.lockedOut, "one of the two runs should have been locked out");
 });
 
@@ -138,17 +136,23 @@ test("the lease is released even when the run throws", async () => {
   assert.equal(queue.lockHeld, false);
 });
 
-test("the hourly cap is not exceeded across several sequential runs", async () => {
-  const queue = new FakeQueue(100);
+test("each run sends at most the throughput cap, and the rest waits", async () => {
+  const queue = new FakeQueue(200);
   const d = deps(queue);
 
   await runWorker(d, settings());
-  // A second run in the same hour sees the 15 already spent.
-  await runWorker(d, settings({
-    budget: { ...settings().budget, newContactsSentLastHour: 15 },
-  }));
+  assert.equal(queue.sentTo.length, 60, "first run must stop at the cap");
 
-  assert.equal(queue.sentTo.length, 15, "the second run must send nothing");
+  // The next cron tick picks up where it left off rather than re-sending.
+  await runWorker(d, settings());
+  assert.equal(queue.sentTo.length, 120);
+  assert.equal(new Set(queue.sentTo).size, 120, "no row was sent twice across runs");
+});
+
+test("a campaign smaller than the cap finishes in one run", async () => {
+  const queue = new FakeQueue(12);
+  const result = await runWorker(deps(queue), settings());
+  assert.equal(result.sent, 12);
 });
 
 test("someone who texted STOP after being queued is skipped, not sent to", async () => {
@@ -189,25 +193,31 @@ test("nothing is claimed at all during quiet hours", async () => {
   assert.ok(queue.rows.every((r) => r.status === "pending"));
 });
 
-test("the consecutive-no-reply ceiling stops the run before anything is claimed", async () => {
+test("a provider-level block stops the run before anything is claimed", async () => {
+  // Telnyx passes null here. The hook stays so Sendblue, whose line stops
+  // after 150 consecutive outbound messages without a reply, can be revived
+  // without re-plumbing the worker.
   const queue = new FakeQueue(10);
   const result = await runWorker(
     deps(queue),
-    settings({ budget: { ...settings().budget, consecutiveNoReply: 150 } })
+    settings({ blockedReason: "line is at its consecutive outbound ceiling" })
   );
 
   assert.match(result.blockedReason ?? "", /consecutive outbound/);
   assert.equal(result.claimed, 0);
   assert.equal(queue.sentTo.length, 0);
+  assert.ok(queue.rows.every((r) => r.status === "pending"), "nothing should be left mid-flight");
 });
 
-test("established contacts drain freely without spending new-contact budget", async () => {
-  const queue = new FakeQueue(40, false); // nobody is a new contact
+test("a cold list is no longer throttled by new-contact status", async () => {
+  // The whole reason for the provider swap: on Sendblue a list of 40 people
+  // nobody had texted before was capped at 15 an hour and 50 a day. On a
+  // registered 10DLC long code the distinction does not exist.
+  const queue = new FakeQueue(40, true); // everyone is a new contact
   const result = await runWorker(deps(queue), settings());
 
-  // Not capped at 15: the new-contact cap only governs new conversations.
   assert.equal(result.sent, 40);
-  assert.equal(result.newContactsUsed, 0);
+  assert.equal(result.newContactsUsed, 40);
 });
 
 test("a rate-limited send is retried later rather than failed", async () => {
@@ -311,4 +321,40 @@ test("a real send does mark contact, so the next campaign budgets correctly", as
 
   assert.equal(result.suppressed, 0);
   assert.equal(queue.contacted.length, 3);
+});
+
+test("a recipient the provider says opted out is skipped, not failed", async () => {
+  // Telnyx returns 40300 when the number texted STOP. That is our record being
+  // stale, not a delivery failure: retrying would be pointless, and succeeding
+  // would mean texting someone who asked us not to.
+  const queue = new FakeQueue(3);
+  const result = await runWorker(
+    deps(queue, {
+      send: async (item) => {
+        if (item.id !== "row-1") {
+          queue.sentTo.push(item.id);
+          return { ok: true, messageHandle: `h-${item.id}`, status: "queued", errorCode: null, errorMessage: null };
+        }
+        return {
+          ok: false,
+          messageHandle: null,
+          status: null,
+          errorCode: "40300",
+          errorMessage: "Blocked due to STOP message",
+          httpStatus: 403,
+          optedOut: true,
+        };
+      },
+    }),
+    settings()
+  );
+
+  assert.equal(result.optedOut, 1);
+  assert.equal(result.failed, 0, "an opt-out must not be recorded as a failure");
+  assert.equal(result.retried, 0, "an opt-out must never be retried");
+  assert.equal(result.sent, 2);
+  assert.equal(queue.find("row-1").status, "skipped");
+  // The subscriber is corrected too, so Supabase stops disagreeing with the
+  // provider about who may be messaged.
+  assert.deepEqual(queue.optedOut, ["sub-1"]);
 });

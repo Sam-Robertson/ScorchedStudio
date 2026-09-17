@@ -26,6 +26,11 @@ export type SendResult = {
   httpStatus?: number;
   // True when MARKETING_LIVE was off and nothing actually left the building.
   suppressed?: boolean;
+  // The recipient is on the provider's own opt-out list. This is a third
+  // outcome, not a failure: the person asked to stop, so the queue row is
+  // skipped and our record is corrected to match. Retrying would be both
+  // pointless and, if it ever succeeded, a compliance problem.
+  optedOut?: boolean;
 };
 
 export type InboundMessage = {
@@ -45,6 +50,11 @@ export type InboundMessage = {
   occurredAt: string | null;
   raw: unknown;
 };
+
+// Maps a provider's own status string onto our queue status. Each provider
+// has its own vocabulary, so the shared webhook handling takes this as an
+// argument rather than trying to understand both.
+export type SmsQueueStatusMapper = (status: string | null | undefined) => import("@/lib/supabase").SmsQueueStatus | null;
 
 export interface SmsProvider {
   readonly name: string;

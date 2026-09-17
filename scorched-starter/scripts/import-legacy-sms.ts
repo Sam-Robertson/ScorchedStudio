@@ -34,7 +34,14 @@ const CONSENT_TEXT =
   `to the studio's previous number. The exact wording shown to them at the time was not recorded by that service.`;
 
 const IMPORT_TAG = "legacy-sms";
-const SENDBLUE_BULK_SIZE = 100;
+// The first message this segment gets. They last heard from a different
+// number, so it has to say who it is before anything else, and it has to fit
+// in one segment: a multi-part re-introduction from an unknown number is
+// exactly what gets reported as spam. Straight apostrophes only, since a curly
+// one would force UCS-2 and halve the usable length.
+export const REINTRO_MESSAGE =
+  "Scorched Studio here! This is our new number for class updates and offers. " +
+  "Save it so you don't miss out. Reply STOP to opt out.";
 
 type Row = {
   phone: string;
@@ -196,66 +203,37 @@ async function importRows(rows: Row[], apply: boolean): Promise<{ inserted: numb
   return { inserted, updated };
 }
 
-// Sendblue's contacts API is limited to 100 requests per 10 seconds per
-// account, so contacts go up in batches of 100 rather than one call each.
-async function pushToSendblue(rows: Row[], apply: boolean): Promise<void> {
-  const base = (process.env.SENDBLUE_BASE_URL || "https://api.sendblue.com").replace(/\/+$/, "");
-  const keyId = process.env.SENDBLUE_API_KEY_ID;
-  const secret = process.env.SENDBLUE_API_SECRET_KEY;
+// Provider contact sync.
+//
+// Sendblue kept its own contact list that had to be populated and opted out in
+// step with ours. Telnyx has no contact list: you send to a number, and its
+// opt-out list is populated automatically from inbound STOP keywords. So on
+// the Telnyx path there is nothing to push, and Supabase is the only store
+// this script writes.
+//
+// The function is kept rather than deleted so that reviving Sendblue means
+// filling in one branch instead of rediscovering that the step is needed.
+async function syncContactsToProvider(rows: Row[], apply: boolean): Promise<void> {
+  const provider = process.env.SMS_PROVIDER === "sendblue" ? "sendblue" : "telnyx";
 
-  if (!keyId || !secret) {
-    console.log("  Sendblue: skipped, SENDBLUE_API_KEY_ID / SENDBLUE_API_SECRET_KEY not set");
+  if (provider === "telnyx") {
+    const optedOut = rows.filter((r) => r.unsubscribed).length;
+    console.log(
+      `  Telnyx: no contact list to sync. ${rows.length - optedOut} subscribed and ${optedOut} ` +
+        `opted out recorded in Supabase only.`
+    );
+    console.log(
+      "  Note: Telnyx's own opt-out list starts empty. Anyone on the legacy opt-out list is " +
+        "unsubscribed here, which is what stops them being enqueued in the first place."
+    );
     return;
   }
 
-  const headers = {
-    "sb-api-key-id": keyId,
-    "sb-api-secret-key": secret,
-    "content-type": "application/json",
-  };
-
-  const active = rows.filter((r) => !r.unsubscribed);
-  const optedOut = rows.filter((r) => r.unsubscribed);
-
-  if (!apply) {
-    console.log(`  Sendblue: WOULD bulk create ${active.length} contacts and opt out ${optedOut.length}`);
-    return;
-  }
-
-  // Note the shape difference from the single-contact endpoint, which takes
-  // `number` in snake_case. Bulk takes `phone` with camelCase names.
-  for (let i = 0; i < active.length; i += SENDBLUE_BULK_SIZE) {
-    const batch = active.slice(i, i + SENDBLUE_BULK_SIZE);
-    const res = await fetch(`${base}/api/v2/contacts/bulk`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        contacts: batch.map((r) => ({
-          phone: r.phone,
-          firstName: r.firstName ?? undefined,
-          lastName: r.lastName ?? undefined,
-          tags: [IMPORT_TAG],
-        })),
-      }),
-    });
-    if (!res.ok) {
-      console.error(`  Sendblue bulk create failed at offset ${i}: HTTP ${res.status}`);
-    } else {
-      console.log(`  Sendblue: created ${batch.length} contacts (offset ${i})`);
-    }
-    await new Promise((r) => setTimeout(r, 150)); // stay under 100 per 10s
-  }
-
-  for (const row of optedOut) {
-    const res = await fetch(`${base}/api/v2/contacts/opt-out`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ number: row.phone, opted_out: true }),
-    });
-    if (!res.ok) console.error(`  Sendblue opt-out failed for ${row.phone}: HTTP ${res.status}`);
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  console.log(`  Sendblue: pushed ${optedOut.length} opt-outs`);
+  console.log(
+    apply
+      ? "  Sendblue: SMS_PROVIDER=sendblue, but the bulk contact sync was removed when Telnyx became the default. Re-add it before using this path."
+      : "  Sendblue: WOULD need a bulk contact sync, which is not implemented on this path."
+  );
 }
 
 function report(label: string, counts: Counts) {
@@ -309,6 +287,7 @@ async function main() {
   console.log(`  will be unsubscribed: ${merged.length - willSubscribe}`);
 
   if (dryRun) {
+    await syncContactsToProvider(merged, false);
     console.log("\nDRY RUN. Nothing was written. Re-run with --apply to import.");
     return;
   }
@@ -318,13 +297,14 @@ async function main() {
   console.log(`  inserted: ${inserted}`);
   console.log(`  updated:  ${updated}`);
 
-  console.log("\nPushing to Sendblue...");
-  await pushToSendblue(merged, true);
+  console.log("\nSyncing contacts to the SMS provider...");
+  await syncContactsToProvider(merged, true);
 
   console.log(
-    `\nDone. Everyone imported counts as a new contact for rate limiting, so the\n` +
-      `re-introduction campaign will drip at the configured daily cap. The admin\n` +
-      `campaign page shows the estimated completion date before you send.`
+    `\nDone. Suggested first message to this segment, which fits in a single\n` +
+      `GSM-7 segment and needs no emoji:\n\n  ${REINTRO_MESSAGE}\n\n` +
+      `Create it as a campaign tagged "${IMPORT_TAG}". The admin page shows the\n` +
+      `recipient count, the segment count, and the estimated cost before you send.`
   );
 }
 

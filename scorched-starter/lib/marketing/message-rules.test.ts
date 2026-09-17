@@ -72,7 +72,24 @@ test("going multi-part warns but does not block", () => {
   assert.equal(issues.filter((i) => i.level === "error").length, 0);
   const warnings = issues.filter((i) => i.level === "warning");
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0].message, /2 parts/);
+  assert.match(warnings[0].message, /2 segments/);
+});
+
+test("an emoji is called out as the reason the cost jumped", () => {
+  // The author cannot see why a short message became two segments unless the
+  // warning names the character responsible.
+  const issues = validateSmsBody("Scorched Studio: classes are up 🔥");
+  const warnings = issues.filter((i) => i.level === "warning");
+
+  assert.ok(warnings.some((w) => w.message.includes("🔥")));
+  assert.ok(warnings.some((w) => /UCS-2/.test(w.message)));
+  assert.equal(issues.filter((i) => i.level === "error").length, 0, "an emoji must not block the send");
+});
+
+test("a GSM-7 extended character is called out as double width", () => {
+  const issues = validateSmsBody("Scorched Studio: 50% off {today}");
+  const warnings = issues.filter((i) => i.level === "warning");
+  assert.ok(warnings.some((w) => /count as two characters/.test(w.message)));
 });
 
 test("the length warning counts the appended STOP notice too", () => {
