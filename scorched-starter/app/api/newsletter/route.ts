@@ -49,12 +49,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const sb = getSupabase();
-    const { error } = await sb.from("newsletter_subscribers").insert({ email: normalizedEmail });
-    // Duplicate email is not an error from the caller's perspective — they're
-    // already subscribed, which is the desired end state.
-    if (error && error.code !== "23505") {
-      return Response.json({ error: "Failed to subscribe" }, { status: 500 });
+    // Only mirrored into the old email table when email was actually asked
+    // for. The email field is still required on the form (it is how we key a
+    // person), so someone ticking only the SMS box would otherwise land on the
+    // email marketing list having explicitly declined email.
+    if (emailOptIn) {
+      const sb = getSupabase();
+      const { error } = await sb.from("newsletter_subscribers").insert({ email: normalizedEmail });
+      // Duplicate email is not an error from the caller's perspective — they're
+      // already subscribed, which is the desired end state.
+      if (error && error.code !== "23505") {
+        return Response.json({ error: "Failed to subscribe" }, { status: 500 });
+      }
     }
 
     const { ip, userAgent } = consentMetaFrom(req);

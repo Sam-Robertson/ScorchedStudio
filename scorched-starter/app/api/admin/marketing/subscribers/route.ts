@@ -26,10 +26,17 @@ export async function GET(req: NextRequest) {
     if (search) {
       // Matches either channel, since staff searching for a person may have
       // only one of the two to hand.
-      const escaped = search.replace(/[%,]/g, "");
-      query = query.or(
-        `email.ilike.%${escaped}%,phone.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%`
-      );
+      const escaped = search.replace(/[%,()]/g, "");
+      const clauses = [
+        `email.ilike.%${escaped}%`,
+        `first_name.ilike.%${escaped}%`,
+        `last_name.ilike.%${escaped}%`,
+      ];
+      // phone is stored as E.164, so a typed "801-361" or "(801) 361" would
+      // never match it literally. Search the digits instead.
+      const digits = search.replace(/\D/g, "");
+      if (digits) clauses.push(`phone.ilike.%${digits}%`);
+      query = query.or(clauses.join(","));
     }
     if (emailStatus) query = query.eq("email_status", emailStatus);
     if (smsStatus) query = query.eq("sms_status", smsStatus);

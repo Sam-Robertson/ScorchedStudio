@@ -51,7 +51,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const result = await sendCampaignEmails(campaign, recipients);
 
     // Email finishes in one pass, so the campaign is done rather than sending.
-    await sb.from("campaigns").update({ status: "sent" }).eq("id", campaign.id);
+    // A suppressed run is not a send, though: marking it 'sent' would make the
+    // campaign permanently unsendable, since only a draft, scheduled or paused
+    // campaign can be started.
+    if (!result.suppressed) {
+      await sb.from("campaigns").update({ status: "sent" }).eq("id", campaign.id);
+    }
 
     return Response.json({ ok: true, channel: "email", live: marketingIsLive(), ...result });
   } catch (err) {

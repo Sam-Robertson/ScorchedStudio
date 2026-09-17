@@ -168,7 +168,9 @@ logs look right, then repeat with `MARKETING_LIVE=true`.
    boxes ticked. Confirm both write consent rows with source `waiver` and
    `booking`, and that neither flow breaks if the marketing write fails.
 3. **Test sends.** In `/admin/marketing`, create one email campaign and one SMS
-   campaign. Use TEST SEND to your own address and number.
+   campaign. Use TEST SEND to your own address and number. (A suppressed run is
+   safe to repeat: it does not mark anyone as contacted and does not mark an
+   email campaign as sent, so nothing is consumed by practising.)
    - With `MARKETING_LIVE=false`, expect `MARKETING_SUPPRESSED` in the Vercel
      logs and nothing delivered. Confirm that first.
    - Then set `MARKETING_LIVE=true` and repeat. Confirm both arrive.

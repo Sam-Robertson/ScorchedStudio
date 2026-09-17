@@ -492,6 +492,12 @@ SELECT s.id,
        n.created_at
   FROM newsletter_subscribers n
   JOIN subscribers s ON s.email = n.email
+ -- Only rows this backfill itself created and that are still subscribed.
+ -- Without this guard, re-running the file would manufacture a fresh opt-in
+ -- record for someone who has since unsubscribed, in the append-only table
+ -- whose entire purpose is being the evidence that they opted in. The file is
+ -- documented as safe to re-run, so it has to actually be safe.
+   AND s.email_status = 'subscribed'
  WHERE NOT EXISTS (
    SELECT 1 FROM consent_events e
     WHERE e.subscriber_id = s.id

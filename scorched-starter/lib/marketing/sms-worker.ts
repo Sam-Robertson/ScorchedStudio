@@ -136,12 +136,15 @@ export async function runSmsWorker(): Promise<WorkerRunResult> {
         statusCallback: `${siteUrl()}/api/webhooks/sendblue`,
       }),
 
-    markSent: async (item, handle, status) => {
+    markSent: async (item, handle, status, suppressed) => {
       await sb
         .from("sms_queue")
         .update({ status: "sent", provider_message_handle: handle, error_code: null, error_message: null })
         .eq("id", item.id);
-      if (status) {
+      // A suppressed send writes no sms_messages row. That table feeds
+      // consecutiveOutboundWithoutReply, and counting messages nobody received
+      // would trip the 150 ceiling against a line that has sent nothing.
+      if (status && !suppressed) {
         await sb.from("sms_messages").upsert(
           {
             provider_message_handle: handle,

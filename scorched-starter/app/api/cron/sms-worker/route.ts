@@ -7,6 +7,7 @@
 // large campaign drips over hours or days and this is what does the dripping.
 import { NextRequest } from "next/server";
 import { runSmsWorker } from "@/lib/marketing/sms-worker";
+import { startDueCampaigns } from "@/lib/marketing/scheduled-campaigns";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -15,6 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Scheduled campaigns start here rather than on their own cron. An SMS
+    // campaign becoming 'sending' is exactly what lets the worker below pick
+    // it up in the same run.
+    const scheduled = await startDueCampaigns();
+
     const result = await runSmsWorker();
 
     // The consecutive-no-reply ceiling is the one limit no config value can
@@ -23,7 +29,7 @@ export async function GET(req: NextRequest) {
       console.error("SMS_WORKER_BLOCKED", result.blockedReason);
     }
 
-    return Response.json({ ok: true, ...result });
+    return Response.json({ ok: true, scheduled, ...result });
   } catch (err) {
     console.error("SMS_WORKER_ERROR", err);
     return Response.json({ error: "Worker failed" }, { status: 500 });

@@ -49,11 +49,13 @@ const RANK: Record<SmsQueueStatus, number> = {
   pending: 0,
   sending: 1,
   sent: 2,
-  delivered: 3,
-  // Terminal failures outrank the in-flight states but never overwrite a
-  // confirmed delivery.
-  failed: 2,
-  skipped: 4,
+  // A confirmed failure outranks 'sent'. Sendblue can report SENT and then
+  // ERROR when a carrier rejects downstream, and the later fact is the true
+  // one. Giving them equal rank let a pair of out-of-order callbacks flip the
+  // row back and forth indefinitely.
+  failed: 3,
+  delivered: 4,
+  skipped: 5,
 };
 
 export function shouldAdvanceStatus(current: SmsQueueStatus, incoming: SmsQueueStatus): boolean {

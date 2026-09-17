@@ -96,3 +96,16 @@ test("backoff grows and then stops growing", () => {
 test("attempts are bounded", () => {
   assert.equal(MAX_ATTEMPTS, 5);
 });
+
+test("sent and failed cannot flip back and forth on out-of-order callbacks", () => {
+  // Sendblue can report SENT and then ERROR when a carrier rejects downstream.
+  // The later fact wins, but the reverse must not, or two callbacks arriving
+  // out of order would toggle the row indefinitely.
+  assert.ok(shouldAdvanceStatus("sent", "failed"));
+  assert.ok(!shouldAdvanceStatus("failed", "sent"));
+});
+
+test("a delivery still outranks a failure", () => {
+  assert.ok(shouldAdvanceStatus("failed", "delivered"));
+  assert.ok(!shouldAdvanceStatus("delivered", "failed"));
+});

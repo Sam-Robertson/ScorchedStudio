@@ -45,8 +45,15 @@ export type WorkerDeps = {
     errorCode: string | null;
     errorMessage: string | null;
     httpStatus?: number;
+    // True when MARKETING_LIVE was off and nothing actually left the building.
+    suppressed?: boolean;
   }>;
-  markSent: (item: QueueItem, handle: string | null, status: string | null) => Promise<void>;
+  markSent: (
+    item: QueueItem,
+    handle: string | null,
+    status: string | null,
+    suppressed: boolean
+  ) => Promise<void>;
   markSkipped: (item: QueueItem, reason: string) => Promise<void>;
   markFailed: (item: QueueItem, errorCode: string | null, errorMessage: string | null) => Promise<void>;
   retryLater: (item: QueueItem, sendAfter: Date, errorCode: string | null) => Promise<void>;
@@ -74,6 +81,7 @@ export type WorkerRunResult = {
   failed: number;
   retried: number;
   newContactsUsed: number;
+  suppressed: number;
 };
 
 export async function runWorker(
@@ -90,6 +98,7 @@ export async function runWorker(
     failed: 0,
     retried: 0,
     newContactsUsed: 0,
+    suppressed: 0,
   };
 
   // Quiet hours short-circuit before the lease is taken, so a run during the
@@ -151,9 +160,18 @@ async function drain(
     const send = await deps.send(item);
 
     if (send.ok) {
-      await deps.markSent(item, send.messageHandle, send.status);
-      await deps.markContacted(item.subscriberId);
+      await deps.markSent(item, send.messageHandle, send.status, send.suppressed === true);
+
+      // Only a message that genuinely went out counts as contact. Stamping
+      // last_sms_contact_at on a suppressed run would mark the whole list as
+      // established for the next 30 days, so the real campaign afterwards
+      // would compute is_new_contact: false for everyone, skip the new-contact
+      // cap entirely, and fire at full burst into a list that is actually
+      // cold. That is precisely the 429 storm this design exists to avoid.
+      if (!send.suppressed) await deps.markContacted(item.subscriberId);
+
       result.sent++;
+      if (send.suppressed) result.suppressed++;
       if (item.isNewContact) result.newContactsUsed++;
       continue;
     }

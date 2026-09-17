@@ -15,6 +15,7 @@ import { backoffMs, isRetryableError, MAX_ATTEMPTS } from "./sms-status.ts";
 class FakeQueue {
   rows: Array<QueueItem & { status: string }> = [];
   sentTo: string[] = [];
+  contacted: string[] = [];
   lockHeld = false;
 
   constructor(count: number, isNewContact = true) {
@@ -71,10 +72,10 @@ function deps(queue: FakeQueue, over: Partial<WorkerDeps> = {}): WorkerDeps {
       return { ok: true, messageHandle: `h-${item.id}`, status: "QUEUED", errorCode: null, errorMessage: null };
     },
     markSent: async (item) => { queue.find(item.id).status = "sent"; },
+    markContacted: async (id: string) => { queue.contacted.push(id); },
     markSkipped: async (item) => { queue.find(item.id).status = "skipped"; },
     markFailed: async (item) => { queue.find(item.id).status = "failed"; },
     retryLater: async (item) => { queue.find(item.id).status = "pending"; },
-    markContacted: async () => {},
     ...over,
   };
 }
@@ -271,4 +272,43 @@ test("a row that has exhausted its attempts fails instead of retrying forever", 
 
   assert.equal(result.failed, 1);
   assert.equal(result.retried, 0);
+});
+
+test("a suppressed send does not mark anyone as contacted", async () => {
+  // The trap this guards against: with MARKETING_LIVE off, the provider
+  // returns ok so the pipeline can be exercised. If that stamped
+  // last_sms_contact_at, everyone would count as an established contact for
+  // the next 30 days, so the real campaign afterwards would skip the
+  // new-contact cap entirely and fire at full burst into a list that is
+  // actually cold. SETUP.md explicitly tells Sam to do a suppressed run first,
+  // so this path is the expected one, not an edge case.
+  const queue = new FakeQueue(5);
+  const result = await runWorker(
+    deps(queue, {
+      send: async (item) => {
+        queue.sentTo.push(item.id);
+        return {
+          ok: true,
+          messageHandle: `suppressed-${item.id}`,
+          status: "QUEUED",
+          errorCode: null,
+          errorMessage: null,
+          suppressed: true,
+        };
+      },
+    }),
+    settings()
+  );
+
+  assert.equal(result.sent, 5);
+  assert.equal(result.suppressed, 5);
+  assert.deepEqual(queue.contacted, [], "a suppressed run must not stamp last_sms_contact_at");
+});
+
+test("a real send does mark contact, so the next campaign budgets correctly", async () => {
+  const queue = new FakeQueue(3);
+  const result = await runWorker(deps(queue), settings());
+
+  assert.equal(result.suppressed, 0);
+  assert.equal(queue.contacted.length, 3);
 });
