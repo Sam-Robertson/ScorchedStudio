@@ -86,3 +86,15 @@ answering questions mid-build.
 - `enqueueSmsCampaign` is the only place a campaign becomes sendable. It applies `withStopNotice` and computes `is_new_contact` once, freezing the body into each queue row so editing a draft mid-drip cannot change what half the list already received.
 - Enqueue flips the campaign to `sending`, which is what the worker's claim filters on. Pause and cancel flip it back and the worker stops on its next run with no other coordination.
 - Enqueue is idempotent via `ON CONFLICT DO NOTHING` on the unique pair, so a retry after a partial failure adds only what is missing.
+
+## Phase 5 legacy import
+
+- The script requires **both** exports and refuses to run with only the active list. Without the opt-out list, people who left the old service would be imported as subscribed and texted again, which is the worst outcome available.
+- Opt-outs are applied first and the active list can never overwrite them, in the file merge and again against existing rows: an opt-out already in our database always wins.
+- Dry run is the default. `--apply` is required to write, matching the webhook script, because the only Supabase credentials on this machine are production.
+- The CSV reader is hand-written rather than a dependency: one throwaway import, and the quoting rules that matter are short. It handles CRLF and a UTF-8 BOM, both near-universal in spreadsheet exports, and a BOM would otherwise corrupt the first header name and break detection entirely.
+- Column detection prefers an exact header match over a partial one, so a column called `phone` beats `phone_carrier_lookup`.
+- An unparseable opt-in date returns null and the import falls back to the import time, rather than recording a date that never happened. Spreadsheet serial numbers are rejected by a plausible-year check.
+- `NoPhoneColumnError` is declared with an explicit field rather than a constructor parameter property, because the test runner uses node's strip-only TypeScript mode which rejects those.
+- The Sendblue bulk contact endpoint takes `phone` with camelCase names, while the single-contact endpoint takes `number` in snake_case. Easy to get wrong; noted at the call site.
+- Contacts go up in batches of 100 with a pause between calls, since the contacts API allows 100 requests per 10 seconds per account.
