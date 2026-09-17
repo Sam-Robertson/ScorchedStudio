@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import MarketingOptIns, { EMPTY_OPT_INS, type OptInState } from "@/components/marketing/MarketingOptIns";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import Container from "@/components/ui/Container";
@@ -154,6 +155,7 @@ export default function BookPage() {
   const [reserveError, setReserveError] = useState("");
   const [referralSource, setReferralSource] = useState("");
   const [referralOther, setReferralOther] = useState("");
+  const [optIns, setOptIns] = useState<OptInState>(EMPTY_OPT_INS);
 
   // ── Manage tab state ────────────────────────────────────────────────────────
   const [manageScreen, setManageScreen] = useState<ManageScreen>("lookup");
@@ -272,7 +274,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined, location }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms }),
       });
       const data = await res.json();
       if (!res.ok) { setPayError(data.error || "Something went wrong."); setPayLoading(false); return; }
@@ -294,7 +296,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined, location }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms }),
       });
       const data = await res.json();
       if (!res.ok) { setReserveError(data.error || "Something went wrong."); setReserveLoading(false); return; }
@@ -472,6 +474,7 @@ export default function BookPage() {
                 partySize={partySize} setPartySize={setPartySize}
                 referralSource={referralSource} setReferralSource={setReferralSource}
                 referralOther={referralOther} setReferralOther={setReferralOther}
+                optIns={optIns} setOptIns={setOptIns}
                 error={formError}
                 onBack={() => setBookStep(1)}
                 onContinue={handleStep2Continue}
@@ -725,13 +728,14 @@ const REFERRAL_OPTIONS = [
   "Other",
 ];
 
-function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, referralSource, setReferralSource, referralOther, setReferralOther, error, onBack, onContinue }: {
+function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, referralSource, setReferralSource, referralOther, setReferralOther, optIns, setOptIns, error, onBack, onContinue }: {
   name: string; setName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
   partySize: number; setPartySize: (v: number) => void;
   referralSource: string; setReferralSource: (v: string) => void;
   referralOther: string; setReferralOther: (v: string) => void;
+  optIns: OptInState; setOptIns: (v: OptInState) => void;
   error: string; onBack: () => void; onContinue: () => void;
 }) {
   return (
@@ -782,6 +786,13 @@ function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize,
             />
           )}
         </div>
+      </div>
+      {/* Optional and unticked by default. Nothing here gates the booking. */}
+      <div className="rounded-xl border border-black/10 bg-neutral-50 p-4">
+        <p className={`${vulfMono.className} text-xs tracking-[0.15em] uppercase text-neutral-500 mb-3`}>
+          Stay in the loop (optional)
+        </p>
+        <MarketingOptIns value={optIns} onChange={setOptIns} idPrefix="book" />
       </div>
       {error && <p className={`${vulfMono.className} text-xs text-red-500`}>{error}</p>}
       <div className="flex gap-3 pt-1">

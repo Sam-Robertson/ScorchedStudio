@@ -6,6 +6,10 @@ import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-uti
 import { getSupabase } from "@/lib/supabase";
 import { getLocationByKey } from "@/lib/locations";
 import { todayInDenverYmd } from "@/lib/timezone";
+import { recordConsentSafe } from "@/lib/marketing/consent";
+import { EMAIL_CONSENT_TEXT, SMS_CONSENT_TEXT } from "@/lib/marketing/consent-copy";
+import { consentMetaFrom } from "@/lib/marketing/request-meta";
+import { syncSubscriberToResend } from "@/lib/marketing/resend-audience";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -20,6 +24,8 @@ const schema = z.object({
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
   location: z.enum(["orem", "slc"]).optional(),
+  emailOptIn: z.boolean().optional().default(false),
+  smsOptIn: z.boolean().optional().default(false),
 });
 
 export async function POST(req: NextRequest) {
@@ -30,6 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { date, time_slot, party_size, name, email, phone, payment_method, referral_source, referral_other } = parsed.data;
+  const { emailOptIn, smsOptIn } = parsed.data;
   const location = parsed.data.location ?? "orem";
   const locationRecord = await getLocationByKey(location);
   const capacity = locationRecord?.capacity ?? MAX_CAPACITY;
@@ -42,6 +49,35 @@ export async function POST(req: NextRequest) {
   const validSlots = await getSlotsForDate(date, location);
   if (!validSlots.includes(time_slot)) {
     return Response.json({ error: "Invalid time slot for this date." }, { status: 400 });
+  }
+
+  // Marketing opt-in. Recorded when the form is submitted with a box ticked,
+  // which is the moment the person actually agreed, rather than after payment
+  // clears. recordConsentSafe never throws, so a marketing failure cannot take
+  // down a booking.
+  if (emailOptIn || smsOptIn) {
+    const { ip, userAgent } = consentMetaFrom(req);
+    const [firstName, ...rest] = name.trim().split(/\s+/);
+    const consent = await recordConsentSafe({
+      email,
+      phone: smsOptIn ? phone : null,
+      firstName: firstName || null,
+      lastName: rest.length ? rest.join(" ") : null,
+      channels: [
+        ...(emailOptIn ? [{ channel: "email" as const, optIn: true }] : []),
+        ...(smsOptIn ? [{ channel: "sms" as const, optIn: true }] : []),
+      ],
+      source: "booking",
+      consentText: [emailOptIn ? EMAIL_CONSENT_TEXT : null, smsOptIn ? SMS_CONSENT_TEXT : null]
+        .filter(Boolean)
+        .join(" "),
+      ip,
+      userAgent,
+      tags: [location],
+    });
+    if (consent?.applied.includes("email")) {
+      await syncSubscriberToResend(consent.subscriber);
+    }
   }
 
   // Check capacity

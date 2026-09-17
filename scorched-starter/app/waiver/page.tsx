@@ -2,6 +2,7 @@
 
 // app/waiver/page.tsx
 import { useRef, useState, useCallback, useEffect } from "react";
+import MarketingOptIns, { EMPTY_OPT_INS, type OptInState } from "@/components/marketing/MarketingOptIns";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -135,6 +136,7 @@ export default function WaiverPage() {
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [minors, setMinors] = useState<Minor[]>([]);
   const [minorErrors, setMinorErrors] = useState<string | null>(null);
+  const [optIns, setOptIns] = useState<OptInState>(EMPTY_OPT_INS);
 
   // Per-kiosk URL, e.g. /waiver?location=slc — defaults to Orem so existing
   // bookmarked kiosks with no query param keep working unchanged.
@@ -200,6 +202,8 @@ export default function WaiverPage() {
         signatureData,
         minors: minors.length > 0 ? minors : [],
         location,
+        emailOptIn: optIns.email,
+        smsOptIn: optIns.sms,
       }),
     });
 
@@ -208,6 +212,7 @@ export default function WaiverPage() {
       return;
     }
 
+    setOptIns(EMPTY_OPT_INS);
     setSubmittedName(values.firstName);
     setSubmittedEmail(values.email);
     setSubmitted(true);
@@ -493,6 +498,15 @@ export default function WaiverPage() {
             </span>
           </label>
           {errors.agreed && <p className={errorCls}>{errors.agreed.message}</p>}
+        </div>
+
+        {/* Marketing opt-ins. Separate from the liability agreement above and
+            entirely optional: ticking neither still signs the waiver. */}
+        <div className="rounded-xl border border-black/10 bg-neutral-50 p-4">
+          <p className={`${vulfMono.className} text-xs tracking-[0.15em] uppercase text-neutral-500 mb-3`}>
+            Stay in the loop (optional)
+          </p>
+          <MarketingOptIns value={optIns} onChange={setOptIns} idPrefix="waiver" />
         </div>
 
         {/* Signature */}

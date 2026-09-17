@@ -32,3 +32,15 @@ answering questions mid-build.
 ## Deliberate limits on what the tests prove
 
 - The no-double-send test injects the claim primitive and proves the budgeting and dedup logic is correct given an atomic claim. It does **not** prove Postgres `FOR UPDATE SKIP LOCKED` semantics, which cannot be exercised without a database. The real guarantee is the `UNIQUE (campaign_id, subscriber_id)` constraint plus the conditional claim in `claim_sms_queue_batch`. A green test here means less than it looks like.
+
+## Phase 2 capture points
+
+- Booking has two payment paths (`reserve` for gift cards, `create-payment-intent` for cards), so consent is recorded in both. It is written when the form is submitted with a box ticked, not after payment clears: that is the moment the person actually agreed, and threading opt-in flags through Stripe metadata to the confirm step would add a failure mode for no benefit. Someone who ticks the box and then abandons checkout is opted in, which is correct, since they asked to be.
+- The waiver and both booking routes call `recordConsentSafe`, which logs and swallows. A marketing write must never turn a signed waiver or a paid booking into a 500.
+- The footer form requires at least one box ticked. Both start unchecked per spec, and a signup with neither ticked would subscribe nobody, so the form says so instead of silently accepting it.
+- The footer only asks for a phone number once the SMS box is ticked, so the common email-only case stays a single field.
+- `/api/newsletter` still writes `newsletter_subscribers` as well as calling `recordConsent`. Nothing else has been repointed at `subscribers` yet, so keeping both in step costs one insert and avoids a one-way migration.
+- Consent text stored is only the wording for the boxes actually ticked, so the log never claims someone read an SMS disclosure they did not see.
+- There is no `/terms` page on this site, so the SMS messaging terms live in the privacy policy under `#sms-terms` and both links beside the checkbox point into it. Privacy sections 5 through 10 were renumbered to 6 through 11 to make room.
+- Added Sendblue to the privacy policy's list of service providers, alongside the explicit statement that mobile opt-in data is never shared for marketing, which is the line carriers look for.
+- `recordConsent` merges two subscriber rows when a submission matches one by email and a different one by phone. Email and phone are independently unique, so without a merge that submission would fail on a unique violation. The older row survives and consent history moves onto it before the loser is deleted.
