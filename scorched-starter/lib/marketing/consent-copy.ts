@@ -38,9 +38,10 @@ export const ADMIN_UNSUBSCRIBE_CONSENT_TEXT =
 
 // Links shown beside the SMS checkbox. Kept here so all capture points agree.
 export const PRIVACY_POLICY_PATH = "/privacy";
-// The messaging terms live inside the privacy policy; there is no separate
-// terms page on this site.
-export const TERMS_PATH = "/privacy#sms-terms";
+// The SMS terms carriers check live on their own page, deep linked to the SMS
+// section. A 10DLC reviewer is given this URL and expects a terms page, not an
+// anchor inside the privacy policy.
+export const TERMS_PATH = "/terms#sms";
 
 // CAN-SPAM requires a physical postal address in every marketing email.
 export const BUSINESS_POSTAL_ADDRESS = "218 E University Pkwy, Orem, UT";

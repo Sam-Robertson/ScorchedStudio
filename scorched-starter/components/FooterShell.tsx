@@ -225,6 +225,7 @@ export default function FooterShell({ locations }: { locations: LocationRecord[]
           <p className="text-sm text-white/70">© {new Date().getFullYear()} Scorched Studio</p>
           <div className="flex items-center gap-4">
             <a href="/privacy" className="underline text-white/60 hover:text-white text-xs">Privacy Policy</a>
+            <a href="/terms" className="underline text-white/60 hover:text-white text-xs">Terms of Service</a>
             <a href="/admin" className="underline text-white/60 hover:text-white text-xs">Admin</a>
           </div>
         </div>

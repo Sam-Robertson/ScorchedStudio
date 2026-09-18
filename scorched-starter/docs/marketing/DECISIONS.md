@@ -188,3 +188,34 @@ Checked against the docs because it is easy to assume the campaign form wants a 
 - The optional webhook field visible during registration is for brand and campaign **status** events (approval, rejection, suspension), not messages. Our route acknowledges and ignores unknown event types, so pointing it there is safe but pointless.
 - It **does** require Privacy Policy and Terms and Conditions URLs in the call-to-action section. Added both to SETUP.md, pointing at `/privacy` and `/privacy#sms-terms`.
 - Opt-in language must cover text messages **only**, and may not mention email or phone calls. Our SMS checkbox copy already satisfies this: it is a separate checkbox from the email one, with its own wording.
+
+## Legal pages audit for 10DLC review (September 17, 2026)
+
+**The checkbox wording matches the registration exactly.** Byte-compared `SMS_CONSENT_TEXT` against the text Sam submitted: identical, no action needed. All three opt-in points render the shared `MarketingOptIns` component, so there is one copy of that string and it cannot drift between forms.
+
+### /terms is now a real page
+
+- Created `app/terms/page.tsx`. `TERMS_PATH` used to be `/privacy#sms-terms`, an anchor inside the privacy policy. The registration tells reviewers there is a terms page, and an anchor is not one. Now `/terms#sms`, which updates all three opt-in forms at once.
+- The SMS Terms section carries every CTIA clause: program description, the three opt-in points, frequency varies, rates may apply, STOP with what happens next, START, HELP plus the support email, consent not a condition of purchase, and the carrier liability disclaimer.
+- General terms are written only from what the code and site copy actually say. The cancellation paragraph describes real behaviour: `app/api/bookings/manage/[id]/route.ts` issues a full Stripe refund on any pre-session cancellation, and bookings lock once the session starts. No late-cancellation, no-show, or partial-refund rule was invented, because none exists anywhere.
+
+### Privacy policy corrections
+
+- **Removed `robots: "noindex"`.** A policy carriers are told to read should be findable.
+- SMS section moved from `id="sms-terms"` to `id="sms"` and rewritten. It now lists exactly what the consent log stores (number, timestamp, source form, IP, and the wording shown), which mirrors the `consent_events` columns rather than describing them loosely.
+- Added the second sentence reviewers search for verbatim: "Text messaging originator opt-in data and consent will not be shared with any third parties." The page previously had a paraphrase of the first sentence only.
+- **Fixed a false claim.** The cookies section said "We do not use advertising or tracking cookies." The site loads the Meta Pixel from `app/layout.tsx` whenever `NEXT_PUBLIC_META_PIXEL_ID` is set, which it is. That is an advertising tracker and it sets cookies. The section now describes it honestly. Checked `lib/fbq.ts` first: the pixel uses no advanced matching, so no email or phone number reaches Meta, which is why the SMS no-sharing statement is still true. Said so explicitly on the page.
+- Processor list now names Vercel (hosting) and Meta (advertising measurement) alongside Stripe, Supabase, Resend, and Telnyx, with a line that none may use the data for their own marketing.
+- Retention section now says consent records are kept after opt-out, which is what the system actually does and why: it is the evidence of consent, and it stops an import undoing an opt-out.
+- Last updated set to today.
+
+### Judgment calls
+
+- **TODOs are source comments, not visible page text.** A "TODO" printed on a live legal page would undermine the page with the reviewer it exists for. They are marked `TODO(sam)` in the JSX and listed in the handoff.
+- **Footer legal links went in the bottom bar, not the Information column.** A Privacy Policy link already lived in the bottom bar next to Admin; adding a second one higher up would have looked like an oversight. Terms now sits beside it.
+- **Added `app/robots.ts`.** There was no robots.txt at all. It allows everything except `/admin` and `/api/`, so a future blanket disallow cannot quietly take the legal pages with it.
+- **Emphasis markup was splitting required phrases.** "Reply <strong>HELP</strong>" reads correctly to a human but leaves no contiguous "Reply HELP" in the HTML, so an automated reviewer scanning the raw response would score it missing. Whole phrases are wrapped now, verified by curling the production build.
+
+### What the tests do and do not prove
+
+`lib/marketing/legal-pages.test.ts` reads both page sources, reduces them to visible prose, and asserts the required phrases. It cannot render the pages: the project's runner is `node --test` with type stripping, which cannot parse JSX. So it catches deletion, rewording, and typos, which is the failure mode worth catching, but not "does this page compile" (the build covers that). It also asserts the terms page quotes `SMS_CONSENT_TEXT` exactly, so editing the checkbox copy fails the suite until the page and the registration are updated to match.
