@@ -5,9 +5,8 @@
 // keywords, forward real questions to a human, and move queue rows along as
 // delivery statuses arrive.
 //
-// Extracted from the Sendblue route so the Telnyx route runs the identical
-// logic rather than a copy that can drift. Provider-specific parts stay in the
-// provider: the status vocabulary differs, so the status mapper is passed in.
+// Provider-specific parts stay in the provider: the status vocabulary is the
+// provider's own, so the status mapper is passed in rather than assumed.
 import { Resend } from "resend";
 import { getSupabase } from "@/lib/supabase";
 import type { SmsQueueStatus, SubscriberRecord } from "@/lib/supabase";

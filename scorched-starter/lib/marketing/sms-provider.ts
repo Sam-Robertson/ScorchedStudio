@@ -1,11 +1,9 @@
 // lib/marketing/sms-provider.ts
 //
 // The seam between the worker and whoever actually delivers the texts.
-// Sendblue is the only implementation today, but its Blue Ocean rate limits
-// (50 new contacts a day, and a hard 150-consecutive-outbound-without-reply
-// ceiling) may turn out to be too tight for a list of this size. Keeping the
-// worker behind this interface means swapping providers is one file, not a
-// rewrite.
+// Telnyx is the only implementation. The interface stays because swapping or
+// adding a provider should be one file rather than a rewrite, which is exactly
+// what it bought when the previous provider's rate limits proved unworkable.
 
 export type SendArgs = {
   to: string; // E.164

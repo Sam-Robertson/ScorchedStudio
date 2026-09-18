@@ -8,7 +8,7 @@ import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import type { CampaignRecord } from "@/lib/supabase";
 import { sendTestEmail } from "@/lib/marketing/email-send";
-import { sendblue } from "@/lib/marketing/sendblue";
+import { telnyx } from "@/lib/marketing/telnyx";
 import { withStopNotice } from "@/lib/marketing/message-rules";
 import { normalizePhone } from "@/lib/marketing/phone";
 import { marketingIsLive, siteUrl } from "@/lib/marketing/config";
@@ -37,11 +37,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const phone = normalizePhone(to);
     if (!phone) return Response.json({ error: "That does not look like a phone number." }, { status: 400 });
 
-    const result = await sendblue.send({
+    const result = await telnyx.send({
       to: phone,
       body: withStopNotice(campaign.body),
       mediaUrl: campaign.media_url,
-      statusCallback: `${siteUrl()}/api/webhooks/sendblue`,
+      statusCallback: `${siteUrl()}/api/webhooks/telnyx`,
     });
 
     if (!result.ok) {

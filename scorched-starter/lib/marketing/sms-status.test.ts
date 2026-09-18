@@ -3,40 +3,9 @@ import assert from "node:assert/strict";
 import {
   backoffMs,
   isRetryableError,
-  mapSendblueStatus,
   MAX_ATTEMPTS,
-  SENDBLUE_STATUSES,
   shouldAdvanceStatus,
 } from "./sms-status.ts";
-
-test("every status Sendblue documents maps to a queue status", () => {
-  // Sendblue reports eight, not the five the original spec listed. An
-  // unmapped one would leave a queue row stuck in 'sending' forever.
-  for (const status of SENDBLUE_STATUSES) {
-    assert.ok(mapSendblueStatus(status), `${status} is unmapped`);
-  }
-});
-
-test("in-flight statuses are distinguished from terminal ones", () => {
-  for (const s of ["REGISTERED", "PENDING", "QUEUED", "ACCEPTED"]) {
-    assert.equal(mapSendblueStatus(s), "sending");
-  }
-  assert.equal(mapSendblueStatus("SENT"), "sent");
-  assert.equal(mapSendblueStatus("DELIVERED"), "delivered");
-  assert.equal(mapSendblueStatus("ERROR"), "failed");
-  assert.equal(mapSendblueStatus("DECLINED"), "failed");
-});
-
-test("status matching is case and whitespace tolerant", () => {
-  assert.equal(mapSendblueStatus("delivered"), "delivered");
-  assert.equal(mapSendblueStatus("  Delivered  "), "delivered");
-});
-
-test("an unknown status maps to null rather than a wrong guess", () => {
-  assert.equal(mapSendblueStatus("SOMETHING_NEW"), null);
-  assert.equal(mapSendblueStatus(null), null);
-  assert.equal(mapSendblueStatus(""), null);
-});
 
 test("a late callback cannot undo a delivery", () => {
   // Callbacks arrive out of order. A QUEUED landing after DELIVERED must not
@@ -98,9 +67,9 @@ test("attempts are bounded", () => {
 });
 
 test("sent and failed cannot flip back and forth on out-of-order callbacks", () => {
-  // Sendblue can report SENT and then ERROR when a carrier rejects downstream.
-  // The later fact wins, but the reverse must not, or two callbacks arriving
-  // out of order would toggle the row indefinitely.
+  // Telnyx reports sent on handoff and delivery_failed if the carrier later
+  // rejects. The later fact wins, but the reverse must not, or two callbacks
+  // arriving out of order would toggle the row indefinitely.
   assert.ok(shouldAdvanceStatus("sent", "failed"));
   assert.ok(!shouldAdvanceStatus("failed", "sent"));
 });

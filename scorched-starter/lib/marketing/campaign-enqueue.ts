@@ -81,9 +81,8 @@ export async function enqueueSmsCampaign(campaign: CampaignRecord): Promise<Enqu
     queued,
     alreadyQueued: rows.length - queued,
     newContacts,
-    // Paced purely by throughput now. On Sendblue this was governed by the
-    // new-contact quota, which for a cold list meant weeks; a registered 10DLC
-    // long code has no such quota, so the only limit is the configured rate.
+    // Paced purely by throughput: a registered 10DLC long code has no
+    // new-contact quota, so the configured rate is the only limit.
     estimate: estimateThroughputCompletion(
       rows.length,
       limits.maxPerMinute,

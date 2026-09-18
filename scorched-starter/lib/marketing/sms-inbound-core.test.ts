@@ -7,7 +7,7 @@ import {
   type QueueRowRef,
   type StatusDeps,
 } from "./sms-inbound-core.ts";
-import { mapTelnyxStatus, mapSendblueStatus } from "./sms-status.ts";
+import { mapTelnyxStatus } from "./sms-status.ts";
 import { parseTelnyxPayload } from "./telnyx.ts";
 import type { InboundMessage } from "./sms-provider.ts";
 
@@ -218,13 +218,4 @@ test("an unmapped or missing status is ignored rather than guessed", async () =>
     "ignored"
   );
   assert.equal(updates.length, 0);
-});
-
-test("the same handling works for the Sendblue status vocabulary", async () => {
-  // The mapper is injected precisely so one code path serves both providers.
-  const { deps, updates } = statusDeps({ id: "q-1", status: "sending" });
-  const msg = inbound({ direction: "outbound", messageHandle: "msg-out", status: "DELIVERED" });
-
-  assert.equal(await applyStatusUpdate(msg, mapSendblueStatus, deps), "updated");
-  assert.equal(updates[0].status, "delivered");
 });

@@ -73,7 +73,7 @@ export default function PrivacyPage() {
             <li><strong>Stripe</strong> — payment processing</li>
             <li><strong>Resend</strong> — transactional email delivery</li>
             <li><strong>Supabase</strong> — secure database hosting</li>
-            <li><strong>Sendblue</strong> — text message delivery</li>
+            <li><strong>Telnyx</strong> — text message delivery</li>
           </ul>
           <p className="mt-4">
             We may also disclose your information if required by law or to protect the rights and

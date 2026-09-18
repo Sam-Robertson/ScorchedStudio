@@ -7,9 +7,8 @@
 //   message.sent       - accepted by the carrier.
 //   message.finalized  - terminal delivery state, success or failure.
 //
-// The handling itself is shared with the Sendblue route via
-// lib/marketing/sms-inbound.ts. Only signature verification and payload shape
-// are provider-specific.
+// The handling itself lives in lib/marketing/sms-inbound.ts. Only signature
+// verification and payload shape are provider-specific.
 //
 // Returns 2xx as soon as the data is persisted. Telnyx retries on anything
 // else, and a retry storm on a slow handler is worse than a dropped forward.

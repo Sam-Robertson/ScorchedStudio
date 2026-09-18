@@ -205,36 +205,18 @@ async function importRows(rows: Row[], apply: boolean): Promise<{ inserted: numb
 
 // Provider contact sync.
 //
-// Sendblue kept its own contact list that had to be populated and opted out in
-// step with ours. Telnyx has no contact list: you send to a number, and its
-// opt-out list is populated automatically from inbound STOP keywords. So on
-// the Telnyx path there is nothing to push, and Supabase is the only store
-// this script writes.
-//
-// The function is kept rather than deleted so that reviving Sendblue means
-// filling in one branch instead of rediscovering that the step is needed.
-async function syncContactsToProvider(rows: Row[], apply: boolean): Promise<void> {
-  const provider = process.env.SMS_PROVIDER === "sendblue" ? "sendblue" : "telnyx";
-
-  if (provider === "telnyx") {
-    const optedOut = rows.filter((r) => r.unsubscribed).length;
-    // Nothing to push either way, so apply changes only the wording. Said out
-    // loud rather than silently ignoring the flag.
-    console.log(
-      `  Telnyx: no contact list to sync, so ${apply ? "nothing was pushed" : "nothing would be pushed"}. ` +
-        `${rows.length - optedOut} subscribed and ${optedOut} opted out recorded in Supabase only.`
-    );
-    console.log(
-      "  Note: Telnyx's own opt-out list starts empty. Anyone on the legacy opt-out list is " +
-        "unsubscribed here, which is what stops them being enqueued in the first place."
-    );
-    return;
-  }
-
+// Telnyx has no contact list: you send to a number, and its opt-out list is
+// populated automatically from inbound STOP keywords. So there is nothing to
+// push, and Supabase is the only store this script writes.
+function reportProviderSync(rows: Row[], apply: boolean): void {
+  const optedOut = rows.filter((r) => r.unsubscribed).length;
   console.log(
-    apply
-      ? "  Sendblue: SMS_PROVIDER=sendblue, but the bulk contact sync was removed when Telnyx became the default. Re-add it before using this path."
-      : "  Sendblue: WOULD need a bulk contact sync, which is not implemented on this path."
+    `  Telnyx: no contact list to sync, so ${apply ? "nothing was pushed" : "nothing would be pushed"}. ` +
+      `${rows.length - optedOut} subscribed and ${optedOut} opted out recorded in Supabase only.`
+  );
+  console.log(
+    "  Note: Telnyx's own opt-out list starts empty. Anyone on the legacy opt-out list is " +
+      "unsubscribed here, which is what stops them being enqueued in the first place."
   );
 }
 
@@ -289,7 +271,7 @@ async function main() {
   console.log(`  will be unsubscribed: ${merged.length - willSubscribe}`);
 
   if (dryRun) {
-    await syncContactsToProvider(merged, false);
+    reportProviderSync(merged, false);
     console.log("\nDRY RUN. Nothing was written. Re-run with --apply to import.");
     return;
   }
@@ -299,8 +281,8 @@ async function main() {
   console.log(`  inserted: ${inserted}`);
   console.log(`  updated:  ${updated}`);
 
-  console.log("\nSyncing contacts to the SMS provider...");
-  await syncContactsToProvider(merged, true);
+  console.log("\nSMS provider contact sync:");
+  reportProviderSync(merged, true);
 
   console.log(
     `\nDone. Suggested first message to this segment, which fits in a single\n` +

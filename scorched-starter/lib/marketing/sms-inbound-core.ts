@@ -37,7 +37,7 @@ export async function decideInbound(
   // The provider's own opt-out flag wins even when the text does not look like
   // a keyword to us. On Telnyx it comes from autoresponse_type, and it is what
   // actually blocks delivery, so our record follows it rather than arguing.
-  // Their keyword list is close to but not identical to ours.
+  // Telnyx's keyword list is close to but not identical to ours.
   if (intent === "opt_out" || msg.optedOut) {
     if (subscriberId) await deps.setSmsStatus(subscriberId, "unsubscribed", SMS_STOP_CONSENT_TEXT);
     return "opt_out";
@@ -48,9 +48,9 @@ export async function decideInbound(
     return "opt_in";
   }
 
-  // Any other inbound message still counts as contact. Nothing on the Telnyx
-  // path paces against this, but the column stays meaningful and the Sendblue
-  // path needs it.
+  // Any other inbound message still counts as contact. Nothing paces against
+  // this now, but it is the honest record of when we last heard from someone
+  // and the admin table shows it.
   if (subscriberId) await deps.touchLastContact(subscriberId);
 
   // Both providers answer HELP with their own auto-reply, so it needs no

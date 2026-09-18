@@ -1,46 +1,8 @@
 // lib/marketing/sms-status.ts
 //
-// Maps Sendblue's message statuses onto our queue statuses.
-//
-// Sendblue reports eight, not the five the original spec listed. The extra
-// ones (REGISTERED, PENDING, ACCEPTED) are all in-flight states, so they map
-// to 'sending' rather than being ignored, which would leave a row stuck.
+// Maps Telnyx message statuses onto our queue statuses, plus the retry and
+// ordering rules that decide what a delivery callback is allowed to change.
 import type { SmsQueueStatus } from "../supabase.ts";
-
-export const SENDBLUE_STATUSES = [
-  "REGISTERED",
-  "PENDING",
-  "QUEUED",
-  "ACCEPTED",
-  "SENT",
-  "DELIVERED",
-  "DECLINED",
-  "ERROR",
-] as const;
-
-export type SendblueStatus = (typeof SENDBLUE_STATUSES)[number];
-
-const MAP: Record<SendblueStatus, SmsQueueStatus> = {
-  // In flight. Nothing to do but wait for the next callback.
-  REGISTERED: "sending",
-  PENDING: "sending",
-  QUEUED: "sending",
-  ACCEPTED: "sending",
-  // Terminal success for SMS and for iMessage users who are offline.
-  SENT: "sent",
-  // Terminal success for iMessage and RCS.
-  DELIVERED: "delivered",
-  // Terminal failures. DECLINED means the recipient's device or carrier
-  // refused it, which is not retryable.
-  DECLINED: "failed",
-  ERROR: "failed",
-};
-
-export function mapSendblueStatus(status: string | null | undefined): SmsQueueStatus | null {
-  if (!status) return null;
-  const key = status.trim().toUpperCase() as SendblueStatus;
-  return MAP[key] ?? null;
-}
 
 // Whether a status callback should overwrite what the row already says.
 // Callbacks can arrive out of order, and a late QUEUED must not undo a
@@ -49,10 +11,10 @@ const RANK: Record<SmsQueueStatus, number> = {
   pending: 0,
   sending: 1,
   sent: 2,
-  // A confirmed failure outranks 'sent'. Sendblue can report SENT and then
-  // ERROR when a carrier rejects downstream, and the later fact is the true
-  // one. Giving them equal rank let a pair of out-of-order callbacks flip the
-  // row back and forth indefinitely.
+  // A confirmed failure outranks 'sent'. Telnyx reports sent when it hands the
+  // message off and delivery_failed when the carrier later rejects it, and the
+  // later fact is the true one. Equal rank let a pair of out-of-order callbacks
+  // flip the row back and forth indefinitely.
   failed: 3,
   delivered: 4,
   skipped: 5,
@@ -65,9 +27,9 @@ export function shouldAdvanceStatus(current: SmsQueueStatus, incoming: SmsQueueS
   return RANK[incoming] >= RANK[current];
 }
 
-// Sendblue error codes worth retrying. 4001 and 5509 are rate limiting, 5000
-// is an internal error on their side. Everything else (validation, blacklist)
-// will fail again identically, so retrying just burns the budget.
+// Provider error codes worth retrying: transient rate limiting and internal
+// faults. Everything else (validation, blocked recipient) fails again
+// identically, so retrying only delays the inevitable.
 const RETRYABLE_CODES = new Set(["4001", "5000", "5509"]);
 
 export function isRetryableError(errorCode: string | null | undefined, httpStatus?: number): boolean {
@@ -86,10 +48,8 @@ export function backoffMs(attempts: number): number {
 export const MAX_ATTEMPTS = 5;
 
 
-// ── Telnyx ───────────────────────────────────────────────────────────────────
-//
 // Telnyx reports status per recipient, nested at data.payload.to[0].status,
-// rather than as a top-level field the way Sendblue does.
+// rather than as a top-level field.
 
 export const TELNYX_STATUSES = [
   "queued",

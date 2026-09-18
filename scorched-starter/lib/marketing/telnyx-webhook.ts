@@ -7,7 +7,7 @@
 // not document a timestamp tolerance, and rejecting stale timestamps is the
 // half that stops a captured webhook being replayed later. Doing both here
 // keeps the whole rule visible and unit testable with no network and no env.
-import { createPublicKey, verify as cryptoVerify, timingSafeEqual } from "crypto";
+import { createPublicKey, verify as cryptoVerify } from "crypto";
 
 export const SIGNATURE_HEADER = "telnyx-signature-ed25519";
 export const TIMESTAMP_HEADER = "telnyx-timestamp";
@@ -90,13 +90,4 @@ export function verifyTelnyxSignature(args: VerifyArgs): VerifyResult {
 // the verifier uses.
 export function signedPayload(timestamp: string, rawBody: string): Buffer {
   return Buffer.from(`${timestamp}|${rawBody}`, "utf8");
-}
-
-// Constant-time compare helper, exported for the Sendblue route's shared-secret
-// check to reuse rather than re-implementing the length guard.
-export function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
 }

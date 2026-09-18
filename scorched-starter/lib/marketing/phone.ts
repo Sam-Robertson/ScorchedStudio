@@ -2,8 +2,8 @@
 //
 // Every phone number that reaches subscribers.phone goes through here first.
 // The column has a CHECK for E.164, so a number that slips past this function
-// fails the insert rather than sitting in the table in a format Sendblue will
-// reject at send time.
+// fails the insert rather than sitting in the table in a format the provider
+// will reject at send time.
 //
 // Default region is US: the studios are in Utah and the existing booking and
 // waiver forms collect 10-digit local numbers with no country code.

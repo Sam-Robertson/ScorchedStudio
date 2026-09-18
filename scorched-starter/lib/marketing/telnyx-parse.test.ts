@@ -5,7 +5,7 @@ import { isTelnyxOptedOutError, mapTelnyxStatus, TELNYX_STATUSES } from "./sms-s
 
 // Payload shapes follow Telnyx's documented examples. The nesting is the part
 // worth pinning: the sender is at payload.from.phone_number and the status is
-// inside the payload.to array, not at the top level like Sendblue.
+// inside the payload.to array, not at the top level.
 
 const inbound = {
   data: {

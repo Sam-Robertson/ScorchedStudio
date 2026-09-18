@@ -154,6 +154,15 @@ Scorched Studio: our beginner wood burning class on Saturday Oct 11 has 4
 spots left. Book at scorchedstudio.com/book. Reply STOP to opt out.
 ```
 
+**Call-to-action URLs.** TCR requires both of these on the campaign, in the dedicated fields or in the CTA section. They are the only URLs the campaign form asks for:
+
+| Field | Value |
+| --- | --- |
+| Privacy policy URL | `https://scorchedstudio.com/privacy` |
+| Terms and conditions URL | `https://scorchedstudio.com/privacy#sms-terms` |
+
+There is **no messaging webhook field on the campaign form**. Message delivery webhooks are configured on the messaging profile and are already set (step 4). The optional webhook field you may see during registration is for brand and campaign *status* events (approval, rejection, suspension), which is a different thing; leave it blank, or point it at the same route, which acknowledges and ignores event types it does not handle.
+
 Answer yes to: subscriber opt-in, subscriber opt-out, subscriber help.
 Answer no to: age-gated content, direct lending, affiliate marketing, embedded links to unknown third parties.
 
@@ -169,7 +178,6 @@ Set these in Vercel (Production, and Preview if you want previews to run the wor
 
 | Variable | Notes |
 | --- | --- |
-| `SMS_PROVIDER` | `telnyx` |
 | `TELNYX_API_KEY` | in local `.env` |
 | `TELNYX_PUBLIC_KEY` | in local `.env`, base64 of 32 raw bytes |
 | `TELNYX_MESSAGING_PROFILE_ID` | `4001a0b1-a53d-4425-abd7-fab71dd60b65` |
@@ -184,9 +192,7 @@ Set these in Vercel (Production, and Preview if you want previews to run the wor
 | `NEXT_PUBLIC_SITE_URL` | must be the real origin, used for unsubscribe links and webhook callbacks |
 | `MARKETING_LIVE` | **leave `false` until step 10 passes** |
 
-All five Telnyx variables must be set in Vercel before the first webhook arrives, not just the API key. `TELNYX_PUBLIC_KEY` in particular exists only in the local `.env` right now, and without it in the deployed environment **every webhook 401s**, which looks from the outside like "Telnyx is not sending anything" rather than a missing variable. If inbound texts and delivery receipts both go quiet, check this first.
-
-The Sendblue variables are optional and only read when `SMS_PROVIDER=sendblue`.
+All four Telnyx variables must be set in Vercel before the first webhook arrives, not just the API key. `TELNYX_PUBLIC_KEY` in particular exists only in the local `.env` right now, and without it in the deployed environment **every webhook 401s**, which looks from the outside like "Telnyx is not sending anything" rather than a missing variable. If inbound texts and delivery receipts both go quiet, check this first.
 
 ## 7. Webhooks
 
@@ -271,13 +277,12 @@ Only after all eleven pass, and after the 10DLC campaign is approved, should the
 | Provider selection | `lib/marketing/sms-provider-registry.ts` |
 | Telnyx provider | `lib/marketing/telnyx.ts` |
 | Telnyx signature check | `lib/marketing/telnyx-webhook.ts` |
-| Sendblue provider (dormant) | `lib/marketing/sendblue.ts` |
 | Shared webhook handling | `lib/marketing/sms-inbound.ts` |
 | Segment and cost rules | `lib/marketing/sms-segments.ts` |
 | Rate limits and the live gate | `lib/marketing/config.ts` |
 | Worker logic | `lib/marketing/sms-worker-core.ts` (pure), `sms-worker.ts` (wired) |
 | Cron route | `app/api/cron/sms-worker/route.ts` |
-| Webhooks | `app/api/webhooks/telnyx`, `app/api/webhooks/sendblue`, `app/api/webhooks/resend` |
+| Webhooks | `app/api/webhooks/telnyx`, `app/api/webhooks/resend` |
 | Unsubscribe | `app/unsubscribe/[token]/route.ts` |
 | Admin UI | `app/admin/marketing/page.tsx` |
 | Decisions made during the build | `docs/marketing/DECISIONS.md` |

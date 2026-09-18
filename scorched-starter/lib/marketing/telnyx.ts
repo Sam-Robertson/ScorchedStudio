@@ -2,11 +2,11 @@
 //
 // The Telnyx implementation of SmsProvider, and the active one.
 //
-// Replaced Sendblue because Sendblue's Blue Ocean plan caps outbound at 50 new
-// contacts a day, stops a line after 150 consecutive outbound messages with no
-// reply, and limits messages to a non-replying contact. Those are sensible
-// guards for two-way conversational messaging and unworkable for the one-way
-// broadcast this system does. A registered 10DLC long code has none of them.
+// Chosen over a conversational-messaging provider, whose plan capped outbound
+// at 50 new contacts a day and stopped a line after 150 consecutive messages
+// without a reply. Those are sensible guards for two-way conversation and
+// unworkable for the one-way broadcast this system does. A registered 10DLC
+// long code has neither limit.
 //
 // Uses plain fetch, not the `telnyx` SDK. The SDK is current and typed, but the
 // send path is one POST, and its webhook helper reads TELNYX_PUBLIC_KEY from
@@ -74,8 +74,8 @@ export class TelnyxProvider implements SmsProvider {
 
     // The gate. Nothing reaches a real phone unless MARKETING_LIVE is exactly
     // "true". The suppressed result is flagged so the worker can tell it from a
-    // real send: treating it as real would stamp last_sms_contact_at and, on
-    // the Sendblue path, wreck the new-contact budgeting for the real run.
+    // real send: treating it as real would stamp last_sms_contact_at and record
+    // a conversation that never happened.
     if (!marketingIsLive()) {
       logSuppressedSend("sms", {
         provider: "telnyx",
@@ -157,8 +157,8 @@ export class TelnyxProvider implements SmsProvider {
 
   // Telnyx maintains its own opt-out list at the messaging profile level and
   // populates it from inbound STOP keywords automatically, so there is nothing
-  // to push. Supabase remains the source of truth on our side; this exists to
-  // satisfy the interface and to keep the Sendblue implementation swappable.
+  // to push. Supabase remains the source of truth on our side; this exists so
+  // the interface stays honest for any future provider that does need it.
   async optOut(phone: string): Promise<{ ok: boolean; suppressed?: boolean }> {
     if (!marketingIsLive()) {
       logSuppressedSend("sms-opt-out", { provider: "telnyx", phone });

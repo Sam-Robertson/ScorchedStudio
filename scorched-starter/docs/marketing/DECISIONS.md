@@ -165,3 +165,26 @@ answering questions mid-build.
 - Removed the `telnyx` npm dependency after deciding not to use its webhook helper. Leaving an unused package installed invites someone to assume it is load-bearing.
 - `estimateThroughputCompletion` returned `Infinity` when the cap or the sending window is zero, which `JSON.stringify` turns into `null` on the way to the admin UI and would have rendered as "0 days", reading as "already finished". Returns -1 now, and the UI says "never at this rate".
 - The `suppressed-` message handle prefix is decorative; the `suppressed` flag is what the worker reads. Said so in a comment in both providers so nobody starts depending on the string.
+
+## Sendblue removed entirely
+
+Sam confirmed the two-way iMessage option is not wanted, so the provider is gone rather than dormant. Deleted: `lib/marketing/sendblue.ts`, its parse tests, `sms-provider-registry.ts`, `app/api/webhooks/sendblue/`, and `scripts/register-sendblue-webhooks.ts`.
+
+- `SMS_PROVIDER` is gone with it. With one provider the indirection was a setting that could only be set wrong, so `sms-worker.ts` imports `telnyx` directly.
+- `SmsProvider` (the interface) **stays**. It is what made this swap a one-file change instead of a rewrite, and that was worth having.
+- Dropped from config: `newContactsPerDay`, `newContactsPerHour`, `burstPerSecond`, `queueCap`, `maxConsecutiveNoReply`, `sendblueBaseUrl`, `smsProviderName`. `SmsLimits` is now three fields.
+- Dropped from `sms-budget.ts`: `computeBudget` and `estimateCompletion`, the new-contact quota model. Only the throughput half remains. Its tests were rewritten to match rather than deleted.
+- Dropped from the worker: `newContactsSent`, `consecutiveOutboundWithoutReply`, `pacingFor`, and `WorkerSettings.blockedReason`. Nothing set a blocked reason any more, so it was config that could only ever be null.
+- **Found a live bug while removing it.** The admin test-send route still set `statusCallback` to `/api/webhooks/sendblue`, a route that no longer exists, so every test send's delivery receipts would have posted to a 404 and the queue row would have sat in `sent` forever. Now points at the Telnyx route.
+- `safeEqual` in `telnyx-webhook.ts` was only ever called by the Sendblue route's shared-secret check, so it went too.
+- **The privacy policy named Sendblue as the SMS processor.** That is a statement about who receives customer phone numbers, so it now says Telnyx. Worth noting as the kind of thing a provider swap quietly invalidates.
+- `is_new_contact` on `sms_queue` and `isNewContact()` are kept. Nothing paces against them now, but the column is in a migration that may already be applied, dropping it would be a destructive schema change, and it is still a useful way to tell a cold list from a warm one.
+
+## 10DLC campaign form: what it actually asks for
+
+Checked against the docs because it is easy to assume the campaign form wants a webhook.
+
+- It does **not** ask for a messaging webhook. Inbound and delivery webhooks are configured on the messaging profile, which is already set to `https://scorchedstudio.com/api/webhooks/telnyx`.
+- The optional webhook field visible during registration is for brand and campaign **status** events (approval, rejection, suspension), not messages. Our route acknowledges and ignores unknown event types, so pointing it there is safe but pointless.
+- It **does** require Privacy Policy and Terms and Conditions URLs in the call-to-action section. Added both to SETUP.md, pointing at `/privacy` and `/privacy#sms-terms`.
+- Opt-in language must cover text messages **only**, and may not mention email or phone calls. Our SMS checkbox copy already satisfies this: it is a separate checkbox from the email one, with its own wording.

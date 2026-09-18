@@ -89,7 +89,6 @@ function settings(over: Partial<WorkerSettings> = {}): WorkerSettings {
     // 12 a minute over a 5 minute cron interval, which is what the Telnyx
     // path actually computes.
     maxThisRun: 60,
-    blockedReason: null,
     quietHoursStart: 20,
     quietHoursEnd: 9,
     currentHour: 12,
@@ -193,26 +192,10 @@ test("nothing is claimed at all during quiet hours", async () => {
   assert.ok(queue.rows.every((r) => r.status === "pending"));
 });
 
-test("a provider-level block stops the run before anything is claimed", async () => {
-  // Telnyx passes null here. The hook stays so Sendblue, whose line stops
-  // after 150 consecutive outbound messages without a reply, can be revived
-  // without re-plumbing the worker.
-  const queue = new FakeQueue(10);
-  const result = await runWorker(
-    deps(queue),
-    settings({ blockedReason: "line is at its consecutive outbound ceiling" })
-  );
-
-  assert.match(result.blockedReason ?? "", /consecutive outbound/);
-  assert.equal(result.claimed, 0);
-  assert.equal(queue.sentTo.length, 0);
-  assert.ok(queue.rows.every((r) => r.status === "pending"), "nothing should be left mid-flight");
-});
-
 test("a cold list is no longer throttled by new-contact status", async () => {
-  // The whole reason for the provider swap: on Sendblue a list of 40 people
-  // nobody had texted before was capped at 15 an hour and 50 a day. On a
-  // registered 10DLC long code the distinction does not exist.
+  // The whole reason for the provider swap: under the old provider a list of
+  // 40 people nobody had texted before was capped at 15 an hour and 50 a day.
+  // On a registered 10DLC long code the distinction does not exist.
   const queue = new FakeQueue(40, true); // everyone is a new contact
   const result = await runWorker(deps(queue), settings());
 

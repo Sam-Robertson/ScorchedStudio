@@ -9,11 +9,8 @@
 // claim_sms_queue_batch, with the single-runner lease on top. This tests that,
 // given an atomic claim, the pacing and the consent re-check are correct.
 //
-// Rate limiting is now a single throughput cap. The new-contact hourly and
-// daily budgeting, and the 150-consecutive-outbound stop, were Sendblue's
-// constraints; a registered 10DLC long code on Telnyx has neither. The caller
-// computes maxThisRun, and may pass a blockedReason if its provider has a
-// ceiling of its own, which keeps that logic out of here.
+// Rate limiting is a single throughput cap: the caller works out how many
+// messages this run may send and passes it in.
 import { isQuietHour } from "./quiet-hours.ts";
 
 export type QueueItem = {
@@ -71,9 +68,6 @@ export type WorkerSettings = {
   // How many messages this run may send, computed by the caller from the
   // configured throughput cap and the cron interval.
   maxThisRun: number;
-  // Set by a provider that has a hard ceiling of its own (Sendblue's
-  // consecutive-outbound rule). Null or absent on the Telnyx path.
-  blockedReason?: string | null;
   quietHoursStart: number;
   quietHoursEnd: number;
   currentHour: number;
@@ -86,7 +80,6 @@ export type WorkerSettings = {
 export type WorkerRunResult = {
   skippedForQuietHours: boolean;
   lockedOut: boolean;
-  blockedReason: string | null;
   claimed: number;
   sent: number;
   skipped: number;
@@ -104,7 +97,6 @@ export async function runWorker(
   const result: WorkerRunResult = {
     skippedForQuietHours: false,
     lockedOut: false,
-    blockedReason: null,
     claimed: 0,
     sent: 0,
     skipped: 0,
@@ -120,11 +112,6 @@ export async function runWorker(
   // out of 'sending' overnight.
   if (isQuietHour(settings.currentHour, settings.quietHoursStart, settings.quietHoursEnd)) {
     result.skippedForQuietHours = true;
-    return result;
-  }
-
-  if (settings.blockedReason) {
-    result.blockedReason = settings.blockedReason;
     return result;
   }
 
@@ -167,9 +154,8 @@ async function drain(
       await deps.markSent(item, send.messageHandle, send.status, send.suppressed === true);
 
       // Only a message that genuinely went out counts as contact. Stamping
-      // last_sms_contact_at on a suppressed run would misreport every
-      // recipient as an established contact, which is still the honest meaning
-      // of the column and is what the Sendblue path budgeted against.
+      // last_sms_contact_at on a suppressed run would record a conversation
+      // that never happened.
       if (!send.suppressed) await deps.markContacted(item.subscriberId);
 
       result.sent++;

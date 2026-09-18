@@ -42,9 +42,10 @@ export function mergeSmsStatus(a: SmsStatus, b: SmsStatus): SmsStatus {
   return a === "subscribed" || b === "subscribed" ? "subscribed" : "none";
 }
 
-// Whether a subscriber counts as a "new contact" for Sendblue's rate limits:
-// nobody we have exchanged a message with, in either direction, inside the
-// window (30 days on the Blue Ocean plan).
+// Whether a subscriber counts as a "new contact": nobody we have exchanged a
+// message with, in either direction, inside the window. Nothing paces against
+// this any more, but sms_queue.is_new_contact still records it, and it is a
+// useful way to tell a cold list from a warm one.
 export const NEW_CONTACT_WINDOW_DAYS = 30;
 
 export function isNewContact(

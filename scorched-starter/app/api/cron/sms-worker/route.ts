@@ -1,10 +1,10 @@
 // app/api/cron/sms-worker/route.ts
 //
-// Drains sms_queue against Sendblue's rate limits. Runs every 5 minutes.
+// Drains sms_queue at the configured throughput. Runs every 5 minutes.
 //
-// A campaign is never sent by looping over the list inline: the Blue Ocean
-// plan caps how many new conversations may start per hour and per day, so a
-// large campaign drips over hours or days and this is what does the dripping.
+// A campaign is never sent by looping over the list inline: a 10DLC campaign
+// has a carrier-assigned send rate, and exceeding it gets messages filtered
+// rather than queued, so the queue is paced and this is what paces it.
 import { NextRequest } from "next/server";
 import { runSmsWorker } from "@/lib/marketing/sms-worker";
 import { startDueCampaigns } from "@/lib/marketing/scheduled-campaigns";
@@ -22,12 +22,6 @@ export async function GET(req: NextRequest) {
     const scheduled = await startDueCampaigns();
 
     const result = await runSmsWorker();
-
-    // The consecutive-no-reply ceiling is the one limit no config value can
-    // raise, so it is logged at error level rather than buried in the result.
-    if (result.blockedReason) {
-      console.error("SMS_WORKER_BLOCKED", result.blockedReason);
-    }
 
     return Response.json({ ok: true, scheduled, ...result });
   } catch (err) {
