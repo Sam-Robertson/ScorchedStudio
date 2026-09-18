@@ -210,10 +210,11 @@ export default function PrivacyPage() {
             keeping you signed in to your account.
           </p>
           <p className="mb-4">
-            We also use the Meta (Facebook) Pixel, which sets cookies and tells Meta which pages of
-            our site were viewed so we can measure our advertising. The pixel does not receive your
-            name, email address, or phone number from us. You can limit this through your browser
-            settings, an ad blocker, or your Meta ad preferences.
+            We also use the Meta (Facebook) Pixel so we can measure our advertising. It sets cookies
+            and tells Meta which pages of our site were viewed, and when someone buys a membership it
+            also reports the amount and the plan name. The pixel never receives your name, email
+            address, or phone number from us. You can limit this through your browser settings, an ad
+            blocker, or your Meta ad preferences.
           </p>
           <p>
             We do not use the pixel, or any other advertising tool, with information you gave us for

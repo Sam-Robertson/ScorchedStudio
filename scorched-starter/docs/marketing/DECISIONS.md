@@ -237,9 +237,9 @@ badly optimistic while this stands.
 
 Nothing is lost today: the migration is not applied, `MARKETING_LIVE` is false,
 and the 10DLC campaign is not approved, so the worker has nothing to do either
-way. Before the first real campaign, either upgrade to Vercel Pro and restore
-`*/5 * * * *`, or drop the cron entry and point an external scheduler at
-`/api/cron/sms-worker` with the `CRON_SECRET` bearer header.
+way. Resolved by moving the schedule to Supabase pg_cron, see below. Vercel Pro
+was considered and deliberately not pursued: the cron no longer needs it, and
+nothing else in the project does.
 
 ## SMS worker moved to Supabase pg_cron (supersedes the daily placeholder)
 
