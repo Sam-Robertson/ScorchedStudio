@@ -1,0 +1,8 @@
+# Vercel's project link. It carries no credentials, only project and org ids,
+# but it is machine-local state and does not belong in the repo. The app's own
+# .gitignore covers scorched-starter/.vercel; this covers a link created at the
+# repo root, which is where the CLI has to run from because the project's Root
+# Directory setting is "scorched-starter".
+.vercel
+
+.DS_Store
