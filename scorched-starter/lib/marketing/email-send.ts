@@ -7,10 +7,8 @@
 // Batch send lets us keep Supabase as the source of truth and set our own
 // List-Unsubscribe headers pointing at our own token route.
 import { Resend } from "resend";
-import { render } from "@react-email/render";
-import { markdownToHtml } from "@/lib/markdown";
 import type { CampaignRecord, SubscriberRecord } from "@/lib/supabase";
-import MarketingEmail from "./MarketingEmail";
+import { renderCampaign, personalizeFor, personalize } from "./email-render";
 import { marketingFrom, marketingIsLive, logSuppressedSend, isTestRecipient } from "./config";
 import { chunk, unsubscribeHeaders, unsubscribeUrlFor } from "./email-headers";
 
@@ -31,30 +29,29 @@ export type PreparedEmail = {
   headers: Record<string, string>;
 };
 
-// Rendered per recipient, because the unsubscribe link carries that person's
-// own token and must never be shared between recipients.
+// Rendered once, then personalized per recipient.
+//
+// Each person's copy still differs: the unsubscribe link carries their own
+// token and must never be shared between recipients, and merge tags resolve to
+// their name. Both are string substitutions into one rendered template rather
+// than a fresh React render each, so preparing a send costs the same whether
+// the list is 5 people or 5000.
 export async function prepareEmails(
   campaign: CampaignRecord,
   recipients: SubscriberRecord[]
 ): Promise<PreparedEmail[]> {
-  const bodyHtml = await markdownToHtml(campaign.body);
+  const template = await renderCampaign(campaign);
 
   const prepared: PreparedEmail[] = [];
   for (const subscriber of recipients) {
     if (!subscriber.email) continue;
-    const element = MarketingEmail({
-      heading: campaign.subject,
-      bodyHtml,
-      unsubscribeUrl: unsubscribeUrlFor(subscriber.unsubscribe_token),
-    });
-    const html = await render(element);
-    const text = await render(element, { plainText: true });
+    const copy = personalizeFor(template, subscriber);
 
     prepared.push({
       to: subscriber.email,
-      subject: campaign.subject ?? campaign.name,
-      html,
-      text,
+      subject: copy.subject || campaign.name,
+      html: copy.html,
+      text: copy.text,
       headers: unsubscribeHeaders(subscriber.unsubscribe_token),
     });
   }
@@ -131,14 +128,13 @@ export async function sendTestEmail(
   toEmail: string,
   token = "test-token"
 ): Promise<{ suppressed: boolean }> {
-  const bodyHtml = await markdownToHtml(campaign.body);
-  const element = MarketingEmail({
-    heading: campaign.subject,
-    bodyHtml,
+  const template = await renderCampaign(campaign);
+  // A stand-in name, so a test send shows what a merge tag will actually look
+  // like rather than leaving {{first_name}} visible in the preview.
+  const copy = personalize(template, {
+    firstName: "Sam",
     unsubscribeUrl: unsubscribeUrlFor(token),
   });
-  const html = await render(element);
-  const text = await render(element, { plainText: true });
 
   // Allowlisted addresses receive even while the system is off; everything else
   // is still suppressed. Campaign sends do not consult this.
@@ -153,9 +149,9 @@ export async function sendTestEmail(
   await new Resend(key).emails.send({
     from: marketingFrom(),
     to: toEmail,
-    subject: `[TEST] ${campaign.subject ?? campaign.name}`,
-    html,
-    text,
+    subject: `[TEST] ${copy.subject || campaign.name}`,
+    html: copy.html,
+    text: copy.text,
     headers: unsubscribeHeaders(token),
   });
 
