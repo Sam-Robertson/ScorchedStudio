@@ -158,9 +158,9 @@ VALUES
       {"id":"t-news-1","type":"heading","text":"This month at the studio","level":1,"align":"left"},
       {"id":"t-news-2","type":"text","html":"<p>Hi {{first_name}}, here is what we have been up to and what is coming next.</p>"},
       {"id":"t-news-3","type":"divider"},
-      {"id":"t-news-4","type":"columns","imageSrc":"","imageAlt":"","title":"Something we made","body":"A short paragraph about a recent piece, a student project, or a technique.","href":"","imagePosition":"left"},
+      {"id":"t-news-4","type":"columns","imageSrc":"","imageAlt":"","title":"Something we made","body":"<p>A short paragraph about a recent piece, a student project, or a technique.</p>","href":"","imagePosition":"left","imageWidth":"40"},
       {"id":"t-news-5","type":"spacer","size":"md"},
-      {"id":"t-news-6","type":"columns","imageSrc":"","imageAlt":"","title":"Coming up","body":"A short paragraph about the next class, event, or open studio night.","href":"","imagePosition":"right"},
+      {"id":"t-news-6","type":"columns","imageSrc":"","imageAlt":"","title":"Coming up","body":"<p>A short paragraph about the next class, event, or open studio night.</p>","href":"","imagePosition":"right","imageWidth":"40"},
       {"id":"t-news-7","type":"divider"},
       {"id":"t-news-8","type":"button","label":"See the full calendar","href":"https://scorchedstudio.com/book","align":"center"},
       {"id":"t-news-9","type":"text","html":"<p>See you soon,<br>The Scorched Studio team</p>"}

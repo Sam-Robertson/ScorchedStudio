@@ -265,9 +265,11 @@ function BlockView({
             </Text>
           ) : null}
           {block.body ? (
-            <Text style={{ fontSize: "14px", lineHeight: 1.6, color: design.textColor, margin: 0 }}>
-              {block.body}
-            </Text>
+            <div
+              style={{ fontSize: "14px", lineHeight: 1.6, color: design.textColor }}
+              // Sanitized on save, same as the text block.
+              dangerouslySetInnerHTML={{ __html: styleLinks(block.body, design.linkColor) }}
+            />
           ) : null}
           {block.href ? (
             <Text style={{ fontSize: "14px", margin: "8px 0 0" }}>
@@ -279,13 +281,27 @@ function BlockView({
         </>
       );
 
+      // The author picks how wide the image is; the text takes the rest.
+      const imagePercent = Number(block.imageWidth);
+      const onLeft = block.imagePosition === "left";
+
       const imageCell = (
-        <Column className="sc-stack" style={{ width: "40%", verticalAlign: "top", paddingRight: "16px" }}>
+        <Column
+          className="sc-stack"
+          style={{
+            width: `${imagePercent}%`,
+            verticalAlign: "top",
+            // Padding goes on the inner edge only, so the image still sits
+            // flush against the email's margin on its outer side.
+            paddingRight: onLeft ? "16px" : undefined,
+            paddingLeft: onLeft ? undefined : "16px",
+          }}
+        >
           {image}
         </Column>
       );
       const copyCell = (
-        <Column className="sc-stack" style={{ width: "60%", verticalAlign: "top" }}>
+        <Column className="sc-stack" style={{ width: `${100 - imagePercent}%`, verticalAlign: "top" }}>
           {copy}
         </Column>
       );
@@ -293,8 +309,8 @@ function BlockView({
       return (
         <Section style={{ margin: "0 0 20px" }}>
           <Row>
-            {block.imagePosition === "left" ? imageCell : copyCell}
-            {block.imagePosition === "left" ? copyCell : imageCell}
+            {onLeft ? imageCell : copyCell}
+            {onLeft ? copyCell : imageCell}
           </Row>
         </Section>
       );

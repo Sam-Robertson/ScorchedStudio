@@ -6,7 +6,7 @@
 // stored and then ignored.
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, PanelRight, X } from "lucide-react";
 import {
   BLOCK_LABELS,
   FONT_STACKS,
@@ -23,9 +23,13 @@ const labelCls = `${vulfMono.className} block text-xs text-neutral-500 mb-1.5`;
 export function BlockInspector({
   block,
   onChange,
+  onWrapTextBeside,
 }: {
   block: EmailBlock;
   onChange: (block: EmailBlock) => void;
+  // Turns this image block into an image-and-text block, absorbing the text
+  // block below it if there is one. Offered on image blocks only.
+  onWrapTextBeside?: () => void;
 }) {
   // A narrow cast in one place rather than a switch that rebuilds the whole
   // block for every field. The schema is the thing that actually guards the
@@ -86,6 +90,22 @@ export function BlockInspector({
               onChange={(e) => set({ href: e.target.value })}
             />
           </Field>
+
+          {onWrapTextBeside && (
+            <div className="rounded-lg bg-neutral-50 p-3">
+              <button
+                type="button"
+                onClick={onWrapTextBeside}
+                className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+              >
+                <PanelRight className="w-3.5 h-3.5" /> Put text beside this image
+              </button>
+              <p className="text-xs text-neutral-500 mt-1">
+                Converts this into an image-and-text block. If there is a text block right below,
+                its words come along.
+              </p>
+            </div>
+          )}
         </>
       )}
 
@@ -153,11 +173,7 @@ export function BlockInspector({
             <input className={inputCls} value={block.title} onChange={(e) => set({ title: e.target.value })} />
           </Field>
           <Field label="Text">
-            <textarea
-              className={`${inputCls} min-h-[90px]`}
-              value={block.body}
-              onChange={(e) => set({ body: e.target.value })}
-            />
+            <RichTextEditor value={block.body} onChange={(body) => set({ body })} />
           </Field>
           <Field label="Link (optional)">
             <input
@@ -176,6 +192,21 @@ export function BlockInspector({
               <option value="left">Left</option>
               <option value="right">Right</option>
             </select>
+          </Field>
+          <Field label="Image width">
+            <select
+              className={inputCls}
+              value={block.imageWidth}
+              onChange={(e) => set({ imageWidth: e.target.value })}
+            >
+              <option value="33">A third</option>
+              <option value="40">Narrow</option>
+              <option value="50">Half</option>
+              <option value="60">Wide</option>
+            </select>
+            <p className="text-xs text-neutral-400 mt-1">
+              On a phone these stack, with the image on top, whatever is set here.
+            </p>
           </Field>
         </>
       )}

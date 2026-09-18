@@ -170,3 +170,80 @@ test("a block campaign renders through the block path", async () => {
   // The markdown body must not leak into a block campaign.
   assert.ok(!out.html.includes("markdown"), "block campaigns ignore the legacy body column");
 });
+
+// ---------------------------------------------------------------------------
+// Image beside text
+// ---------------------------------------------------------------------------
+
+test("an image-and-text block puts both in a two-column table", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "1",
+        type: "columns",
+        imageSrc: "https://example.com/bowls.jpg",
+        imageAlt: "Stacked bowls",
+        title: "Something we made",
+        body: "<p>A <strong>short</strong> paragraph.</p>",
+        href: "",
+        imagePosition: "left",
+        imageWidth: "40",
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+
+  assert.ok(out.html.includes("bowls.jpg"));
+  assert.ok(out.html.includes("Something we made"));
+  // Rich text has to survive, which is the whole reason the body is HTML.
+  assert.ok(out.html.includes("<strong>short</strong>"), "formatting must reach the email");
+  // A table is what makes side-by-side work in Outlook.
+  assert.ok(out.html.includes("<table"), "must render as a table, not a flex row");
+  assert.ok(out.html.includes("40%") && out.html.includes("60%"), "both column widths should be set");
+});
+
+test("the image width control changes the split", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "1",
+        type: "columns",
+        imageSrc: "https://example.com/a.jpg",
+        imageAlt: "",
+        title: "",
+        body: "<p>Words</p>",
+        href: "",
+        imagePosition: "right",
+        imageWidth: "33",
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.ok(out.html.includes("33%"));
+  assert.ok(out.html.includes("67%"));
+});
+
+test("the stacking class is on both cells so a phone does not squash them", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "1",
+        type: "columns",
+        imageSrc: "https://example.com/a.jpg",
+        imageAlt: "",
+        title: "",
+        body: "<p>Words</p>",
+        href: "",
+        imagePosition: "left",
+        imageWidth: "50",
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  // Two cells carry the class; a third mention is the rule in the stylesheet.
+  assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 2, "both cells need the class");
+  assert.ok(/@media[^{]*max-width[^{]*\{[^}]*sc-stack/.test(out.html), "the stacking rule must be in the document");
+});

@@ -16,6 +16,7 @@ import {
   DEFAULT_DESIGN,
   blocksFromLegacyHtml,
   checkDocument,
+  newBlockId,
   parseDocument,
   type EmailBlock,
   type EmailDesign,
@@ -193,6 +194,36 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
+  // Turns an image block into an image-and-text block. If the block directly
+  // below it is text, its content moves into the new block and the old one is
+  // removed, so someone who already built the stacked version does not have to
+  // retype it.
+  function wrapTextBeside(imageId: string) {
+    const at = blocks.findIndex((b) => b.id === imageId);
+    const image = blocks[at];
+    if (!image || image.type !== "image") return;
+
+    const below = blocks[at + 1];
+    const absorbs = below?.type === "text";
+
+    const columns = {
+      id: newBlockId(),
+      type: "columns" as const,
+      imageSrc: image.src,
+      imageAlt: image.alt,
+      title: "",
+      body: absorbs && below.type === "text" ? below.html : "",
+      href: image.href,
+      imagePosition: "left" as const,
+      imageWidth: "40" as const,
+    };
+
+    const next = [...blocks];
+    next.splice(at, absorbs ? 2 : 1, columns);
+    setBlocks(next);
+    setSelectedId(columns.id);
+  }
+
   function applyTemplate(template: Template) {
     const doc = parseDocument(template.blocks, template.design);
     setBlocks(doc.blocks);
@@ -361,6 +392,9 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
                     block={selected}
                     onChange={(next) =>
                       setBlocks(blocks.map((b) => (b.id === next.id ? next : b)))
+                    }
+                    onWrapTextBeside={
+                      selected.type === "image" ? () => wrapTextBeside(selected.id) : undefined
                     }
                   />
                 ) : (

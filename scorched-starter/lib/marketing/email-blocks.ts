@@ -107,17 +107,24 @@ export const quoteBlockSchema = z.object({
   attribution: z.string().default(""),
 });
 
-// An image beside a paragraph. Renders as a real two-column table on desktop
-// and stacks on a phone, which is the one layout worth the extra table markup.
+// An image beside text. Renders as a real two-column table on desktop and
+// stacks on a phone, which is the one layout worth the extra table markup.
 export const columnsBlockSchema = z.object({
   ...base,
   type: z.literal("columns"),
   imageSrc: z.string().default(""),
   imageAlt: z.string().default(""),
   title: z.string().default(""),
+  // Rich text, same as the text block, so moving a formatted paragraph beside
+  // an image does not mean giving up bold, links, and lists. Plain strings
+  // written before this became rich text still work: normalizeDocument wraps
+  // them in a paragraph.
   body: z.string().default(""),
   href: z.string().default(""),
   imagePosition: z.enum(["left", "right"]).default("left"),
+  // How much width the image takes. A portrait photo usually wants a third, a
+  // wide one usually wants half.
+  imageWidth: z.enum(["33", "40", "50", "60"]).default("40"),
 });
 
 // The studio's most common email: one class, its details, and a book button.
@@ -229,6 +236,16 @@ export function createBlock(type: EmailBlockType): EmailBlock {
   // Parsing an object with only id and type lets every other field come from
   // the schema defaults, so a default lives in exactly one place.
   return blockSchema.parse({ id: newBlockId(), type }) as EmailBlock;
+}
+
+// Text that predates rich text, or that someone pasted as a bare string, has no
+// tags at all. Rendering it raw would run it together with whatever follows, so
+// it becomes a paragraph. Anything already containing a tag is left alone.
+export function ensureHtml(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+  return `<p>${trimmed.replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
 }
 
 // Turns a pre-builder campaign into blocks.
@@ -407,7 +424,11 @@ export function blocksToPlainText(blocks: EmailBlock[]): string {
         break;
       }
       case "columns": {
-        const lines = [block.title.trim(), block.body.trim(), block.href.trim()].filter(Boolean);
+        const lines = [
+          block.title.trim(),
+          htmlToPlainText(block.body),
+          block.href.trim(),
+        ].filter(Boolean);
         if (lines.length) parts.push(lines.join("\n"));
         break;
       }

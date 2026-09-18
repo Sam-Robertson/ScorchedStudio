@@ -640,6 +640,34 @@ One text block rather than an attempt to infer headings and buttons. Guessing
 would silently reshape a campaign that has already gone out, and the point here
 is to not lose anything.
 
+### Image beside text is one block, not two
+
+Putting a text block next to an image block was the first thing asked for after
+the builder shipped, and the honest answer is that email cannot do it with two
+separate blocks: side-by-side layout in Outlook needs a real table, so the pair
+has to be one block that owns both cells.
+
+The `columns` block already existed, but its text was a plain textarea, so
+moving a formatted paragraph into it meant giving up bold, links, and lists.
+That is a downgrade dressed as a feature. Its body is rich text now, sanitized
+on save exactly like the text block, and the image width is selectable rather
+than a fixed 40/60 split.
+
+Two things this had to not break. Bodies written as plain strings still exist
+in saved campaigns, so `ensureHtml` wraps a bare string in a paragraph rather
+than letting it run into whatever follows. And rows saved before the width
+control get the default from the schema, which is what `parseDocument` already
+does for every other field.
+
+The editor also offers "Put text beside this image" on an image block, which
+converts it and absorbs the text block directly below it. Without that, the
+answer to "can the text go to the right" would have been "yes, rebuild it".
+
+Both cells carry the class the stylesheet's media query targets, so they stack
+on a phone with the image on top whatever width is chosen. A test counts the
+class attributes rather than mentions of the name, since the stylesheet mentions
+it too.
+
 ### A second test runner
 
 The renderer is JSX, which `node --experimental-strip-types` cannot parse, so

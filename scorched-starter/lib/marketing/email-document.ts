@@ -10,6 +10,7 @@ import {
   blocksSchema,
   designSchema,
   blocksToPlainText,
+  ensureHtml,
   type EmailBlock,
   type EmailDesign,
 } from "./email-blocks";
@@ -39,9 +40,18 @@ export function normalizeDocument(rawBlocks: unknown, rawDesign: unknown): Norma
   const parsedDesign = designSchema.safeParse(rawDesign ?? {});
   if (!parsedDesign.success) throw new DocumentError("Invalid design settings");
 
-  const blocks = parsedBlocks.data.map((block) =>
-    block.type === "text" ? { ...block, html: sanitizeEmailHtml(block.html) } : block
-  );
+  // Every field holding author-supplied HTML is sanitized here. Missing one
+  // would mean a route that writes markup into an email untouched, so the list
+  // is kept exhaustive rather than clever.
+  const blocks = parsedBlocks.data.map((block) => {
+    if (block.type === "text") {
+      return { ...block, html: sanitizeEmailHtml(block.html) };
+    }
+    if (block.type === "columns") {
+      return { ...block, body: sanitizeEmailHtml(ensureHtml(block.body)) };
+    }
+    return block;
+  });
 
   return {
     blocks,

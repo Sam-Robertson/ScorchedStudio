@@ -7,6 +7,7 @@ import {
   blocksToPlainText,
   checkDocument,
   createBlock,
+  ensureHtml,
   escapeHtml,
   htmlToPlainText,
   mergeTagsUsed,
@@ -272,4 +273,79 @@ test("a legacy campaign survives load, edit, and save", () => {
     `the original copy was lost: ${JSON.stringify(regeneratedBody)}`
   );
   assert.ok(regeneratedBody.includes("https://example.com"));
+});
+
+// ---------------------------------------------------------------------------
+// Image beside text
+// ---------------------------------------------------------------------------
+
+test("ensureHtml wraps a bare string but leaves markup alone", () => {
+  assert.equal(ensureHtml("Just words"), "<p>Just words</p>");
+  assert.equal(ensureHtml("<p>Already tagged</p>"), "<p>Already tagged</p>");
+  assert.equal(ensureHtml(""), "");
+  assert.equal(ensureHtml("   "), "");
+});
+
+test("ensureHtml keeps line breaks from a plain textarea", () => {
+  assert.equal(ensureHtml("One\n\nTwo"), "<p>One</p><p>Two</p>");
+  assert.equal(ensureHtml("One\nTwo"), "<p>One<br>Two</p>");
+});
+
+test("a columns block written before rich text still reads correctly", () => {
+  // The body used to be a plain string. Those rows must not render as one run
+  // of text jammed against whatever follows.
+  const legacy = ensureHtml("A short paragraph about a recent piece.");
+  const text = blocksToPlainText([
+    block({
+      id: "1",
+      type: "columns",
+      imageSrc: "https://x/y.png",
+      imageAlt: "A bowl",
+      title: "Something we made",
+      body: legacy,
+      href: "",
+      imagePosition: "left",
+      imageWidth: "40",
+    }),
+  ]);
+  assert.ok(text.includes("Something we made"));
+  assert.ok(text.includes("A short paragraph about a recent piece."), text);
+});
+
+test("columns blocks default to a sensible image width", () => {
+  const made = createBlock("columns");
+  assert.equal(made.type, "columns");
+  if (made.type !== "columns") return;
+  assert.equal(made.imageWidth, "40");
+  assert.equal(made.imagePosition, "left");
+});
+
+test("a columns block parsed without imageWidth gets the default", () => {
+  // Rows written before the width control existed.
+  const doc = parseDocument(
+    [{ id: "1", type: "columns", imageSrc: "", imageAlt: "", title: "T", body: "B", href: "", imagePosition: "left" }],
+    null
+  );
+  assert.equal(doc.blocks.length, 1);
+  const b = doc.blocks[0];
+  assert.equal(b.type, "columns");
+  if (b.type !== "columns") return;
+  assert.equal(b.imageWidth, "40");
+});
+
+test("rich text in a columns body reaches the plain-text half", () => {
+  const text = blocksToPlainText([
+    block({
+      id: "1",
+      type: "columns",
+      imageSrc: "",
+      imageAlt: "",
+      title: "",
+      body: "<p>Read <a href=\"https://x.com\">the post</a> now</p>",
+      href: "",
+      imagePosition: "right",
+      imageWidth: "50",
+    }),
+  ]);
+  assert.equal(text, "Read the post now");
 });
