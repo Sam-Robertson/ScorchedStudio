@@ -75,18 +75,40 @@ export async function POST(req: Request) {
       .filter(Boolean)
       .join(" ");
 
-    const result = await recordConsent({
-      email: normalizedEmail,
-      phone: smsOptIn ? phone : null,
-      channels: [
-        ...(emailOptIn ? [{ channel: "email" as const, optIn: true }] : []),
-        ...(smsOptIn ? [{ channel: "sms" as const, optIn: true }] : []),
-      ],
-      source: "footer_form",
-      consentText,
-      ip,
-      userAgent,
-    });
+    // recordConsent is the only part of this route that needs the marketing
+    // tables. If they are missing, or Supabase is briefly unavailable, a
+    // visitor who just wanted the newsletter should not see a failure for
+    // something they cannot act on. The waiver and booking flows already take
+    // this stance through recordConsentSafe; the footer form is the last place
+    // a marketing write could still turn into a 500.
+    let result: Awaited<ReturnType<typeof recordConsent>> | null = null;
+    try {
+      result = await recordConsent({
+        email: normalizedEmail,
+        phone: smsOptIn ? phone : null,
+        channels: [
+          ...(emailOptIn ? [{ channel: "email" as const, optIn: true }] : []),
+          ...(smsOptIn ? [{ channel: "sms" as const, optIn: true }] : []),
+        ],
+        source: "footer_form",
+        consentText,
+        ip,
+        userAgent,
+      });
+    } catch (err) {
+      console.error("NEWSLETTER_CONSENT_ERROR", err);
+
+      // An SMS-only signup that failed here recorded nothing anywhere, so
+      // saying "you are on the list" would be a lie. Email at least landed in
+      // newsletter_subscribers above.
+      if (!emailOptIn) {
+        return Response.json(
+          { error: "We could not sign you up for texts just now. Please try again shortly." },
+          { status: 503 }
+        );
+      }
+      return Response.json({ ok: true, smsSkipped: smsOptIn });
+    }
 
     if (result.applied.includes("email")) {
       await syncSubscriberToResend(result.subscriber);
