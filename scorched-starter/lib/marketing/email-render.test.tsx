@@ -247,3 +247,54 @@ test("the stacking class is on both cells so a phone does not squash them", asyn
   assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 2, "both cells need the class");
   assert.ok(/@media[^{]*max-width[^{]*\{[^}]*sc-stack/.test(out.html), "the stacking rule must be in the document");
 });
+
+// ---------------------------------------------------------------------------
+// Formatting in headings and titles
+// ---------------------------------------------------------------------------
+
+test("formatting inside a heading reaches the email", async () => {
+  const out = await renderDocument(
+    [block({ id: "1", type: "heading", text: 'A <strong>big</strong> <a href="https://x.com">sale</a>', level: 1, align: "left" })],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+
+  assert.ok(out.html.includes("<h1"), "should render a real heading tag");
+  assert.ok(out.html.includes("<strong>big</strong>"), out.html.slice(0, 400));
+  assert.ok(out.html.includes("https://x.com"));
+  // The text half gets the words, not the tags.
+  assert.ok(out.text.includes("A big sale"), out.text);
+});
+
+test("heading level picks the right tag", async () => {
+  for (const [level, tag] of [[1, "h1"], [2, "h2"], [3, "h3"]] as const) {
+    const out = await renderDocument(
+      [block({ id: "1", type: "heading", text: "Hello", level, align: "left" })],
+      DEFAULT_DESIGN,
+      { subject: "Hi" }
+    );
+    assert.ok(out.html.includes(`<${tag}`), `level ${level} should render <${tag}>`);
+  }
+});
+
+test("a formatted card title renders as markup", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "1",
+        type: "card",
+        imageSrc: "",
+        imageAlt: "",
+        title: "<em>Beginner</em> night",
+        meta: "Saturday",
+        body: "Come along",
+        buttonLabel: "Book",
+        buttonHref: "https://example.com",
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.ok(out.html.includes("<em>Beginner</em>"));
+  assert.ok(out.text.includes("Beginner night"), out.text);
+});

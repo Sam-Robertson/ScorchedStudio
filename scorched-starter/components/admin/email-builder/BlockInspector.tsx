@@ -15,6 +15,7 @@ import {
   type EmailDesign,
 } from "@/lib/marketing/email-blocks";
 import RichTextEditor from "./RichTextEditor";
+import InlineTextEditor from "./InlineTextEditor";
 import MediaPicker from "./MediaPicker";
 import { inputCls } from "./api";
 
@@ -48,7 +49,11 @@ export function BlockInspector({
       {block.type === "heading" && (
         <>
           <Field label="Text">
-            <input className={inputCls} value={block.text} onChange={(e) => set({ text: e.target.value })} />
+            <InlineTextEditor
+              value={block.text}
+              onChange={(text) => set({ text })}
+              placeholder="Your headline"
+            />
           </Field>
           <Field label="Size">
             <select
@@ -173,7 +178,7 @@ export function BlockInspector({
             />
           </Field>
           <Field label="Title">
-            <input className={inputCls} value={block.title} onChange={(e) => set({ title: e.target.value })} />
+            <InlineTextEditor value={block.title} onChange={(title) => set({ title })} />
           </Field>
           <Field label="Text">
             <RichTextEditor value={block.body} onChange={(body) => set({ body })} />
@@ -240,7 +245,7 @@ export function BlockInspector({
             />
           </Field>
           <Field label="Title">
-            <input className={inputCls} value={block.title} onChange={(e) => set({ title: e.target.value })} />
+            <InlineTextEditor value={block.title} onChange={(title) => set({ title })} />
           </Field>
           <Field label="Details (date, length, price)">
             <input

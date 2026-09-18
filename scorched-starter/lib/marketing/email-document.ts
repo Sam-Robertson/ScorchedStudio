@@ -14,7 +14,7 @@ import {
   type EmailBlock,
   type EmailDesign,
 } from "./email-blocks";
-import { sanitizeEmailHtml } from "./sanitize-email-html";
+import { sanitizeEmailHtml, sanitizeInlineHtml } from "./sanitize-email-html";
 
 export type NormalizedDocument = {
   blocks: EmailBlock[];
@@ -47,8 +47,20 @@ export function normalizeDocument(rawBlocks: unknown, rawDesign: unknown): Norma
     if (block.type === "text") {
       return { ...block, html: sanitizeEmailHtml(block.html) };
     }
+    if (block.type === "heading") {
+      // Inline only: a paragraph or a list inside an <h2> is invalid markup
+      // and email clients recover from it unpredictably.
+      return { ...block, text: sanitizeInlineHtml(block.text) };
+    }
     if (block.type === "columns") {
-      return { ...block, body: sanitizeEmailHtml(ensureHtml(block.body)) };
+      return {
+        ...block,
+        title: sanitizeInlineHtml(block.title),
+        body: sanitizeEmailHtml(ensureHtml(block.body)),
+      };
+    }
+    if (block.type === "card") {
+      return { ...block, title: sanitizeInlineHtml(block.title) };
     }
     return block;
   });

@@ -17,7 +17,7 @@ import {
   DEFAULT_DESIGN,
   type EmailBlock,
 } from "./email-blocks.ts";
-import { sanitizeEmailHtml } from "./sanitize-email-html.ts";
+import { sanitizeEmailHtml, sanitizeInlineHtml } from "./sanitize-email-html.ts";
 
 function block(partial: Record<string, unknown>): EmailBlock {
   return partial as unknown as EmailBlock;
@@ -497,4 +497,99 @@ test("transforms ignore an id that is not there or is the wrong type", () => {
   // Combining targets an image; pointing it at the text block must do nothing.
   assert.deepEqual(combineImageWithText([IMAGE, TEXT], "txt"), [IMAGE, TEXT]);
   assert.deepEqual(splitColumns([IMAGE], "img"), [IMAGE]);
+});
+
+// ---------------------------------------------------------------------------
+// Formatting in headings and titles
+// ---------------------------------------------------------------------------
+
+test("sanitizeInlineHtml keeps inline formatting", () => {
+  const clean = sanitizeInlineHtml("A <strong>big</strong> <em>sale</em>");
+  assert.ok(clean.includes("<strong>big</strong>"));
+  assert.ok(clean.includes("<em>sale</em>"));
+});
+
+test("sanitizeInlineHtml keeps links but drops javascript ones", () => {
+  assert.ok(sanitizeInlineHtml('<a href="https://x.com">x</a>').includes("https://x.com"));
+  assert.ok(!sanitizeInlineHtml('<a href="javascript:alert(1)">x</a>').includes("javascript:"));
+});
+
+test("sanitizeInlineHtml strips block tags but keeps their words", () => {
+  // A paragraph or a list inside an <h2> is invalid markup, and clients
+  // recover from it unpredictably.
+  const clean = sanitizeInlineHtml("<p>One</p><ul><li>Two</li></ul>");
+  assert.ok(!clean.includes("<p"), clean);
+  assert.ok(!clean.includes("<li"), clean);
+  assert.ok(clean.includes("One"));
+  assert.ok(clean.includes("Two"));
+});
+
+test("sanitizeInlineHtml removes scripts and handlers", () => {
+  const clean = sanitizeInlineHtml('<span onclick="x()">Hi</span><script>alert(1)</script>');
+  assert.ok(!clean.includes("script"), clean);
+  assert.ok(!clean.includes("onclick"), clean);
+  assert.ok(clean.includes("Hi"));
+});
+
+test("a formatted heading reads as plain words in the text half", () => {
+  const text = blocksToPlainText([
+    block({ id: "1", type: "heading", text: "A <strong>big</strong> sale", level: 1, align: "left" }),
+  ]);
+  assert.equal(text, "A big sale");
+});
+
+test("a plain heading written before formatting still works", () => {
+  // Every existing heading is a bare string, which is already valid inline
+  // HTML, so nothing needed converting.
+  const text = blocksToPlainText([
+    block({ id: "1", type: "heading", text: "Just words", level: 2, align: "left" }),
+  ]);
+  assert.equal(text, "Just words");
+});
+
+test("a heading holding only empty tags counts as empty", () => {
+  const issues = checkDocument(
+    [block({ id: "1", type: "heading", text: "<strong></strong>", level: 1, align: "left" })],
+    { subject: "Hi", previewText: "Hi" }
+  );
+  assert.ok(issues.some((i) => /empty heading/i.test(i.message)));
+});
+
+test("a formatted card title is not treated as missing", () => {
+  const issues = checkDocument(
+    [
+      block({
+        id: "1",
+        type: "card",
+        imageSrc: "",
+        imageAlt: "",
+        title: "<em>Beginner</em> night",
+        meta: "",
+        body: "",
+        buttonLabel: "",
+        buttonHref: "",
+      }),
+    ],
+    { subject: "Hi", previewText: "Hi" }
+  );
+  assert.ok(!issues.some((i) => /card has no title/i.test(i.message)));
+});
+
+test("splitting carries a formatted title into the heading intact", () => {
+  const columns = block({
+    id: "c",
+    type: "columns",
+    imageSrc: "https://example.com/a.jpg",
+    imageAlt: "A",
+    title: "A <strong>big</strong> sale",
+    body: "<p>Words</p>",
+    href: "",
+    imagePosition: "left",
+    imageWidth: "40",
+  });
+  const out = splitColumns([columns], "c");
+  const heading = out.find((b) => b.type === "heading");
+  assert.ok(heading);
+  if (heading?.type !== "heading") return;
+  assert.equal(heading.text, "A <strong>big</strong> sale");
 });

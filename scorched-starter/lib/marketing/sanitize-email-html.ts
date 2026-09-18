@@ -61,3 +61,27 @@ const OPTIONS: sanitizeHtml.IOptions = {
 export function sanitizeEmailHtml(html: string): string {
   return sanitizeHtml(html, OPTIONS);
 }
+
+// A much tighter allowlist, for fields that are a single line: headings, and
+// the titles on card and image-and-text blocks.
+//
+// Block tags are excluded rather than merely discouraged. A paragraph or a
+// list inside an <h2> is invalid markup, and email clients recover from it
+// unpredictably, so the editor for these fields offers no way to make one and
+// this is the backstop if something else tries.
+const INLINE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: ["strong", "b", "em", "i", "u", "s", "a", "br", "span"],
+  allowedAttributes: {
+    a: ["href", "target", "rel"],
+  },
+  allowedSchemes: ["http", "https", "mailto", "tel"],
+  allowedSchemesAppliedToAttributes: ["href"],
+  disallowedTagsMode: "discard",
+  transformTags: {
+    a: sanitizeHtml.simpleTransform("a", { target: "_blank", rel: "noopener noreferrer" }),
+  },
+};
+
+export function sanitizeInlineHtml(html: string): string {
+  return sanitizeHtml(html, INLINE_OPTIONS);
+}

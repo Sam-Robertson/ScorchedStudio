@@ -57,6 +57,9 @@ const base = { id: z.string().min(1) };
 export const headingBlockSchema = z.object({
   ...base,
   type: z.literal("heading"),
+  // Inline HTML: bold, italic, underline, and links. Headings written before
+  // this were plain strings, and a plain string is already valid inline HTML,
+  // so nothing saved had to be converted.
   text: z.string().default(""),
   level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
   align: align.default("left"),
@@ -114,6 +117,7 @@ export const columnsBlockSchema = z.object({
   type: z.literal("columns"),
   imageSrc: z.string().default(""),
   imageAlt: z.string().default(""),
+  // Inline HTML, same as a heading.
   title: z.string().default(""),
   // Rich text, same as the text block, so moving a formatted paragraph beside
   // an image does not mean giving up bold, links, and lists. Plain strings
@@ -133,6 +137,7 @@ export const cardBlockSchema = z.object({
   type: z.literal("card"),
   imageSrc: z.string().default(""),
   imageAlt: z.string().default(""),
+  // Inline HTML, same as a heading.
   title: z.string().default(""),
   meta: z.string().default(""),
   body: z.string().default(""),
@@ -321,7 +326,7 @@ export function splitColumns(blocks: EmailBlock[], columnsId: string): EmailBloc
     );
   }
 
-  if (block.title.trim()) {
+  if (htmlToPlainText(block.title)) {
     parts.push(blockSchema.parse({ id: newBlockId(), type: "heading", text: block.title, level: 2 }));
   }
 
@@ -471,7 +476,7 @@ export function blocksToPlainText(blocks: EmailBlock[]): string {
   for (const block of blocks) {
     switch (block.type) {
       case "heading":
-        parts.push(block.text.trim());
+        parts.push(htmlToPlainText(block.text));
         break;
       case "text": {
         const text = htmlToPlainText(block.html);
@@ -502,7 +507,7 @@ export function blocksToPlainText(blocks: EmailBlock[]): string {
       }
       case "columns": {
         const lines = [
-          block.title.trim(),
+          htmlToPlainText(block.title),
           htmlToPlainText(block.body),
           block.href.trim(),
         ].filter(Boolean);
@@ -511,7 +516,7 @@ export function blocksToPlainText(blocks: EmailBlock[]): string {
       }
       case "card": {
         const lines = [
-          block.title.trim(),
+          htmlToPlainText(block.title),
           block.meta.trim(),
           block.body.trim(),
           block.buttonHref.trim() ? `${block.buttonLabel.trim()}: ${block.buttonHref.trim()}` : "",
@@ -609,7 +614,7 @@ export function checkDocument(
             blockId: block.id,
           });
         }
-        if (!block.title.trim()) {
+        if (!htmlToPlainText(block.title)) {
           issues.push({ level: "warning", message: "A card has no title.", blockId: block.id });
         }
         break;
@@ -623,7 +628,7 @@ export function checkDocument(
         }
         break;
       case "heading":
-        if (!block.text.trim()) {
+        if (!htmlToPlainText(block.text)) {
           issues.push({ level: "warning", message: "An empty heading block.", blockId: block.id });
         }
         break;

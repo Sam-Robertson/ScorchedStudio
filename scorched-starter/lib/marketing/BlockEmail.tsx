@@ -17,7 +17,6 @@ import {
   Body,
   Container,
   Head,
-  Heading,
   Hr,
   Html,
   Img,
@@ -139,9 +138,12 @@ function BlockView({
   switch (block.type) {
     case "heading": {
       const size = block.level === 1 ? "28px" : block.level === 2 ? "22px" : "17px";
+      const Tag = (`h${block.level}` as unknown) as "h1";
+      // A native heading tag, not react-email's Heading: that one renders its
+      // children, and React refuses an element carrying both children and
+      // dangerouslySetInnerHTML.
       return (
-        <Heading
-          as={`h${block.level}`}
+        <Tag
           style={{
             fontFamily: font,
             fontSize: size,
@@ -151,9 +153,9 @@ function BlockView({
             textAlign: block.align,
             margin: "0 0 14px",
           }}
-        >
-          {block.text}
-        </Heading>
+          // Inline markup only, sanitized on save.
+          dangerouslySetInnerHTML={{ __html: styleLinks(block.text, design.linkColor) }}
+        />
       );
     }
 
@@ -260,9 +262,10 @@ function BlockView({
       const copy = (
         <>
           {block.title ? (
-            <Text style={{ fontSize: "17px", fontWeight: 700, color: design.headingColor, margin: "0 0 6px" }}>
-              {block.title}
-            </Text>
+            <p
+              style={{ fontSize: "17px", fontWeight: 700, color: design.headingColor, margin: "0 0 6px" }}
+              dangerouslySetInnerHTML={{ __html: styleLinks(block.title, design.linkColor) }}
+            />
           ) : null}
           {block.body ? (
             <div
@@ -335,9 +338,10 @@ function BlockView({
           ) : null}
           <Section style={{ padding: "18px 20px" }}>
             {block.title ? (
-              <Text style={{ fontSize: "18px", fontWeight: 700, color: design.headingColor, margin: "0 0 4px" }}>
-                {block.title}
-              </Text>
+              <p
+                style={{ fontSize: "18px", fontWeight: 700, color: design.headingColor, margin: "0 0 4px" }}
+                dangerouslySetInnerHTML={{ __html: styleLinks(block.title, design.linkColor) }}
+              />
             ) : null}
             {block.meta ? (
               <Text style={{ fontSize: "13px", color: "#8a8378", margin: "0 0 10px" }}>{block.meta}</Text>

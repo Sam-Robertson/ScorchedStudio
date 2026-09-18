@@ -9,7 +9,6 @@
 import { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import { Bold, Italic, Link2, List, ListOrdered, Unlink } from "lucide-react";
 
 type Props = {
@@ -28,8 +27,11 @@ export default function RichTextEditor({ value, onChange }: Props) {
         // by the sanitizer later.
         codeBlock: false,
         horizontalRule: false,
+        // Configured here rather than added separately: StarterKit already
+        // bundles the link extension, and registering it twice makes Tiptap
+        // warn about a duplicate and behave unpredictably.
+        link: { openOnClick: false, autolink: true },
       }),
-      Link.configure({ openOnClick: false, autolink: true }),
     ],
     content: value,
     editorProps: {

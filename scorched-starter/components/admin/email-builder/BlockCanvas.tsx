@@ -47,7 +47,7 @@ type Props = {
 function summarize(block: EmailBlock): string {
   switch (block.type) {
     case "heading":
-      return block.text || "Empty heading";
+      return htmlToPlainText(block.text) || "Empty heading";
     case "text": {
       const text = htmlToPlainText(block.html);
       return text ? text.slice(0, 70) : "Empty text";
@@ -63,9 +63,9 @@ function summarize(block: EmailBlock): string {
     case "quote":
       return block.text || "Empty quote";
     case "columns":
-      return block.title || "Image and text";
+      return htmlToPlainText(block.title) || "Image and text";
     case "card":
-      return block.title || "Class card";
+      return htmlToPlainText(block.title) || "Class card";
     case "social":
       return "Social links";
     default:
