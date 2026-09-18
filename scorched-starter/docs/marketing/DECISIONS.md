@@ -219,3 +219,24 @@ Checked against the docs because it is easy to assume the campaign form wants a 
 ### What the tests do and do not prove
 
 `lib/marketing/legal-pages.test.ts` reads both page sources, reduces them to visible prose, and asserts the required phrases. It cannot render the pages: the project's runner is `node --test` with type stripping, which cannot parse JSX. So it catches deletion, rewording, and typos, which is the failure mode worth catching, but not "does this page compile" (the build covers that). It also asserts the terms page quotes `SMS_CONSENT_TEXT` exactly, so editing the checkbox copy fails the suite until the page and the registration are updated to match.
+
+## SMS worker cron is temporarily daily (September 17, 2026)
+
+Vercel rejected the production deploy outright: Hobby accounts allow only daily
+cron jobs, and `*/5 * * * *` is more than once a day. Set to `0 16 * * *` (10am
+Denver in MDT, 9am in MST, both inside the send window) so the deploy could go
+through and `/privacy` and `/terms` could go live for the 10DLC registration,
+which is the actual blocker.
+
+**This is a placeholder, not a working configuration.** The per-run budget is
+`SMS_MAX_PER_MINUTE * CRON_INTERVAL_MINUTES`, which is 60 messages at the
+defaults. One run a day therefore caps the whole system at 60 texts per day, and
+scheduled campaigns fire up to 24 hours after their scheduled time. The
+completion estimate in the admin UI assumes the 5 minute cadence and will be
+badly optimistic while this stands.
+
+Nothing is lost today: the migration is not applied, `MARKETING_LIVE` is false,
+and the 10DLC campaign is not approved, so the worker has nothing to do either
+way. Before the first real campaign, either upgrade to Vercel Pro and restore
+`*/5 * * * *`, or drop the cron entry and point an external scheduler at
+`/api/cron/sms-worker` with the `CRON_SECRET` bearer header.

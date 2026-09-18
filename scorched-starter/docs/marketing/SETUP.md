@@ -209,9 +209,17 @@ The route rejects anything whose Ed25519 signature does not verify, and anything
 
 ## 8. Cron
 
-`vercel.json` has `/api/cron/sms-worker` on `*/5 * * * *`. It drains the queue and also starts any campaign whose scheduled time has arrived.
+`vercel.json` has `/api/cron/sms-worker` on `0 16 * * *`, once a day. It drains the queue and also starts any campaign whose scheduled time has arrived.
 
-> **Vercel plan check.** Sub-daily cron schedules need a paid plan. On Hobby, crons run at most once a day and this schedule will be rejected or silently downgraded at deploy. Confirm the project's plan allows `*/5`. If it does not, either upgrade or point an external scheduler at the route with the `Authorization: Bearer $CRON_SECRET` header.
+> **This is a placeholder and must be changed before the first real campaign.**
+> The deploy on 17 September 2026 was rejected because Vercel Hobby allows only
+> daily crons and the worker was set to `*/5 * * * *`. One run a day caps the
+> whole system at **60 texts per day** (`SMS_MAX_PER_MINUTE` times the 5 minute
+> interval the budget assumes), and scheduled campaigns fire up to 24 hours
+> late. Either upgrade to Vercel Pro and restore `*/5 * * * *` in `vercel.json`,
+> or remove the cron entry and point an external scheduler (cron-job.org, a
+> GitHub Actions schedule) at `/api/cron/sms-worker` with an
+> `Authorization: Bearer $CRON_SECRET` header.
 
 ## 9. Legacy SMS list import
 
