@@ -2,6 +2,11 @@
 //
 // Drains sms_queue at the configured throughput. Runs every 5 minutes.
 //
+// Scheduled by Postgres, not Vercel: see supabase-sms-cron-setup.sql. Vercel
+// Hobby allows only daily crons and rejects the whole deploy over anything more
+// frequent, and a daily run would cap the system at SMS_MAX_PER_MINUTE times
+// one interval, which is 60 texts a day. pg_cron has no such limit.
+//
 // A campaign is never sent by looping over the list inline: a 10DLC campaign
 // has a carrier-assigned send rate, and exceeding it gets messages filtered
 // rather than queued, so the queue is paced and this is what paces it.

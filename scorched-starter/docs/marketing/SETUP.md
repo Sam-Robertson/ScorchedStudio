@@ -207,19 +207,70 @@ curl -s https://api.telnyx.com/v2/messaging_profiles \
 
 The route rejects anything whose Ed25519 signature does not verify, and anything stamped more than 5 minutes ago, so a missing or wrong `TELNYX_PUBLIC_KEY` shows up as every webhook 401ing.
 
-## 8. Cron
+## 8. Cron (Supabase pg_cron, not Vercel)
 
-`vercel.json` has `/api/cron/sms-worker` on `0 16 * * *`, once a day. It drains the queue and also starts any campaign whose scheduled time has arrived.
+The SMS worker is scheduled from Postgres, not from `vercel.json`. Vercel Hobby
+allows only daily cron jobs and rejects the whole deploy if any schedule runs
+more often, and the worker needs to run every 5 minutes: one run sends at most
+`SMS_MAX_PER_MINUTE` times that interval, so a daily schedule would cap the
+system at 60 texts a day. pg_cron has no such limit.
 
-> **This is a placeholder and must be changed before the first real campaign.**
-> The deploy on 17 September 2026 was rejected because Vercel Hobby allows only
-> daily crons and the worker was set to `*/5 * * * *`. One run a day caps the
-> whole system at **60 texts per day** (`SMS_MAX_PER_MINUTE` times the 5 minute
-> interval the budget assumes), and scheduled campaigns fire up to 24 hours
-> late. Either upgrade to Vercel Pro and restore `*/5 * * * *` in `vercel.json`,
-> or remove the cron entry and point an external scheduler (cron-job.org, a
-> GitHub Actions schedule) at `/api/cron/sms-worker` with an
-> `Authorization: Bearer $CRON_SECRET` header.
+`supabase-sms-cron-setup.sql` has **not been run**. Apply it after
+`supabase-marketing-setup.sql`.
+
+- [ ] **Create the two Vault secrets first.** The migration reads them by name
+      and raises if they are missing, so do this before scheduling. In the SQL
+      editor:
+
+      ```sql
+      select vault.create_secret(
+        'https://www.scorchedstudio.com/api/cron/sms-worker',
+        'sms_worker_url',
+        'Endpoint pg_cron calls to drain the marketing SMS queue'
+      );
+
+      select vault.create_secret(
+        '<the same value as CRON_SECRET in Vercel>',
+        'sms_worker_cron_secret',
+        'Bearer token for /api/cron/sms-worker; must match CRON_SECRET'
+      );
+      ```
+
+      The token has to match `CRON_SECRET` in Vercel exactly. If it does not,
+      every run returns 401 and the job still reports success, because pg_cron
+      only knows whether the SQL ran.
+
+- [ ] **Run `supabase-sms-cron-setup.sql`.** It enables `pg_cron` and `pg_net`,
+      creates `public.invoke_sms_worker()`, schedules it every 5 minutes, and
+      creates a `sms_worker_cron_health` view. Safe to re-run: it unschedules
+      the job before rescheduling, so it cannot end up running twice.
+
+      If the `create extension` lines fail on a permissions error, enable the
+      two extensions from the dashboard instead (Database, then Extensions,
+      search for `pg_cron` and `pg_net`), then re-run the file. Some projects
+      do not allow creating them from the SQL editor.
+
+- [ ] **Confirm it works**, without waiting for the next tick:
+
+      ```sql
+      select jobname, schedule, active from cron.job where jobname = 'sms-worker';
+      select public.invoke_sms_worker();
+      -- a few seconds later:
+      select status_code, error_msg from net._http_response order by created desc limit 1;
+      ```
+
+      A 200 means the route accepted the call. A 401 means the Vault secret and
+      `CRON_SECRET` disagree.
+
+- [ ] **Check it again the next day** with
+      `select * from public.sms_worker_cron_health limit 20;`. That view joins
+      what pg_cron recorded to what the HTTP call actually returned, which is
+      the only way to tell a working schedule from one that fires and 401s.
+
+Nothing needs to change in Vercel. The two remaining crons there, the daily
+booking report and the Plaid sync, are unaffected.
+
+To stop the schedule: `select cron.unschedule('sms-worker');`
 
 ## 9. Legacy SMS list import
 
@@ -289,7 +340,7 @@ Only after all eleven pass, and after the 10DLC campaign is approved, should the
 | Segment and cost rules | `lib/marketing/sms-segments.ts` |
 | Rate limits and the live gate | `lib/marketing/config.ts` |
 | Worker logic | `lib/marketing/sms-worker-core.ts` (pure), `sms-worker.ts` (wired) |
-| Cron route | `app/api/cron/sms-worker/route.ts` |
+| Cron route | `app/api/cron/sms-worker/route.ts`, scheduled by `supabase-sms-cron-setup.sql` |
 | Webhooks | `app/api/webhooks/telnyx`, `app/api/webhooks/resend` |
 | Unsubscribe | `app/unsubscribe/[token]/route.ts` |
 | Admin UI | `app/admin/marketing/page.tsx` |

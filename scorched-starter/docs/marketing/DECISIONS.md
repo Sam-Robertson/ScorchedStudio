@@ -220,7 +220,7 @@ Checked against the docs because it is easy to assume the campaign form wants a 
 
 `lib/marketing/legal-pages.test.ts` reads both page sources, reduces them to visible prose, and asserts the required phrases. It cannot render the pages: the project's runner is `node --test` with type stripping, which cannot parse JSX. So it catches deletion, rewording, and typos, which is the failure mode worth catching, but not "does this page compile" (the build covers that). It also asserts the terms page quotes `SMS_CONSENT_TEXT` exactly, so editing the checkbox copy fails the suite until the page and the registration are updated to match.
 
-## SMS worker cron is temporarily daily (September 17, 2026)
+## SMS worker cron is temporarily daily (September 17, 2026, superseded below)
 
 Vercel rejected the production deploy outright: Hobby accounts allow only daily
 cron jobs, and `*/5 * * * *` is more than once a day. Set to `0 16 * * *` (10am
@@ -240,3 +240,55 @@ and the 10DLC campaign is not approved, so the worker has nothing to do either
 way. Before the first real campaign, either upgrade to Vercel Pro and restore
 `*/5 * * * *`, or drop the cron entry and point an external scheduler at
 `/api/cron/sms-worker` with the `CRON_SECRET` bearer header.
+
+## SMS worker moved to Supabase pg_cron (supersedes the daily placeholder)
+
+The daily Vercel cron above was a placeholder to unblock a deploy. It is gone.
+`vercel.json` no longer schedules the SMS worker at all, and
+`supabase-sms-cron-setup.sql` schedules it from Postgres every 5 minutes.
+
+**Why not just pay for Vercel Pro.** That would work, but it puts a recurring
+subscription on the critical path of a feature the project can already run
+without one. The project already depends on Supabase for everything else the
+worker touches, so pg_cron adds no new vendor, no new failure mode that is not
+already fatal, and no new secret to rotate beyond the one the route already
+checks. Vercel Pro is still the right call if Sam wants it for other reasons;
+this just stops the cron from being the reason.
+
+**Why not an external scheduler** (cron-job.org, GitHub Actions). It works, but
+it is a third system holding a production secret, with its own account, its own
+uptime, and its own place to look when sends stop. pg_cron lives next to the
+data the worker reads.
+
+Decisions inside the migration:
+
+- **The bearer token is a Vault secret, never SQL.** `cron.job.command` is
+  readable by anyone with database access, so the token cannot be inlined there.
+  `public.invoke_sms_worker()` reads it from `vault.decrypted_secrets` at call
+  time, which also means rotating it is an update to one row rather than an edit
+  and re-run of this file.
+- **The URL is in Vault too**, even though it is not secret. It keeps the
+  migration byte-identical across environments: a staging project points
+  somewhere else by changing a row, not by editing SQL.
+- **Wrapped in a function rather than inlining `net.http_get` in the schedule.**
+  The command text stays free of anything sensitive, the call can be tested by
+  hand with one select, and the request shape can change without touching the
+  schedule.
+- **`SECURITY DEFINER` with a pinned `search_path`.** Without the pin, a caller
+  could shadow `vault` or `net` with their own schema and capture the token.
+  Execute is revoked from `anon` and `authenticated`, since otherwise any
+  signed-in user could trigger a send cycle through PostgREST.
+- **The function raises if either secret is missing** rather than firing an
+  unauthenticated request. A 401 would still be recorded by pg_cron as a
+  successful run, because pg_cron only knows whether the SQL executed, so the
+  failure has to be made loud at the point it happens.
+- **Re-running the file is safe.** It unschedules before scheduling, so it
+  cannot leave two jobs running and double the send rate.
+- **Added a `sms_worker_cron_health` view.** pg_cron records whether the SQL ran
+  and pg_net separately records what the HTTP call returned; a job can report
+  success while every request 401s. The view joins both halves, which is the
+  only way to tell a working schedule from one that only looks like one.
+
+`CRON_INTERVAL_MINUTES` in `sms-budget.ts` is 5 and is correct again. It was
+quietly wrong for as long as the daily placeholder stood, which is the other
+reason not to leave that in place.
