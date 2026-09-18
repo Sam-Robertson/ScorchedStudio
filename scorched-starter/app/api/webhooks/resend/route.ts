@@ -10,6 +10,7 @@
 // against the raw request body.
 import { NextRequest } from "next/server";
 import { Webhook } from "svix";
+import { resendEventFrom } from "@/lib/marketing/resend-event";
 import { getSupabase } from "@/lib/supabase";
 import type { EmailStatus, SubscriberRecord } from "@/lib/supabase";
 import { syncSubscriberToResend } from "@/lib/marketing/resend-audience";
@@ -78,11 +79,15 @@ export async function POST(req: NextRequest) {
 
   let event: ResendEvent;
   try {
-    event = new Webhook(secret).verify(payload, {
+    // verify() authenticates; it does not reliably parse. It throws on a bad
+    // signature and returns undefined on a good one in this version, so the
+    // event has to come from the raw body.
+    const verified = new Webhook(secret).verify(payload, {
       "svix-id": req.headers.get("svix-id") ?? "",
       "svix-timestamp": req.headers.get("svix-timestamp") ?? "",
       "svix-signature": req.headers.get("svix-signature") ?? "",
-    }) as unknown as ResendEvent;
+    });
+    event = resendEventFrom<ResendEvent>(verified, payload);
   } catch (err) {
     console.error("RESEND_WEBHOOK_SIG_ERROR", err);
     return Response.json({ error: "Invalid signature" }, { status: 400 });

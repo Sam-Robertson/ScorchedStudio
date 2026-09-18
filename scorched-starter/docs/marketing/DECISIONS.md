@@ -344,3 +344,26 @@ worked around, because there is no code change that resolves it.
 Two tests guard the new shape: one fails if the footer regrows a phone input or
 the opt-in component, and one fails if the privacy policy stops saying the footer
 is email only.
+
+## The Resend webhook never worked, and a cast hid it
+
+Sending a real test email surfaced it: every genuine Resend webhook was crashing
+with an empty 500 and recording nothing, while forged ones were correctly
+rejected with a 400. From the outside the endpoint looked healthy, which is the
+worst shape for a bug to be in.
+
+Cause: `svix`'s `Webhook.verify()` authenticates but does not parse. It throws on
+a bad signature and returns `undefined` on a good one. The route treated the
+return value as the event, so `event.type` threw on every valid delivery.
+
+TypeScript caught this at the time. The error was
+`Conversion of type 'undefined' to type 'ResendEvent' may be a mistake`, and it
+was silenced with `as unknown as ResendEvent` rather than investigated. The cast
+was the bug; the type checker was right.
+
+Fixed by `resendEventFrom()`, which uses the verified object when a version of
+svix returns one and falls back to parsing the raw body otherwise, so it holds
+across versions. Four tests cover it, including the unparseable-body case.
+
+Worth generalising: a cast that exists to silence a warning about `undefined` is
+worth treating as a bug report rather than a formality.
