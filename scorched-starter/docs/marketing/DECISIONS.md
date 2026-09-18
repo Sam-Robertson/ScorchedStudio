@@ -431,3 +431,47 @@ show all seven APPROVED after the edit.
 Noted while there: the campaign has moved from `TCR_ACCEPTED` to `MNO_PENDING`,
 which is why number assignment still fails with 10036. That is the carrier
 provisioning stage, not a problem with the registration.
+
+## Legacy subscriber import (September 18, 2026)
+
+Imported `scorched_subscribers_combined.csv`, a combined Omnisend and Klaviyo
+export of 551 rows. Result: 548 subscribers, 540 reachable by email, 34 by text.
+
+A new script, `scripts/import-subscribers-csv.ts`, because the file does not fit
+`import-legacy-sms.ts`: that one expects two SMS-only exports with a single
+status column, and this one is a single file with `email_marketing` and
+`sms_marketing` columns and both contact methods per row. Both scripts are kept
+since they read different exports.
+
+**The decision that matters: 90 rows had `sms_marketing = unknown` and were
+imported as not subscribed.** Unknown is the absence of a record, not a yes.
+Importing it as consent would have put 90 people on a list nobody can evidence
+consent for, which is precisely what a carrier audit looks for and the fastest
+way to get a new 10DLC number blocked. They are on the list and reachable by
+email where applicable; they simply cannot be texted until they opt in through
+one of the three checkboxes. That is why the textable list is 34 rather than 124.
+
+Other decisions:
+
+- **Per-channel sources.** Two `recordConsent` calls per person rather than one,
+  so an email row records `import_legacy_newsletter` and an SMS row records
+  `import_legacy_sms`, instead of a single blended label that is true for
+  neither.
+- **The consent text records what is actually known**: which platform it came
+  from, that the export carried an opt-in date of 2026-04-01, and that no record
+  exists of the wording the person was originally shown. That last part matters,
+  because the whole point of the log is not overstating what we can prove.
+- **The 2026-04-01 date is uniform across all 550 rows**, so it is plainly a
+  bulk placeholder rather than real per-person timestamps. Used anyway, since it
+  is the only date available, but it is weaker evidence than a real one and the
+  consent text says where it came from.
+- `email_marketing = no` is imported as an explicit opt-out rather than left
+  blank, so a later import cannot quietly resubscribe someone.
+- Everything is tagged `legacy-import` so it can be segmented or removed as a set.
+
+**A silent failure worth recording.** The first `--apply` run wrote zero rows:
+tsx does not load `.env` the way Next does, so every row failed on "Missing
+SUPABASE_URL" while the script happily printed its summary. It failed cleanly
+with no partial state, but a script that reports success-shaped output while
+writing nothing is a bad failure mode. `scripts/load-env.ts` now handles it, and
+`import-legacy-sms.ts` had the identical gap and was fixed in the same change.

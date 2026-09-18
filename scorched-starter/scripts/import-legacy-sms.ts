@@ -16,6 +16,12 @@
 // Column headers are auto-detected. Override with --phone-col, --date-col,
 // --status-col, --first-name-col, --last-name-col, --email-col.
 import { readFileSync } from "node:fs";
+import { loadEnv } from "./load-env.ts";
+
+// Without this the script reports its counts and then writes nothing, because
+// tsx does not load .env.
+loadEnv();
+
 import { getSupabase } from "../lib/supabase.ts";
 import { normalizePhone } from "../lib/marketing/phone.ts";
 import {
