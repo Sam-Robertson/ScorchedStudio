@@ -91,9 +91,9 @@ test("the privacy policy states the required SMS mechanics", () => {
 });
 
 test("the privacy policy says what is collected for SMS consent", () => {
-  // These five are what the consent log actually stores, and what proves an
-  // opt-in if anyone ever challenges it.
-  for (const phrase of ["mobile number", "IP address", "waiver", "booking checkout", "footer signup"]) {
+  // What the consent log actually stores, and what proves an opt-in if anyone
+  // ever challenges it.
+  for (const phrase of ["mobile number", "IP address", "waiver", "booking checkout"]) {
     assert.ok(privacy.toLowerCase().includes(phrase.toLowerCase()), `missing: ${phrase}`);
   }
 });
@@ -123,10 +123,31 @@ test("the terms page repeats the no-sharing promise", () => {
   assert.ok(terms.includes(NO_SHARING_MOBILE), "terms page is missing the no-sharing sentence");
 });
 
-test("the terms page names the three opt-in points, matching the registration", () => {
-  for (const phrase of ["waiver", "booking checkout", "footer"]) {
+test("the terms page names the SMS opt-in points, matching the registration", () => {
+  // Two, not three: the footer collects email only. The 10DLC campaign's
+  // opt-in description has to say the same thing or a reviewer comparing the
+  // two will find a mismatch.
+  for (const phrase of ["waiver", "booking checkout"]) {
     assert.ok(terms.toLowerCase().includes(phrase.toLowerCase()), `missing: ${phrase}`);
   }
+});
+
+test("the footer form does not collect a phone number", () => {
+  // It used to carry the SMS checkbox. If it ever grows a phone field again,
+  // both legal pages and the 10DLC registration need updating in the same
+  // change, so this fails loudly rather than letting them drift apart.
+  const footer = readFileSync(join(appDir, "..", "components", "FooterShell.tsx"), "utf8");
+
+  assert.ok(!/type="tel"/.test(footer), "the footer form has a phone input again");
+  assert.ok(!/MarketingOptIns/.test(footer), "the footer form has opt-in checkboxes again");
+});
+
+test("both pages say the footer is email only", () => {
+  // The claim a reviewer checks by looking at the actual footer.
+  assert.ok(
+    /footer[^.]*email addresses only|email[^.]*only[^.]*footer/i.test(privacy),
+    "the privacy policy does not say the footer form is email only"
+  );
 });
 
 test("the terms page quotes the live checkbox wording exactly", () => {

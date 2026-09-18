@@ -316,3 +316,31 @@ Two things worth Sam knowing rather than me deciding:
   with a US-only audience, but it would not satisfy GDPR or the newer state
   privacy laws if the audience ever broadens. Worth a lawyer's view alongside
   the rest of the policy.
+
+## Footer signup reduced to email only (September 18, 2026)
+
+Sam asked for the footer to be just an email input: no checkboxes, no phone
+field. Done, and the rest of the system was brought in line rather than left
+describing a form that no longer exists.
+
+- **There is no email checkbox either, so submitting the form is the consent.**
+  That is valid for email (a form labelled as a newsletter signup is itself the
+  opt-in), but the consent log cannot quote a checkbox nobody saw. Added
+  `FOOTER_EMAIL_CONSENT_TEXT`, which records the form's actual visible label, so
+  the log still reflects what was on screen.
+- `/api/newsletter` is email only now. It no longer takes a phone number or
+  opt-in flags, and no longer rejects a submission for having nothing ticked.
+- **SMS opt-in is now two places, not three.** Both legal pages were updated to
+  say so, and the privacy policy states explicitly that the footer form collects
+  email addresses only and never asks for a mobile number.
+
+**This contradicts the 10DLC campaign registration, which is still pending.**
+The opt-in description submitted to TCR names three places including the footer.
+A reviewer comparing that description against the live site will now find a
+footer with no SMS checkbox. Sam has to update the campaign's opt-in description
+to name the waiver and the booking checkout only. Flagged directly rather than
+worked around, because there is no code change that resolves it.
+
+Two tests guard the new shape: one fails if the footer regrows a phone input or
+the opt-in component, and one fails if the privacy policy stops saying the footer
+is email only.

@@ -6,7 +6,6 @@ import { Instagram } from 'lucide-react';
 import Container from './ui/Container';
 import { vulfMono } from '@/app/fonts';
 import type { LocationRecord } from '@/lib/locations';
-import MarketingOptIns, { EMPTY_OPT_INS, type OptInState } from './marketing/MarketingOptIns';
 
 const infoLinks = [
   { href: '/faq', label: 'FAQ' },
@@ -33,49 +32,33 @@ function TikTokIcon({ className }: { className?: string }) {
   );
 }
 
+// Email only. The SMS opt-in that used to live here moved off the footer: the
+// text message checkbox now appears on the waiver and the booking checkout,
+// where there is room for the full disclosure it has to carry.
+//
+// There is no checkbox because there is nothing to choose between. Submitting
+// a form labelled as a newsletter signup is itself the consent, which is what
+// FOOTER_EMAIL_CONSENT_TEXT records.
 function NewsletterForm() {
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [optIns, setOptIns] = useState<OptInState>(EMPTY_OPT_INS);
   const [company, setCompany] = useState(''); // honeypot
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Both boxes start unchecked, so there is nothing to consent to until one
-    // is ticked. Saying so beats silently accepting a signup that would never
-    // receive anything.
-    if (!optIns.email && !optIns.sms) {
-      setMessage('Tick at least one box so we know how to reach you.');
-      setStatus('error');
-      return;
-    }
     setStatus('loading');
     setMessage('');
     try {
       const res = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          phone: optIns.sms ? phone : undefined,
-          emailOptIn: optIns.email,
-          smsOptIn: optIns.sms,
-          company,
-        }),
+        body: JSON.stringify({ email, company }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || '');
       setStatus('done');
-      setMessage(
-        body?.smsSkipped
-          ? "You're on the email list. We couldn't read that phone number, so texts are not set up."
-          : ''
-      );
       setEmail('');
-      setPhone('');
-      setOptIns(EMPTY_OPT_INS);
     } catch (err) {
       setMessage(err instanceof Error && err.message ? err.message : 'Something went wrong. Try again.');
       setStatus('error');
@@ -83,15 +66,11 @@ function NewsletterForm() {
   }
 
   if (status === 'done') {
-    return (
-      <p className="text-sm text-white/80">
-        {message || "You're on the list. Thanks!"}
-      </p>
-    );
+    return <p className="text-sm text-white/80">You&apos;re on the list. Thanks!</p>;
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-2">
       <p className="text-sm text-white/70">Deals, new products, and studio news. No spam.</p>
       <div className="flex gap-2">
         <input
@@ -119,22 +98,6 @@ function NewsletterForm() {
           {status === 'loading' ? '…' : 'JOIN'}
         </button>
       </div>
-
-      {/* Only asked for once the SMS box is ticked, so the form stays a single
-          field for the majority who just want email. */}
-      {optIns.sms && (
-        <input
-          type="tel"
-          required
-          placeholder="(801) 555-0123"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="w-full rounded-lg border border-white/30 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-white"
-        />
-      )}
-
-      <MarketingOptIns value={optIns} onChange={setOptIns} tone="dark" idPrefix="footer" />
-
       {status === 'error' && <p className="text-xs text-white/70">{message}</p>}
     </form>
   );

@@ -48,8 +48,9 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Join our email or text list</strong> — your email address, and your mobile
-              number if you asked for texts, plus a record of the consent you gave. You can opt in
-              on the waiver, at booking checkout, or through the signup form in our footer.
+              number if you asked for texts, plus a record of the consent you gave. Email signup is
+              on the waiver, at booking checkout, and in our footer form. Text message signup is on
+              the waiver and at booking checkout only.
             </li>
           </ul>
           <p className="mt-4">
@@ -106,16 +107,17 @@ export default function PrivacyPage() {
           <h2 className="h3 font-semibold mb-3">5. SMS / Text Messaging</h2>
           <p className="mb-4">
             We send marketing text messages about classes, courses, events, and offers, and only to
-            people who have asked for them. The text message box on our waiver, booking checkout,
-            and footer signup form is separate from the email box, is never ticked for you, and
-            agreeing is never a condition of booking or buying anything.
+            people who have asked for them. The text message box on our waiver and our booking
+            checkout is separate from the email box, is never ticked for you, and agreeing is never
+            a condition of booking or buying anything. The signup form in our site footer collects
+            email addresses only and never asks for a mobile number.
           </p>
 
           <h3 className="font-semibold mt-6 mb-2">What we collect for text messaging</h3>
           <ul className="list-disc list-outside ml-5 space-y-2">
             <li>Your mobile number</li>
             <li>The date and time you opted in</li>
-            <li>Which form you opted in on: the waiver, the booking checkout, or the footer signup</li>
+            <li>Which form you opted in on: the waiver or the booking checkout</li>
             <li>The IP address and browser the request came from</li>
             <li>The exact wording of the consent you were shown and agreed to</li>
           </ul>

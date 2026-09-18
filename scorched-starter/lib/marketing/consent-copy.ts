@@ -12,6 +12,14 @@
 export const EMAIL_CONSENT_TEXT =
   "Email me about new classes, events, and offers.";
 
+// The footer signup has no checkbox: submitting the form is the consent, and
+// the form's own label is the only wording shown. Recorded verbatim so the
+// consent log reflects what was on screen rather than borrowing the checkbox
+// wording from the waiver and booking forms, which footer signups never see.
+export const FOOTER_EMAIL_CONSENT_TEXT =
+  "Submitted the email signup form in the site footer, labelled: " +
+  "\"Deals, new products, and studio news. No spam.\"";
+
 // Required elements for SMS marketing consent under TCPA and the CTIA
 // guidelines the carriers enforce: who is messaging, that frequency varies,
 // that rates may apply, how to stop, how to get help, and that agreeing is not
