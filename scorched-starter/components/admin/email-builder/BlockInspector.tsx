@@ -6,7 +6,7 @@
 // stored and then ignored.
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { Image as ImageIcon, PanelRight, X } from "lucide-react";
+import { Image as ImageIcon, PanelRight, Rows3, X } from "lucide-react";
 import {
   BLOCK_LABELS,
   FONT_STACKS,
@@ -24,12 +24,15 @@ export function BlockInspector({
   block,
   onChange,
   onWrapTextBeside,
+  onSplit,
 }: {
   block: EmailBlock;
   onChange: (block: EmailBlock) => void;
   // Turns this image block into an image-and-text block, absorbing the text
   // block below it if there is one. Offered on image blocks only.
   onWrapTextBeside?: () => void;
+  // The inverse, offered on image-and-text blocks.
+  onSplit?: () => void;
 }) {
   // A narrow cast in one place rather than a switch that rebuilds the whole
   // block for every field. The schema is the thing that actually guards the
@@ -193,6 +196,21 @@ export function BlockInspector({
               <option value="right">Right</option>
             </select>
           </Field>
+          {onSplit && (
+            <div className="rounded-lg bg-neutral-50 p-3">
+              <button
+                type="button"
+                onClick={onSplit}
+                className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+              >
+                <Rows3 className="w-3.5 h-3.5" /> Split back into separate blocks
+              </button>
+              <p className="text-xs text-neutral-500 mt-1">
+                The image and the text become their own blocks again, stacked. A title becomes a
+                heading.
+              </p>
+            </div>
+          )}
           <Field label="Image width">
             <select
               className={inputCls}

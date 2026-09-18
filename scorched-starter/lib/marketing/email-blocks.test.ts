@@ -6,12 +6,14 @@ import {
   blocksFromLegacyHtml,
   blocksToPlainText,
   checkDocument,
+  combineImageWithText,
   createBlock,
   ensureHtml,
   escapeHtml,
   htmlToPlainText,
   mergeTagsUsed,
   parseDocument,
+  splitColumns,
   DEFAULT_DESIGN,
   type EmailBlock,
 } from "./email-blocks.ts";
@@ -348,4 +350,151 @@ test("rich text in a columns body reaches the plain-text half", () => {
     }),
   ]);
   assert.equal(text, "Read the post now");
+});
+
+// ---------------------------------------------------------------------------
+// Combining and splitting
+// ---------------------------------------------------------------------------
+
+const IMAGE = block({
+  id: "img",
+  type: "image",
+  src: "https://example.com/bowls.jpg",
+  alt: "Stacked bowls",
+  width: "full",
+  align: "center",
+  href: "https://example.com/shop",
+});
+
+const TEXT = block({ id: "txt", type: "text", html: "<p>Some <strong>words</strong>.</p>", align: "left" });
+
+test("combining an image with the text below it makes one block", () => {
+  const out = combineImageWithText([IMAGE, TEXT], "img");
+
+  assert.equal(out.length, 1);
+  const c = out[0];
+  assert.equal(c.type, "columns");
+  if (c.type !== "columns") return;
+  assert.equal(c.imageSrc, "https://example.com/bowls.jpg");
+  assert.equal(c.imageAlt, "Stacked bowls");
+  assert.equal(c.href, "https://example.com/shop");
+  // The formatting has to survive, or combining silently costs you the bold.
+  assert.equal(c.body, "<p>Some <strong>words</strong>.</p>");
+});
+
+test("combining an image with nothing below it leaves the text empty", () => {
+  const out = combineImageWithText([IMAGE], "img");
+  assert.equal(out.length, 1);
+  assert.equal(out[0].type, "columns");
+});
+
+test("combining only absorbs a text block, not whatever happens to be next", () => {
+  const button = block({ id: "b", type: "button", label: "Go", href: "https://x.com", align: "center" });
+  const out = combineImageWithText([IMAGE, button], "img");
+  assert.equal(out.length, 2, "the button must survive");
+  assert.equal(out[1].id, "b");
+});
+
+test("splitting puts the image and the text back", () => {
+  const combined = combineImageWithText([IMAGE, TEXT], "img");
+  const out = splitColumns(combined, combined[0].id);
+
+  assert.equal(out.length, 2);
+  assert.equal(out[0].type, "image");
+  assert.equal(out[1].type, "text");
+  if (out[0].type !== "image" || out[1].type !== "text") return;
+  assert.equal(out[0].src, "https://example.com/bowls.jpg");
+  assert.equal(out[0].alt, "Stacked bowls");
+  assert.equal(out[0].href, "https://example.com/shop");
+  assert.equal(out[1].html, "<p>Some <strong>words</strong>.</p>");
+});
+
+test("a combine then split round trip loses nothing that matters", () => {
+  // The editor has no undo, so this round trip is the only way back.
+  const before = blocksToPlainText([IMAGE, TEXT]);
+
+  const combined = combineImageWithText([IMAGE, TEXT], "img");
+  const restored = splitColumns(combined, combined[0].id);
+
+  assert.equal(blocksToPlainText(restored), before);
+
+  // Shapes too, not just the readable text.
+  assert.deepEqual(restored.map((b) => b.type), ["image", "text"]);
+});
+
+test("splitting turns a title into its own heading", () => {
+  const columns = block({
+    id: "c",
+    type: "columns",
+    imageSrc: "https://example.com/a.jpg",
+    imageAlt: "A",
+    title: "Something we made",
+    body: "<p>Words</p>",
+    href: "",
+    imagePosition: "left",
+    imageWidth: "40",
+  });
+  const out = splitColumns([columns], "c");
+
+  assert.equal(out.length, 3);
+  assert.equal(out[0].type, "image");
+  assert.equal(out[1].type, "heading");
+  assert.equal(out[2].type, "text");
+  if (out[1].type !== "heading") return;
+  assert.equal(out[1].text, "Something we made");
+});
+
+test("splitting skips the parts that are empty", () => {
+  const noImage = block({
+    id: "c",
+    type: "columns",
+    imageSrc: "",
+    imageAlt: "",
+    title: "",
+    body: "<p>Only words</p>",
+    href: "",
+    imagePosition: "left",
+    imageWidth: "40",
+  });
+  const out = splitColumns([noImage], "c");
+  assert.equal(out.length, 1);
+  assert.equal(out[0].type, "text");
+});
+
+test("splitting an entirely empty block does not delete it", () => {
+  // Otherwise the button would read as Split and behave as Delete.
+  const empty = block({
+    id: "c",
+    type: "columns",
+    imageSrc: "",
+    imageAlt: "",
+    title: "",
+    body: "",
+    href: "",
+    imagePosition: "left",
+    imageWidth: "40",
+  });
+  const out = splitColumns([empty], "c");
+  assert.equal(out.length, 1);
+  assert.equal(out[0].type, "columns");
+});
+
+test("both transforms leave surrounding blocks and their order alone", () => {
+  const before = block({ id: "before", type: "heading", text: "Top", level: 1, align: "left" });
+  const after = block({ id: "after", type: "divider" });
+
+  const combined = combineImageWithText([before, IMAGE, TEXT, after], "img");
+  assert.deepEqual(combined.map((b) => b.type), ["heading", "columns", "divider"]);
+
+  const split = splitColumns(combined, combined[1].id);
+  assert.deepEqual(split.map((b) => b.type), ["heading", "image", "text", "divider"]);
+  assert.equal(split[0].id, "before");
+  assert.equal(split[3].id, "after");
+});
+
+test("transforms ignore an id that is not there or is the wrong type", () => {
+  assert.deepEqual(combineImageWithText([IMAGE, TEXT], "nope"), [IMAGE, TEXT]);
+  // Combining targets an image; pointing it at the text block must do nothing.
+  assert.deepEqual(combineImageWithText([IMAGE, TEXT], "txt"), [IMAGE, TEXT]);
+  assert.deepEqual(splitColumns([IMAGE], "img"), [IMAGE]);
 });

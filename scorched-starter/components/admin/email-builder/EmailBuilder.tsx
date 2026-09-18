@@ -16,8 +16,9 @@ import {
   DEFAULT_DESIGN,
   blocksFromLegacyHtml,
   checkDocument,
-  newBlockId,
+  combineImageWithText,
   parseDocument,
+  splitColumns,
   type EmailBlock,
   type EmailDesign,
 } from "@/lib/marketing/email-blocks";
@@ -194,34 +195,22 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
-  // Turns an image block into an image-and-text block. If the block directly
-  // below it is text, its content moves into the new block and the old one is
-  // removed, so someone who already built the stacked version does not have to
-  // retype it.
-  function wrapTextBeside(imageId: string) {
-    const at = blocks.findIndex((b) => b.id === imageId);
-    const image = blocks[at];
-    if (!image || image.type !== "image") return;
-
-    const below = blocks[at + 1];
-    const absorbs = below?.type === "text";
-
-    const columns = {
-      id: newBlockId(),
-      type: "columns" as const,
-      imageSrc: image.src,
-      imageAlt: image.alt,
-      title: "",
-      body: absorbs && below.type === "text" ? below.html : "",
-      href: image.href,
-      imagePosition: "left" as const,
-      imageWidth: "40" as const,
-    };
-
-    const next = [...blocks];
-    next.splice(at, absorbs ? 2 : 1, columns);
+  // Both transforms live in email-blocks.ts as pure functions, so the round
+  // trip is covered by tests rather than only by clicking through the editor.
+  function combineWithTextBelow(imageId: string) {
+    const next = combineImageWithText(blocks, imageId);
     setBlocks(next);
-    setSelectedId(columns.id);
+    // The combined block is the one that replaced the image, so it sits where
+    // the image was.
+    const at = blocks.findIndex((b) => b.id === imageId);
+    setSelectedId(next[at]?.id ?? null);
+  }
+
+  function separate(columnsId: string) {
+    const at = blocks.findIndex((b) => b.id === columnsId);
+    const next = splitColumns(blocks, columnsId);
+    setBlocks(next);
+    setSelectedId(next[at]?.id ?? null);
   }
 
   function applyTemplate(template: Template) {
@@ -394,8 +383,9 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
                       setBlocks(blocks.map((b) => (b.id === next.id ? next : b)))
                     }
                     onWrapTextBeside={
-                      selected.type === "image" ? () => wrapTextBeside(selected.id) : undefined
+                      selected.type === "image" ? () => combineWithTextBelow(selected.id) : undefined
                     }
+                    onSplit={selected.type === "columns" ? () => separate(selected.id) : undefined}
                   />
                 ) : (
                   <p className="text-sm text-neutral-400">

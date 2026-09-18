@@ -262,6 +262,83 @@ export function blocksFromLegacyHtml(bodyHtml: string): EmailBlock[] {
 }
 
 // ---------------------------------------------------------------------------
+// Combining and splitting
+// ---------------------------------------------------------------------------
+
+// Email cannot put two separate blocks side by side: that needs a real table,
+// so the pair has to become one block owning both cells. These two functions
+// are the way in and the way back out, and they are pure so the round trip can
+// be tested rather than trusted.
+
+// Turns an image block into an image-and-text block, absorbing the text block
+// directly below it when there is one.
+export function combineImageWithText(blocks: EmailBlock[], imageId: string): EmailBlock[] {
+  const at = blocks.findIndex((b) => b.id === imageId);
+  const image = blocks[at];
+  if (!image || image.type !== "image") return blocks;
+
+  const below = blocks[at + 1];
+  const absorbs = below?.type === "text";
+
+  const combined = blockSchema.parse({
+    id: newBlockId(),
+    type: "columns",
+    imageSrc: image.src,
+    imageAlt: image.alt,
+    title: "",
+    body: absorbs && below.type === "text" ? below.html : "",
+    href: image.href,
+    imagePosition: "left",
+  });
+
+  const next = [...blocks];
+  next.splice(at, absorbs ? 2 : 1, combined);
+  return next;
+}
+
+// The inverse. There is no undo in the editor, so combining has to be
+// reversible by an explicit action or it is a one-way door.
+//
+// A title becomes its own heading block rather than being folded into the
+// text, because that is what it was doing visually and merging it would change
+// how the email reads.
+export function splitColumns(blocks: EmailBlock[], columnsId: string): EmailBlock[] {
+  const at = blocks.findIndex((b) => b.id === columnsId);
+  const block = blocks[at];
+  if (!block || block.type !== "columns") return blocks;
+
+  const parts: EmailBlock[] = [];
+
+  if (block.imageSrc.trim()) {
+    parts.push(
+      blockSchema.parse({
+        id: newBlockId(),
+        type: "image",
+        src: block.imageSrc,
+        alt: block.imageAlt,
+        href: block.href,
+      })
+    );
+  }
+
+  if (block.title.trim()) {
+    parts.push(blockSchema.parse({ id: newBlockId(), type: "heading", text: block.title, level: 2 }));
+  }
+
+  if (htmlToPlainText(block.body)) {
+    parts.push(blockSchema.parse({ id: newBlockId(), type: "text", html: block.body }));
+  }
+
+  // An entirely empty block would otherwise vanish on split, which looks like
+  // a delete rather than a split.
+  if (!parts.length) return blocks;
+
+  const next = [...blocks];
+  next.splice(at, 1, ...parts);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Merge tags
 // ---------------------------------------------------------------------------
 

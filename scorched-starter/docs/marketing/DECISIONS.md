@@ -663,6 +663,16 @@ The editor also offers "Put text beside this image" on an image block, which
 converts it and absorbs the text block directly below it. Without that, the
 answer to "can the text go to the right" would have been "yes, rebuild it".
 
+Combining is reversible: "Split back into separate blocks" undoes it, since the
+editor has no undo and a one-way door is a bad thing to put behind a button. A
+title becomes its own heading rather than being folded into the text, because
+that is what it was doing visually. Both transforms are pure functions in
+`email-blocks.ts` rather than inline handlers in the component, so the round
+trip is covered by tests instead of by clicking through the editor.
+
+Splitting an entirely empty block returns it unchanged. Otherwise a button
+labelled Split would behave as Delete.
+
 Both cells carry the class the stylesheet's media query targets, so they stack
 on a phone with the image on top whatever width is chosen. A test counts the
 class attributes rather than mentions of the name, since the stylesheet mentions
