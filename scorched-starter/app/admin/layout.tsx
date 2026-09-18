@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
@@ -16,6 +16,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChevronDown,
+  ChevronRight,
   ClipboardList,
   Clock,
   FileText,
@@ -27,7 +28,9 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Package,
   Printer,
+  Share2,
   TrendingUp,
   Users,
   X,
@@ -43,21 +46,38 @@ const IN_STUDIO_NAV = [
   { href: "/admin/memberships", label: "Memberships",  icon: Users },
 ];
 
+// Grouped so the sidebar stays short. Every group's parent href is a real page,
+// so clicking the group name goes somewhere rather than only toggling.
 const ADMIN_NAV = [
-  { href: "/admin/locations",  label: "Locations",  icon: Clock },
   { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
-    { href: "/admin/reporting",             label: "Reporting",   icon: LayoutDashboard },
+    { href: "/admin/reporting",             label: "Overview",    icon: LayoutDashboard },
     { href: "/admin/reporting/projections", label: "Projections", icon: TrendingUp },
     { href: "/admin/accounting",            label: "Accounting",  icon: Landmark },
   ] },
-  { href: "/admin/events",    label: "Events",     icon: CalendarDays },
-  { href: "/admin/schedule",  label: "Schedule",   icon: CalendarClock },
-  { href: "/admin/inventory", label: "Inventory",  icon: Boxes },
-  { href: "/admin/courses",   label: "Courses",    icon: GraduationCap },
-  { href: "/admin/customers", label: "Customers",  icon: UserRound },
-  { href: "/admin/marketing", label: "Marketing",  icon: Megaphone },
-  { href: "/admin/careers",   label: "Careers",    icon: Briefcase },
-  { href: "/admin/boards",    label: "Boards",     icon: KanbanSquare },
+  { href: "/admin/customers",  label: "Customers",  icon: UserRound, children: [
+    { href: "/admin/customers", label: "Accounts",  icon: UserRound },
+    { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
+  ] },
+  { href: "/admin/locations",  label: "Operations", icon: Clock, children: [
+    { href: "/admin/locations", label: "Locations", icon: Clock },
+    { href: "/admin/schedule",  label: "Schedule",  icon: CalendarClock },
+    { href: "/admin/events",    label: "Events",    icon: CalendarDays },
+  ] },
+  // Products had no nav entry at all and was reachable only from inside the
+  // print queue, which is why it lives here rather than staying hidden.
+  { href: "/admin/courses",    label: "Studio",     icon: GraduationCap, children: [
+    { href: "/admin/courses",   label: "Courses",   icon: GraduationCap },
+    { href: "/admin/inventory", label: "Inventory", icon: Boxes },
+    { href: "/admin/products",  label: "Products",  icon: Package },
+  ] },
+  // Boards was a 77 line hub page whose only job was linking to Projects and
+  // Social. They are children here instead, which saves a click on the two
+  // largest pages in the admin.
+  { href: "/admin/boards",     label: "Team",       icon: KanbanSquare, children: [
+    { href: "/admin/projects", label: "Projects", icon: KanbanSquare },
+    { href: "/admin/social",   label: "Social",   icon: Share2 },
+    { href: "/admin/careers",  label: "Careers",  icon: Briefcase },
+  ] },
 ];
 
 const IN_STUDIO_PATHS = IN_STUDIO_NAV.map((item) => item.href);
@@ -79,16 +99,12 @@ function NavItem({
   onClick?: () => void;
 }) {
   const active =
-    href === "/admin/boards"
-      ? pathname?.startsWith("/admin/boards") ||
-        pathname?.startsWith("/admin/projects") ||
-        pathname?.startsWith("/admin/social")
-      : href === "/admin/reporting"
-        // Exact match only — "/admin/reporting" is the merged Reporting child
-        // of the Reporting group and must not light up on its sibling
-        // sub-route (/admin/reporting/projections).
-        ? pathname === "/admin/reporting"
-        : pathname?.startsWith(href);
+    href === "/admin/reporting"
+      // Exact match only — "/admin/reporting" is the Overview child of the
+      // Reporting group and must not light up on its sibling sub-route
+      // (/admin/reporting/projections).
+      ? pathname === "/admin/reporting"
+      : pathname?.startsWith(href);
   return (
     <Link
       href={href}
@@ -107,11 +123,17 @@ function NavItem({
   );
 }
 
-// ── Nav group (parent link + collapsible children) ─────────────────────────────
+// ── Nav group ─────────────────────────────────────────────────────────────────
 //
-// Collapsed by default to keep the sidebar short — auto-expands when the
-// current route is the parent or one of its children, otherwise the user
-// toggles it open with the chevron independent of navigating the parent link.
+// Two shapes from one component. On desktop the children fly out to the right
+// of the sidebar on hover or focus; in the mobile drawer they expand inline,
+// because a 16rem drawer has nothing to the right of it.
+//
+// The flyout is position:fixed rather than absolute. The sidebar is
+// overflow-hidden and the nav inside it is overflow-y-auto, so an absolutely
+// positioned panel would be clipped by both. Fixed escapes them, since nothing
+// in the chain creates a containing block, but it means the panel has to be
+// placed from a measured rect rather than by CSS.
 
 function NavGroup({
   href,
@@ -120,6 +142,7 @@ function NavGroup({
   children,
   pathname,
   onClick,
+  flyout,
 }: {
   href: string;
   label: string;
@@ -127,42 +150,139 @@ function NavGroup({
   children: { href: string; label: string; icon: React.ElementType }[];
   pathname: string | null;
   onClick?: () => void;
+  flyout?: boolean;
 }) {
-  const [manuallyOpen, setManuallyOpen] = useState(false);
-  const isActiveGroup = pathname?.startsWith(href) || children.some((c) => pathname?.startsWith(c.href));
-  const open = isActiveGroup || manuallyOpen;
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  // Leaving the trigger on the way to the panel would otherwise close it before
+  // the pointer arrives.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onChildRoute = children.some((c) => pathname?.startsWith(c.href));
+  const isActiveGroup = pathname?.startsWith(href) || onChildRoute;
+
+  function place() {
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (rect) setPos({ top: rect.top, left: rect.right + 8 });
+  }
+
+  function show() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    place();
+    setOpen(true);
+  }
+
+  function hideSoon() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 120);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("resize", close);
+    // The nav scrolls, so a panel pinned to a stale rect would detach from its
+    // trigger. Closing is less jarring than chasing it.
+    window.addEventListener("scroll", close, true);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
+
+  const parentRow = (
+    <div className="flex items-center gap-1" ref={rowRef}>
+      <Link
+        href={href}
+        onClick={onClick}
+        className={clsx(
+          vulfMono.className,
+          "flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-colors",
+          isActiveGroup && !onChildRoute
+            ? "bg-[#884A20] text-white font-semibold"
+            : onChildRoute
+              ? "text-neutral-900 font-semibold bg-black/5"
+              : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900"
+        )}
+      >
+        <Icon className="w-4 h-4 flex-shrink-0" />
+        {label}
+      </Link>
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : show())}
+        aria-expanded={open}
+        aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
+        className="p-2 rounded-lg text-neutral-400 hover:bg-black/5 hover:text-neutral-700 transition-colors"
+      >
+        {flyout ? (
+          <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-90")} />
+        ) : (
+          <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
+        )}
+      </button>
+    </div>
+  );
+
+  // Mobile drawer: expand in place, and stay open while the route is inside the
+  // group so the current page is visible without reopening it.
+  if (!flyout) {
+    const expanded = open || isActiveGroup;
+    return (
+      <div>
+        {parentRow}
+        {expanded && (
+          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-black/8 pl-2">
+            {children.map((child) => (
+              <NavItem key={child.href} {...child} pathname={pathname} onClick={onClick} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="flex items-center gap-1">
-        <Link
-          href={href}
-          onClick={onClick}
-          className={clsx(
-            vulfMono.className,
-            "flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-colors",
-            isActiveGroup && !children.some((c) => pathname?.startsWith(c.href))
-              ? "bg-[#884A20] text-white font-semibold"
-              : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900"
-          )}
+    <div onMouseEnter={show} onMouseLeave={hideSoon} onFocus={show} onBlur={hideSoon}>
+      {parentRow}
+      {open && pos && (
+        <div
+          role="menu"
+          aria-label={label}
+          onMouseEnter={show}
+          onMouseLeave={hideSoon}
+          style={{ position: "fixed", top: pos.top, left: pos.left }}
+          className="z-40 min-w-[11rem] rounded-xl border border-black/10 bg-white p-1.5 shadow-xl"
         >
-          <Icon className="w-4 h-4 flex-shrink-0" />
-          {label}
-        </Link>
-        <button
-          type="button"
-          onClick={() => setManuallyOpen((v) => !v)}
-          aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
-          className="p-2 rounded-lg text-neutral-400 hover:bg-black/5 hover:text-neutral-700 transition-colors"
-        >
-          <ChevronDown className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
-        </button>
-      </div>
-      {open && (
-        <div className="ml-4 mt-0.5 space-y-0.5 border-l border-black/8 pl-2">
-          {children.map((child) => (
-            <NavItem key={child.href} {...child} pathname={pathname} onClick={onClick} />
-          ))}
+          <p
+            className={clsx(
+              vulfMono.className,
+              "px-2 pb-1 pt-0.5 text-[10px] uppercase tracking-widest text-neutral-400"
+            )}
+          >
+            {label}
+          </p>
+          <div className="space-y-0.5">
+            {children.map((child) => (
+              <NavItem
+                key={child.href}
+                {...child}
+                pathname={pathname}
+                onClick={() => {
+                  setOpen(false);
+                  onClick?.();
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -177,12 +297,15 @@ function SidebarContent({
   location,
   onLogout,
   onNavClick,
+  flyout,
 }: {
   pathname: string | null;
   role: Role;
   location: LocationKey | null;
   onLogout: () => void;
   onNavClick?: () => void;
+  // True for the fixed desktop sidebar, false for the mobile drawer.
+  flyout?: boolean;
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -228,7 +351,7 @@ function SidebarContent({
             <div className="space-y-0.5">
               {ADMIN_NAV.map((item) =>
                 item.children ? (
-                  <NavGroup key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
+                  <NavGroup key={item.href} {...item} pathname={pathname} onClick={onNavClick} flyout={flyout} />
                 ) : (
                   <NavItem key={item.href} {...item} pathname={pathname} onClick={onNavClick} />
                 )
@@ -290,7 +413,7 @@ function AdminShell({
       {/* ── Desktop sidebar — full height: the public header hides on /admin,
           so there's no offset to leave room for. */}
       <aside className="hidden md:flex flex-col fixed top-0 left-0 h-screen w-56 bg-white border-r border-black/10 z-30 overflow-hidden">
-        <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} />
+        <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} flyout />
       </aside>
 
       {/* ── Mobile top bar */}
