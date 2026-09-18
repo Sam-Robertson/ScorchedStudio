@@ -14,6 +14,7 @@ import type { CampaignRecord } from "@/lib/supabase";
 import { describeSegment } from "@/lib/marketing/segment";
 import {
   DEFAULT_DESIGN,
+  blocksFromLegacyHtml,
   checkDocument,
   parseDocument,
   type EmailBlock,
@@ -87,11 +88,21 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
         const record = body.campaign as CampaignRecord;
         const doc = parseDocument(record.blocks, record.design);
 
+        // A campaign written before the builder arrives with no blocks and its
+        // copy in `body`. Seeding a text block from it is what stops the first
+        // autosave regenerating `body` from an empty array and wiping the
+        // email. The snapshot below is taken from the seeded state, so opening
+        // one changes nothing until the user actually edits it.
+        const startingBlocks =
+          doc.blocks.length === 0 && body.legacyHtml
+            ? blocksFromLegacyHtml(body.legacyHtml as string)
+            : doc.blocks;
+
         setCampaign(record);
         setName(record.name);
         setSubject(record.subject ?? "");
         setPreviewText(record.preview_text ?? "");
-        setBlocks(doc.blocks);
+        setBlocks(startingBlocks);
         setDesign(doc.design);
         setTags((record.segment?.tags ?? []).join(", "));
         setMatch(record.segment?.match === "all" ? "all" : "any");
@@ -100,7 +111,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
           name: record.name,
           subject: record.subject ?? "",
           previewText: record.preview_text ?? "",
-          blocks: doc.blocks,
+          blocks: startingBlocks,
           design: doc.design,
           tags: (record.segment?.tags ?? []).join(", "),
           match: record.segment?.match === "all" ? "all" : "any",
@@ -195,8 +206,10 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
     setTestMessage("");
     try {
       // Saved first, so the test is of what is stored rather than of whatever
-      // the last autosave happened to catch.
-      await save();
+      // the last autosave happened to catch. Skipped once the campaign is
+      // locked, since the route rejects content edits then and the saved
+      // version is already the one that went out.
+      if (!locked) await save();
       const body = await api(`/api/admin/marketing/campaigns/${campaignId}/test`, {
         method: "POST",
         body: JSON.stringify({ to: testTo.trim() }),

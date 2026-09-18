@@ -94,13 +94,15 @@ ON CONFLICT (id) DO UPDATE
       file_size_limit = EXCLUDED.file_size_limit,
       allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Anyone may read (that is the point of a public bucket); only the service
--- role writes, which is the upload route after it has checked the admin
--- session and re-encoded the file.
-DROP POLICY IF EXISTS "marketing media public read" ON storage.objects;
-CREATE POLICY "marketing media public read"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'marketing-media');
+-- A public bucket already serves reads through the public object endpoint,
+-- which is what an email client fetches, so no policy is needed for this to
+-- work. Writes stay with the service role, which is the upload route after it
+-- has checked the admin session and re-encoded the file.
+--
+-- An explicit SELECT policy is offered at the bottom of this file instead of
+-- here: creating one requires ownership of storage.objects, which the
+-- dashboard SQL Editor does not always have, and a failure mid-script would
+-- roll back the column changes above along with it.
 
 -- ---------------------------------------------------------------------------
 -- 4. Seed the built-in templates
@@ -181,3 +183,19 @@ ON CONFLICT (slug) DO UPDATE
 --   WHERE table_name = 'campaigns' AND column_name IN ('blocks','design','preview_text');
 -- SELECT slug, name, is_builtin FROM campaign_templates ORDER BY sort_order;
 -- SELECT id, public FROM storage.buckets WHERE id = 'marketing-media';
+
+-- ---------------------------------------------------------------------------
+-- 5. Optional: an explicit read policy on the bucket
+-- ---------------------------------------------------------------------------
+-- Not needed. A public bucket already serves its objects over the public
+-- endpoint, which is how an email client fetches an image.
+--
+-- Run this separately, on its own, only if you later make the bucket private
+-- and need a policy to open reads back up. It is kept out of the main script
+-- because CREATE POLICY on storage.objects needs ownership of a table owned by
+-- supabase_storage_admin, and a failure here would roll back everything above.
+--
+--   DROP POLICY IF EXISTS "marketing media public read" ON storage.objects;
+--   CREATE POLICY "marketing media public read"
+--     ON storage.objects FOR SELECT
+--     USING (bucket_id = 'marketing-media');

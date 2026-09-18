@@ -623,6 +623,23 @@ generates `public/email/logo-wordmark.png` from it at 600px, flattened onto the
 cream background because a transparent PNG can come out black-on-black in a
 dark-mode client. Re-run it if the wordmark ever changes.
 
+### Opening a pre-builder campaign converts it, carefully
+
+Every email campaign that existed before the migration has `blocks IS NULL` and
+its copy in `body` as markdown. The editor cannot simply open those blank:
+`body` is regenerated from the block array on every save, so one keystroke on an
+empty document would have wiped the original email and left a row that renders
+as nothing but a footer from then on.
+
+So the campaign GET returns the markdown already rendered to HTML, and the
+editor seeds a single text block from it. The saved snapshot is taken from the
+seeded state, which means opening a campaign writes nothing; the conversion is
+only persisted when someone actually edits it.
+
+One text block rather than an attempt to infer headings and buttons. Guessing
+would silently reshape a campaign that has already gone out, and the point here
+is to not lose anything.
+
 ### A second test runner
 
 The renderer is JSX, which `node --experimental-strip-types` cannot parse, so

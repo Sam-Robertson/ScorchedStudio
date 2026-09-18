@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyMergeTags,
+  blocksFromLegacyHtml,
   blocksToPlainText,
   checkDocument,
   createBlock,
@@ -228,4 +229,47 @@ test("sanitizeEmailHtml keeps text-align but discards other styles", () => {
   const clean = sanitizeEmailHtml('<p style="text-align:center;position:fixed">Hi</p>');
   assert.ok(clean.includes("text-align:center"), clean);
   assert.ok(!clean.includes("position"), clean);
+});
+
+// ---------------------------------------------------------------------------
+// Opening a campaign written before the builder
+// ---------------------------------------------------------------------------
+
+test("blocksFromLegacyHtml keeps the original copy", () => {
+  const blocks = blocksFromLegacyHtml("<p>Our <strong>spring</strong> class list is up.</p>");
+
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].type, "text");
+
+  // The words have to survive the round trip, because campaigns.body is
+  // regenerated from these blocks on the first save. If this were empty, the
+  // original email would be gone.
+  const text = blocksToPlainText(blocks);
+  assert.ok(text.includes("Our spring class list is up."), text);
+});
+
+test("blocksFromLegacyHtml leaves an empty body alone", () => {
+  assert.deepEqual(blocksFromLegacyHtml(""), []);
+  assert.deepEqual(blocksFromLegacyHtml("   "), []);
+});
+
+test("a legacy campaign survives load, edit, and save", () => {
+  // The exact sequence that would otherwise destroy it: a row with no blocks
+  // is opened, seeded, edited, and written back. campaigns.body is rebuilt
+  // from the blocks on every save, so the original words have to still be
+  // there afterwards.
+  const originalHtml = "<p>Join us Saturday for a beginner class.</p>";
+
+  const seeded = blocksFromLegacyHtml(originalHtml);
+  const edited = [
+    ...seeded,
+    { id: "new", type: "button", label: "Book", href: "https://example.com", align: "center" },
+  ] as EmailBlock[];
+
+  const regeneratedBody = blocksToPlainText(edited);
+  assert.ok(
+    regeneratedBody.includes("Join us Saturday for a beginner class."),
+    `the original copy was lost: ${JSON.stringify(regeneratedBody)}`
+  );
+  assert.ok(regeneratedBody.includes("https://example.com"));
 });

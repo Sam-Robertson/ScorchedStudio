@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import type { CampaignRecord, CampaignStatus } from "@/lib/supabase";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
 import { normalizeDocument, DocumentError } from "@/lib/marketing/email-document";
+import { markdownToHtml } from "@/lib/markdown";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,7 +16,19 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { data, error } = await getSupabase().from("campaigns").select("*").eq("id", id).maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!data) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json({ campaign: data as CampaignRecord });
+
+  const campaign = data as CampaignRecord;
+
+  // A campaign written before the builder holds markdown in `body` and nothing
+  // in `blocks`. The editor needs that copy as HTML so it can seed a text
+  // block from it, rather than opening blank and overwriting the original on
+  // the first keystroke.
+  const legacyHtml =
+    campaign.channel === "email" && !campaign.blocks && campaign.body.trim()
+      ? await markdownToHtml(campaign.body)
+      : null;
+
+  return Response.json({ campaign, legacyHtml });
 }
 
 // Edits a draft, or changes status for pause, resume, cancel, and schedule.

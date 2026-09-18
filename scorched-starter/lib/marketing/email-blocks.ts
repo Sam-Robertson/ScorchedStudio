@@ -231,6 +231,19 @@ export function createBlock(type: EmailBlockType): EmailBlock {
   return blockSchema.parse({ id: newBlockId(), type }) as EmailBlock;
 }
 
+// Turns a pre-builder campaign into blocks.
+//
+// Campaigns written before the builder hold markdown in `body` and nothing in
+// `blocks`. Opening one in the editor has to carry that copy across, or the
+// first autosave would regenerate `body` from an empty block array and wipe
+// the email. One text block holding the whole thing is the honest conversion:
+// guessing at headings and buttons would silently reshape a campaign that has
+// already been sent.
+export function blocksFromLegacyHtml(bodyHtml: string): EmailBlock[] {
+  if (!bodyHtml.trim()) return [];
+  return [blockSchema.parse({ id: newBlockId(), type: "text", html: bodyHtml })];
+}
+
 // ---------------------------------------------------------------------------
 // Merge tags
 // ---------------------------------------------------------------------------
