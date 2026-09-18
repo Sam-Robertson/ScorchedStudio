@@ -74,12 +74,35 @@ export const textBlockSchema = z.object({
   align: align.default("left"),
 });
 
+// Width as a percentage of the content column. Stored as a number so it can
+// be a slider rather than three fixed sizes.
+//
+// The three old names are still accepted and converted, because campaigns
+// saved before this hold them and rewriting stored rows to change a control
+// would be a worse trade than a three-line mapping.
+const LEGACY_WIDTHS: Record<string, number> = { full: 100, half: 50, third: 33 };
+
+const imageWidth = z
+  .union([
+    z.number(),
+    z.literal("full"),
+    z.literal("half"),
+    z.literal("third"),
+  ])
+  .default(100)
+  .transform((value) => {
+    const percent = typeof value === "number" ? value : LEGACY_WIDTHS[value] ?? 100;
+    // Clamped rather than rejected: a nonsense width should not make a
+    // campaign refuse to open in the one place it can be fixed.
+    return Math.min(100, Math.max(10, Math.round(percent)));
+  });
+
 export const imageBlockSchema = z.object({
   ...base,
   type: z.literal("image"),
   src: z.string().default(""),
   alt: z.string().default(""),
-  width: z.enum(["full", "half", "third"]).default("full"),
+  width: imageWidth,
   align: align.default("center"),
   href: z.string().default(""),
 });

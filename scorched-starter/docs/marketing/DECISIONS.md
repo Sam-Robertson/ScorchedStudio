@@ -717,6 +717,51 @@ about what they will absorb: only an actual image block, never whatever happens
 to sit below. An image row with nothing chosen renders nothing at all, rather
 than emitting empty table cells that show up as a gap.
 
+### Blocks are selectable in the preview
+
+Picking a block only from the left-hand outline meant reading the email in one
+pane and editing it in another. Every block now renders wrapped in a
+`data-block-id`, and a small script injected into the preview posts the id of
+whatever was clicked back to the editor.
+
+That required loosening the iframe from `sandbox=""` to
+`sandbox="allow-scripts"`. Worth being precise about what that does and does
+not allow: `allow-same-origin` is still absent, so the frame sits in an opaque
+origin and can post a message out and nothing else. It cannot read the admin
+page, its cookies, or its storage. Author content reaching it has already had
+scripts and event handlers stripped by the sanitizer, so the injected selection
+script is the only code in there. The parent checks `event.source` against the
+frame's own window rather than trusting the origin, which is null for a
+sandboxed frame.
+
+The `data-block-id` attributes ship in the real email too, rather than being
+added only for the preview. Keeping the preview byte-identical to what sends is
+the point of having one renderer, and an inert data attribute costs a few dozen
+bytes per block.
+
+### Image width is a percentage
+
+Full, half, and a third were the only sizes, which is not really resizing. The
+width is a number now, edited with a slider and three presets. The three old
+names are still accepted and converted on read, because saved campaigns hold
+them and rewriting stored rows to change a control is a worse trade than a
+three-line mapping. A nonsense width is clamped rather than rejected: a
+campaign that will not open is worse than one with an odd width, since the
+editor is the only place it can be fixed.
+
+### Equal columns have to be equal
+
+The first version of the image row put the 12px gap on the inner edge of each
+cell except the last. That makes the first image's content box narrower than
+the last one's by the width of the gap, so two posters that should have matched
+rendered at visibly different sizes in a real inbox.
+
+Every cell gets the same padding on both sides now, outer edges included, and
+the column width is not floored: `Math.floor(100 / 3)` is 33, which leaves a 1%
+remainder for the last column to absorb and reintroduces the same problem in a
+subtler form. A test asserts every cell carries identical padding and identical
+width, which is the assertion that would have caught it.
+
 ### A second test runner
 
 The renderer is JSX, which `node --experimental-strip-types` cannot parse, so

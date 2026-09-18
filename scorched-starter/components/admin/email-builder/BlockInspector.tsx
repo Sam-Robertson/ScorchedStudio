@@ -86,12 +86,36 @@ export function BlockInspector({
           <Field label="Alt text (what it says when images are blocked)">
             <input className={inputCls} value={block.alt} onChange={(e) => set({ alt: e.target.value })} />
           </Field>
-          <Field label="Width">
-            <select className={inputCls} value={block.width} onChange={(e) => set({ width: e.target.value })}>
-              <option value="full">Full width</option>
-              <option value="half">Half</option>
-              <option value="third">A third</option>
-            </select>
+          <Field label={`Width (${block.width}% of the email)`}>
+            <input
+              type="range"
+              min={10}
+              max={100}
+              step={5}
+              value={block.width}
+              onChange={(e) => set({ width: Number(e.target.value) })}
+              className="w-full accent-[#884A20]"
+            />
+            <div className="flex gap-1.5 mt-1.5">
+              {[
+                ["Third", 33],
+                ["Half", 50],
+                ["Full", 100],
+              ].map(([label, value]) => (
+                <button
+                  key={label as string}
+                  type="button"
+                  onClick={() => set({ width: value })}
+                  className={`rounded px-2 py-1 text-xs ${
+                    block.width === value
+                      ? "bg-neutral-200 text-neutral-900"
+                      : "text-neutral-500 hover:bg-neutral-100"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </Field>
           <AlignField value={block.align} onChange={(align) => set({ align })} />
           <Field label="Link (optional)">

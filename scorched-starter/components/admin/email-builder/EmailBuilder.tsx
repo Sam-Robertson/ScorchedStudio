@@ -580,7 +580,19 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
 
         {/* Right: preview */}
         <div className="flex-1 min-w-0">
-          <EmailPreview blocks={blocks} design={design} subject={subject} previewText={previewText} />
+          <EmailPreview
+            blocks={blocks}
+            design={design}
+            subject={subject}
+            previewText={previewText}
+            selectedId={selectedId}
+            // Clicking a block in the preview selects it and swings the panel
+            // back to Content, so the fields for it are actually on screen.
+            onSelect={(id) => {
+              setSelectedId(id);
+              setTab("content");
+            }}
+          />
         </div>
       </div>
     </div>

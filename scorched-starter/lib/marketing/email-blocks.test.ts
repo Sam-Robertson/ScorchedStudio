@@ -727,3 +727,55 @@ test("a new image row starts with two slots", () => {
   if (made.type !== "imageRow") return;
   assert.equal(made.images.length, 2);
 });
+
+// ---------------------------------------------------------------------------
+// Image width
+// ---------------------------------------------------------------------------
+
+test("image width accepts a percentage", () => {
+  const doc = parseDocument(
+    [{ id: "1", type: "image", src: "https://x/y.png", alt: "", width: 65, align: "center", href: "" }],
+    null
+  );
+  const b = doc.blocks[0];
+  assert.equal(b.type, "image");
+  if (b.type !== "image") return;
+  assert.equal(b.width, 65);
+});
+
+test("the three old width names still open", () => {
+  // Campaigns saved before the slider hold these, and they must not be
+  // rejected or silently reset.
+  for (const [name, percent] of [["full", 100], ["half", 50], ["third", 33]] as const) {
+    const doc = parseDocument(
+      [{ id: "1", type: "image", src: "https://x/y.png", alt: "", width: name, align: "center", href: "" }],
+      null
+    );
+    const b = doc.blocks[0];
+    assert.equal(b.type, "image", `${name} should still parse`);
+    if (b.type !== "image") return;
+    assert.equal(b.width, percent, `${name} should become ${percent}`);
+  }
+});
+
+test("a nonsense width is clamped, not rejected", () => {
+  // A campaign that will not open is worse than one with an odd width, since
+  // the editor is the only place it can be fixed.
+  for (const [given, expected] of [[0, 10], [-40, 10], [500, 100], [42.6, 43]] as const) {
+    const doc = parseDocument(
+      [{ id: "1", type: "image", src: "https://x/y.png", alt: "", width: given, align: "center", href: "" }],
+      null
+    );
+    const b = doc.blocks[0];
+    assert.equal(b.type, "image", `width ${given} should still open`);
+    if (b.type !== "image") return;
+    assert.equal(b.width, expected);
+  }
+});
+
+test("a new image block is full width", () => {
+  const made = createBlock("image");
+  assert.equal(made.type, "image");
+  if (made.type !== "image") return;
+  assert.equal(made.width, 100);
+});

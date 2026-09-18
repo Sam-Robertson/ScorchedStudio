@@ -322,7 +322,18 @@ test("two images render as one table row, not stacked", async () => {
   assert.ok(out.html.includes("1.jpg"));
   assert.ok(out.html.includes("2.jpg"));
   assert.ok(out.html.includes("<table"), "side by side needs a table for Outlook");
-  assert.ok(out.html.includes("50%"), "two images should split the width evenly");
+  const halves = out.html.match(/width:\s*50(\.0+)?%/g) ?? [];
+  assert.equal(halves.length, 2, "two images should split the width evenly");
+  // Every cell must have identical padding. Putting the gap on the inner edge
+  // only makes the first image narrower than the last, which is exactly what
+  // it looked like in a real inbox.
+  const paddings = (out.html.match(/padding-left:[^;"]*/g) ?? []).filter(
+    // The stylesheet's mobile rule mentions padding too; only the inline
+    // styles on the cells are being compared here.
+    (p) => !p.includes("!important")
+  );
+  assert.equal(paddings.length, 2, "both cells should carry padding");
+  assert.equal(new Set(paddings).size, 1, `cells have different padding: ${paddings.join(" | ")}`);
   assert.ok(out.html.includes("https://example.com/book"), "a linked image keeps its link");
   // Both cells stack on a phone.
   assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 2);
@@ -344,7 +355,9 @@ test("three images split the width three ways", async () => {
     DEFAULT_DESIGN,
     { subject: "Hi" }
   );
-  assert.ok(out.html.includes("33%"));
+  // Not floored to 33, which would leave a 1% remainder on one column.
+  const widths = out.html.match(/width:\s*33\.3333%/g) ?? [];
+  assert.equal(widths.length, 3, "all three columns should be exactly equal");
   assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 3);
 });
 
@@ -370,4 +383,26 @@ test("an image row with nothing chosen renders nothing rather than empty cells",
   );
   // The footer still has to be there.
   assert.ok(out.html.includes(BUSINESS_POSTAL_ADDRESS));
+});
+
+test("an image renders at the width it was given", async () => {
+  const out = await renderDocument(
+    [block({ id: "1", type: "image", src: "https://example.com/a.jpg", alt: "A", width: 65, align: "center", href: "" })],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.ok(out.html.includes("65%"), "the chosen width should be inlined");
+});
+
+test("every block is tagged with its id so the preview can select it", async () => {
+  const out = await renderDocument(
+    [
+      block({ id: "first", type: "heading", text: "Hello", level: 1, align: "left" }),
+      block({ id: "second", type: "divider" }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.ok(out.html.includes('data-block-id="first"'), out.html.slice(0, 300));
+  assert.ok(out.html.includes('data-block-id="second"'));
 });

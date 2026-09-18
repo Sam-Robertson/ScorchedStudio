@@ -49,7 +49,6 @@ export type BlockEmailProps = {
 };
 
 const SPACER_HEIGHT = { sm: 12, md: 28, lg: 48 };
-const IMAGE_WIDTH = { full: "100%", half: "50%", third: "33%" };
 
 export default function BlockEmail({ blocks, design, previewText, logoUrl }: BlockEmailProps) {
   const font = FONT_STACKS[design.fontFamily];
@@ -95,8 +94,15 @@ export default function BlockEmail({ blocks, design, previewText, logoUrl }: Blo
               />
             ) : null}
 
+            {/* Each block is tagged with its id so the editor's preview can
+                map a click back to the block that produced it. An inert data
+                attribute, and it ships in the real email too: keeping the
+                preview byte-identical to what sends is worth more than the
+                handful of bytes it costs. */}
             {blocks.map((block) => (
-              <BlockView key={block.id} block={block} design={design} font={font} />
+              <div key={block.id} data-block-id={block.id}>
+                <BlockView block={block} design={design} font={font} />
+              </div>
             ))}
           </Section>
 
@@ -185,7 +191,7 @@ function BlockView({
           alt={block.alt}
           style={{
             display: "block",
-            width: IMAGE_WIDTH[block.width],
+            width: `${block.width}%`,
             maxWidth: "100%",
             height: "auto",
             borderRadius: "8px",
@@ -378,7 +384,11 @@ function BlockView({
 
       // Equal columns. A table, not a flex row, because that is the only thing
       // Outlook lays out side by side.
-      const width = Math.floor(100 / shown.length);
+      //
+      // Not floored: 100/3 floored to 33 leaves a 1% remainder that the last
+      // column absorbs, which is the same "one image is bigger" problem the
+      // padding above avoids.
+      const width = (100 / shown.length).toFixed(4);
 
       return (
         <Section style={{ margin: "0 0 20px" }}>
@@ -404,9 +414,13 @@ function BlockView({
                   style={{
                     width: `${width}%`,
                     verticalAlign: "top",
-                    // Gap between columns only, so the row still sits flush
-                    // with the email's margins on both outer edges.
-                    paddingRight: i < shown.length - 1 ? "12px" : undefined,
+                    // The same padding on every cell, including the outer
+                    // edges. Putting the gap on the inner edge only makes the
+                    // first image's content box narrower than the last one's
+                    // by the width of the gap, so two images that should match
+                    // render at visibly different sizes.
+                    paddingLeft: "6px",
+                    paddingRight: "6px",
                   }}
                 >
                   {img.href ? <Link href={img.href}>{picture}</Link> : picture}

@@ -17,6 +17,8 @@ type Props = {
   design: EmailDesign;
   subject: string;
   previewText: string;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
 };
 
 type Device = "desktop" | "mobile";
@@ -25,6 +27,56 @@ type Theme = "light" | "dark";
 // Approximates what a dark-mode client does to a message: most of them invert
 // the page around the email rather than the email itself, which is why a
 // preview that only flips its own background is misleading.
+// Injected into the preview only, never into anything that sends.
+//
+// The iframe runs this with allow-scripts but without allow-same-origin, so it
+// sits in an opaque origin: it can post a message out and nothing else. It
+// cannot read the admin page, its cookies, or its storage. Author content
+// reaching it has already had scripts and event handlers stripped by the
+// sanitizer, so this is the only code in there.
+const EDITOR_SCRIPT = `
+  <style>
+    [data-block-id] { position: relative; cursor: pointer; }
+    [data-block-id]:hover { outline: 2px solid rgba(136,74,32,.35); outline-offset: 2px; }
+    [data-sc-selected] { outline: 2px solid #884A20 !important; outline-offset: 2px; }
+  </style>
+  <script>
+    (function () {
+      function idFor(target) {
+        var node = target;
+        while (node && node !== document.body) {
+          if (node.getAttribute && node.getAttribute('data-block-id')) {
+            return node.getAttribute('data-block-id');
+          }
+          node = node.parentNode;
+        }
+        return null;
+      }
+
+      document.addEventListener('click', function (event) {
+        // A link in a preview should select its block, not try to navigate
+        // the frame away from the email being edited.
+        event.preventDefault();
+        var id = idFor(event.target);
+        if (id) parent.postMessage({ source: 'scorched-preview', type: 'select', id: id }, '*');
+      });
+
+      window.addEventListener('message', function (event) {
+        var data = event.data;
+        if (!data || data.source !== 'scorched-editor') return;
+        var previous = document.querySelector('[data-sc-selected]');
+        if (previous) previous.removeAttribute('data-sc-selected');
+        if (!data.id) return;
+        var next = document.querySelector('[data-block-id="' + data.id + '"]');
+        if (next) {
+          next.setAttribute('data-sc-selected', '');
+          next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      });
+    })();
+  <\/script>
+`;
+
 const DARK_WRAPPER = `
   <style>
     html { background: #1b1b1b; }
@@ -33,7 +85,15 @@ const DARK_WRAPPER = `
   </style>
 `;
 
-export default function EmailPreview({ blocks, design, subject, previewText }: Props) {
+export default function EmailPreview({
+  blocks,
+  design,
+  subject,
+  previewText,
+  selectedId,
+  onSelect,
+}: Props) {
+  const frame = useRef<HTMLIFrameElement | null>(null);
   const [html, setHtml] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,7 +126,33 @@ export default function EmailPreview({ blocks, design, subject, previewText }: P
     return () => clearTimeout(timer);
   }, [blocks, design, subject, previewText]);
 
-  const shown = theme === "dark" ? html.replace("</head>", `${DARK_WRAPPER}</head>`) : html;
+  // Clicks inside the frame come back as a message. The check on the source
+  // window matters: the frame has no same-origin access, so its messages
+  // arrive with a null origin, and anything on the page could otherwise post
+  // one that looks the same.
+  useEffect(() => {
+    function handle(event: MessageEvent) {
+      if (frame.current && event.source !== frame.current.contentWindow) return;
+      const data = event.data as { source?: string; type?: string; id?: string } | null;
+      if (data?.source !== "scorched-preview" || data.type !== "select" || !data.id) return;
+      onSelect?.(data.id);
+    }
+    window.addEventListener("message", handle);
+    return () => window.removeEventListener("message", handle);
+  }, [onSelect]);
+
+  // Mirrors the selection the other way, so picking a block in the outline
+  // highlights it here and scrolls it into view.
+  useEffect(() => {
+    frame.current?.contentWindow?.postMessage(
+      { source: "scorched-editor", id: selectedId ?? null },
+      "*"
+    );
+  }, [selectedId, html, device, theme]);
+
+  const withEditor = html ? html.replace("</body>", `${EDITOR_SCRIPT}</body>`) : html;
+  const shown =
+    theme === "dark" ? withEditor.replace("</head>", `${DARK_WRAPPER}</head>`) : withEditor;
 
   return (
     <div className="flex flex-col h-full">
@@ -107,12 +193,21 @@ export default function EmailPreview({ blocks, design, subject, previewText }: P
         ) : (
           <iframe
             title="Email preview"
+            ref={frame}
             srcDoc={shown}
-            // The preview is our own rendered HTML, but it can carry an image
-            // from anywhere and links the author pasted. Sandboxing without
-            // allow-scripts and allow-same-origin means it cannot reach the
-            // admin page around it.
-            sandbox=""
+            onLoad={() =>
+              frame.current?.contentWindow?.postMessage(
+                { source: "scorched-editor", id: selectedId ?? null },
+                "*"
+              )
+            }
+            // allow-scripts runs the small selection script injected above.
+            // allow-same-origin is deliberately still absent, which leaves the
+            // frame in an opaque origin: it can post a message out and nothing
+            // else, so it cannot reach the admin page, its cookies, or its
+            // storage. Author content in here has already had scripts and
+            // handlers stripped by the sanitizer.
+            sandbox="allow-scripts"
             className="bg-white border border-black/10 mx-auto block"
             style={{
               width: device === "mobile" ? 390 : "100%",
