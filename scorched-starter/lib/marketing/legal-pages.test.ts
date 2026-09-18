@@ -204,3 +204,35 @@ test("the keyword phrases survive contiguously in the rendered HTML", () => {
     assert.ok(privacyHtml.includes(phrase), `privacy policy splits "${phrase}" across markup`);
   }
 });
+
+test("both analytics tags are gated on an env var, not hardcoded", () => {
+  // The privacy policy's analytics section describes Google Analytics and the
+  // Meta Pixel. Google Analytics used to be hardcoded in the layout, which
+  // meant it ran on every preview deploy and ran for a long time while the
+  // policy said the site used no tracking cookies. Gating both on an id keeps
+  // "what the policy says" and "what is switched on" the same decision.
+  const layout = readFileSync(join(appDir, "layout.tsx"), "utf8");
+
+  assert.ok(
+    !/G-[A-Z0-9]{8,}/.test(layout),
+    "a Google Analytics measurement id is hardcoded in layout.tsx"
+  );
+  assert.match(layout, /process\.env\.NEXT_PUBLIC_GA_ID/);
+  assert.match(layout, /process\.env\.NEXT_PUBLIC_META_PIXEL_ID/);
+  // Both must be behind a truthiness check, or an unset id renders a broken tag.
+  assert.match(layout, /\{GA_ID &&/);
+  assert.match(layout, /\{META_PIXEL_ID &&/);
+});
+
+test("the privacy policy names every tracker the layout can load", () => {
+  // If a third analytics tag is ever added, this fails until the policy
+  // mentions it, which is the failure mode that caused the GA gap.
+  const layout = readFileSync(join(appDir, "layout.tsx"), "utf8");
+
+  if (/NEXT_PUBLIC_GA_ID/.test(layout)) {
+    assert.ok(privacy.includes("Google Analytics"), "GA is loadable but undisclosed");
+  }
+  if (/NEXT_PUBLIC_META_PIXEL_ID/.test(layout)) {
+    assert.ok(privacy.includes("Meta (Facebook) Pixel"), "the pixel is loadable but undisclosed");
+  }
+});
