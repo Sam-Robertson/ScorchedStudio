@@ -68,6 +68,7 @@ export async function renderDocument(
     design,
     previewText: opts.previewText ?? null,
     logoUrl: logoUrl(),
+    baseUrl: siteUrl(),
   });
 
   return {

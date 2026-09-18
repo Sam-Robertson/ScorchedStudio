@@ -10,6 +10,85 @@
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
+// Fonts
+// ---------------------------------------------------------------------------
+
+// Every font offered, in the order the picker shows them.
+//
+// The two brand faces are served as woff2 from /email/fonts and declared with
+// @font-face in the message. That only reaches some recipients: Gmail strips
+// @font-face on every platform, and Outlook on Windows ignores web fonts
+// entirely. Which is why each one carries a real fallback stack rather than a
+// bare family name, and why the fallback is chosen to be the closest thing
+// already on the device rather than whatever the browser defaults to.
+export type EmailFont = {
+  key: string;
+  label: string;
+  // What it is for, shown under the name in the picker.
+  note: string;
+  stack: string;
+  // The faces to declare. Empty for a font already on the device.
+  faces: { file: string; weight: number; style: "normal" | "italic" }[];
+  family: string | null;
+};
+
+export const EMAIL_FONTS = [
+  {
+    key: "brandSans",
+    label: "Vulf Sans",
+    note: "The website's body font",
+    family: "Vulf Sans",
+    stack: "'Vulf Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+    faces: [
+      { file: "VulfSans-Regular.woff2", weight: 400, style: "normal" as const },
+      { file: "VulfSans-Italic.woff2", weight: 400, style: "italic" as const },
+      { file: "VulfSans-Bold.woff2", weight: 700, style: "normal" as const },
+    ],
+  },
+  {
+    key: "brandMono",
+    label: "Vulf Mono",
+    note: "The website's headings",
+    family: "Vulf Mono",
+    stack: "'Vulf Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    faces: [
+      { file: "VulfMono-Regular.woff2", weight: 400, style: "normal" as const },
+      { file: "VulfMono-Bold.woff2", weight: 700, style: "normal" as const },
+    ],
+  },
+  {
+    key: "sans",
+    label: "System sans",
+    note: "Renders everywhere, no download",
+    family: null,
+    stack: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+    faces: [],
+  },
+  {
+    key: "serif",
+    label: "Serif",
+    note: "Georgia, already on every device",
+    family: null,
+    stack: "Georgia, 'Times New Roman', Times, serif",
+    faces: [],
+  },
+  {
+    key: "mono",
+    label: "Monospace",
+    note: "A typewriter look, no download",
+    family: null,
+    stack: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    faces: [],
+  },
+] as const satisfies readonly EmailFont[];
+
+const FONT_KEYS = EMAIL_FONTS.map((f) => f.key) as unknown as [string, ...string[]];
+
+export function fontByKey(key: string): EmailFont {
+  return (EMAIL_FONTS.find((f) => f.key === key) ?? EMAIL_FONTS[2]) as EmailFont;
+}
+
+// ---------------------------------------------------------------------------
 // Design
 // ---------------------------------------------------------------------------
 
@@ -24,11 +103,10 @@ export const designSchema = z.object({
   linkColor: z.string().default("#884A20"),
   buttonColor: z.string().default("#884A20"),
   buttonTextColor: z.string().default("#FFFFFF"),
-  // Web fonts do not load in most email clients, so this is a stack of things
-  // already on the device rather than a font we would have to serve.
-  fontFamily: z
-    .enum(["sans", "serif", "mono"])
-    .default("sans"),
+  fontFamily: z.enum(FONT_KEYS).default("brandSans"),
+  // Headings can differ from the body, which is how the website itself is set:
+  // the display face for headings, the text face for everything else.
+  headingFontFamily: z.enum(FONT_KEYS).default("brandMono"),
   contentWidth: z.number().int().min(480).max(800).default(600),
   showLogo: z.boolean().default(true),
 });
@@ -37,11 +115,24 @@ export type EmailDesign = z.infer<typeof designSchema>;
 
 export const DEFAULT_DESIGN: EmailDesign = designSchema.parse({});
 
-export const FONT_STACKS: Record<EmailDesign["fontFamily"], string> = {
-  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-  serif: "Georgia, 'Times New Roman', Times, serif",
-  mono: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-};
+// The @font-face rules a document needs: only the fonts it actually uses, and
+// each declared once even when the body and the headings share a family.
+export function fontFaceCss(design: EmailDesign, baseUrl: string): string {
+  const used = new Set([design.fontFamily, design.headingFontFamily]);
+  const rules: string[] = [];
+
+  for (const key of used) {
+    for (const face of fontByKey(key).faces) {
+      rules.push(
+        `@font-face{font-family:'${fontByKey(key).family}';` +
+          `src:url('${baseUrl}/email/fonts/${face.file}') format('woff2');` +
+          `font-weight:${face.weight};font-style:${face.style};font-display:swap;}`
+      );
+    }
+  }
+
+  return rules.join("");
+}
 
 // ---------------------------------------------------------------------------
 // Blocks

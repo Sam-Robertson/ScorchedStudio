@@ -762,6 +762,47 @@ remainder for the last column to absorb and reintroduces the same problem in a
 subtler form. A test asserts every cell carries identical padding and identical
 width, which is the assertion that would have caught it.
 
+### The brand fonts, with honest fallbacks
+
+The website is set in Vulf Sans with Vulf Mono for headings, and those are now
+two of five font options, alongside a system sans, Georgia, and a monospace.
+Body and heading fonts are chosen separately, which is how the site itself is
+set.
+
+Email makes this messier than it sounds. Gmail strips `@font-face` on every
+platform, and Outlook on Windows ignores web fonts entirely, so a large share
+of recipients will never see the brand face no matter what is served. Every
+option therefore carries a full fallback stack ending in a generic family, and
+the fallbacks are picked to be the nearest thing already on the device rather
+than whatever the client would default to. A test asserts every stack has at
+least one fallback and ends in a generic family.
+
+The brand faces are converted to woff2 by `scripts/make-email-fonts.py` and
+served from `/email/fonts`. woff2 rather than the site's `.otf`: it is the
+format every client that supports web fonts understands, and it halves the
+size. Only the faces an email actually uses are declared, and a family shared
+between the body and the headings is declared once.
+
+Two things that would otherwise fail quietly. Fonts are subject to CORS even
+where stylesheets and images are not, so `/email/fonts` is served with
+`Access-Control-Allow-Origin: *`; without it the preview iframe, which has an
+opaque origin, silently falls back. And every text-bearing element states its
+own `font-family` rather than relying on inheritance from `<body>`, because
+Outlook does not reliably inherit it into table cells.
+
+The font picker in the admin renders each option in its own face through the
+CSS variables `next/font` defines, not the family name the email uses:
+`next/font` rewrites the family to a hashed name, so the literal "Vulf Sans"
+does not exist on that page.
+
+### The block menu is scannable
+
+The add-a-block menu was a two-column grid of bare labels, which wrapped badly
+and gave no clue what several of them did. It is a single list now, each entry
+with an icon and a line of description, and the same icons appear in the block
+outline. "Image and text" in particular reads as two separate blocks until it
+says "Text beside a picture" underneath.
+
 ### A second test runner
 
 The renderer is JSX, which `node --experimental-strip-types` cannot parse, so

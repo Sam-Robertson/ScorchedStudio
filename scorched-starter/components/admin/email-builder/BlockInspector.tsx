@@ -6,10 +6,10 @@
 // stored and then ignored.
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { Columns2, Image as ImageIcon, PanelRight, Rows3, Trash2, X } from "lucide-react";
+import { Check, Columns2, Image as ImageIcon, PanelRight, Rows3, Trash2, X } from "lucide-react";
 import {
   BLOCK_LABELS,
-  FONT_STACKS,
+  EMAIL_FONTS,
   MERGE_TAGS,
   type EmailBlock,
   type EmailDesign,
@@ -483,21 +483,22 @@ export function DesignPanel({
       <ColorField label="Buttons" value={design.buttonColor} onChange={(v) => set({ buttonColor: v })} />
       <ColorField label="Button text" value={design.buttonTextColor} onChange={(v) => set({ buttonTextColor: v })} />
 
-      <Field label="Font">
-        <select
-          className={inputCls}
-          value={design.fontFamily}
-          onChange={(e) => set({ fontFamily: e.target.value as EmailDesign["fontFamily"] })}
-        >
-          {/* Only fonts already on the device: email clients do not load web
-              fonts, so anything else would silently fall back anyway. */}
-          {(Object.keys(FONT_STACKS) as Array<keyof typeof FONT_STACKS>).map((key) => (
-            <option key={key} value={key}>
-              {key === "sans" ? "Sans serif" : key === "serif" ? "Serif" : "Monospace"}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <FontField
+        label="Body font"
+        value={design.fontFamily}
+        onChange={(fontFamily) => set({ fontFamily })}
+      />
+      <FontField
+        label="Heading font"
+        value={design.headingFontFamily}
+        onChange={(headingFontFamily) => set({ headingFontFamily })}
+      />
+
+      <p className="text-xs text-neutral-400">
+        Vulf Sans and Vulf Mono are the website&apos;s own fonts. Apple Mail and Outlook on a Mac
+        show them; Gmail and Outlook on Windows ignore custom fonts in email and fall back to the
+        closest thing already on the device, which is what the other options are.
+      </p>
 
       <Field label={`Width (${design.contentWidth}px)`}>
         <input
@@ -535,6 +536,62 @@ export function DesignPanel({
         ))}
       </div>
     </div>
+  );
+}
+
+// next/font hashes the family name, so the admin refers to the brand faces
+// through the variables it sets rather than by the name the email uses.
+const ADMIN_FONT_VARS: Record<string, string> = {
+  brandSans: "var(--font-sans)",
+  brandMono: "var(--font-display)",
+};
+
+function adminStackFor(key: string, stack: string): string {
+  const variable = ADMIN_FONT_VARS[key];
+  return variable ? `${variable}, ${stack}` : stack;
+}
+
+function FontField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (key: EmailDesign["fontFamily"]) => void;
+}) {
+  return (
+    <Field label={label}>
+      <div className="space-y-1">
+        {EMAIL_FONTS.map((font) => (
+          <button
+            key={font.key}
+            type="button"
+            onClick={() => onChange(font.key as EmailDesign["fontFamily"])}
+            className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left ${
+              value === font.key
+                ? "border-[#884A20] bg-[#884A20]/5"
+                : "border-black/10 hover:border-black/25"
+            }`}
+          >
+            <span className="min-w-0">
+              {/* Shown in its own face. The brand entries go through the CSS
+                  variables next/font defines, because next/font rewrites the
+                  family to a hashed name and the literal "Vulf Sans" the email
+                  uses does not exist in this page. */}
+              <span
+                className="block truncate text-sm text-neutral-800"
+                style={{ fontFamily: adminStackFor(font.key, font.stack) }}
+              >
+                {font.label}
+              </span>
+              <span className="block text-xs text-neutral-400">{font.note}</span>
+            </span>
+            {value === font.key && <Check className="h-3.5 w-3.5 shrink-0 text-[#884A20]" />}
+          </button>
+        ))}
+      </div>
+    </Field>
   );
 }
 

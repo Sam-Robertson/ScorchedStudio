@@ -13,10 +13,13 @@ import {
   escapeHtml,
   htmlToPlainText,
   mergeTagsUsed,
+  fontByKey,
+  fontFaceCss,
   parseDocument,
   splitColumns,
   splitImageRow,
   DEFAULT_DESIGN,
+  EMAIL_FONTS,
   type EmailBlock,
 } from "./email-blocks.ts";
 import { sanitizeEmailHtml, sanitizeInlineHtml } from "./sanitize-email-html.ts";
@@ -778,4 +781,76 @@ test("a new image block is full width", () => {
   assert.equal(made.type, "image");
   if (made.type !== "image") return;
   assert.equal(made.width, 100);
+});
+
+// ---------------------------------------------------------------------------
+// Fonts
+// ---------------------------------------------------------------------------
+
+test("every font offers a fallback beyond its own name", () => {
+  // Gmail strips @font-face and Outlook on Windows ignores web fonts, so a
+  // bare family name would leave those recipients on the client default.
+  for (const font of EMAIL_FONTS) {
+    const families = font.stack.split(",").map((f) => f.trim());
+    assert.ok(families.length >= 2, `${font.key} needs a fallback`);
+    const last = families[families.length - 1];
+    assert.ok(
+      /sans-serif|serif|monospace/.test(last),
+      `${font.key} should end in a generic family, ends in ${last}`
+    );
+  }
+});
+
+test("a font that needs downloading names the family its stack starts with", () => {
+  for (const font of EMAIL_FONTS) {
+    if (!font.faces.length) continue;
+    assert.ok(font.family, `${font.key} declares faces so it needs a family name`);
+    assert.ok(
+      font.stack.startsWith(`'${font.family}'`),
+      `${font.key} stack should start with ${font.family}`
+    );
+  }
+});
+
+test("fontFaceCss only declares the fonts a design uses", () => {
+  const css = fontFaceCss(
+    { ...DEFAULT_DESIGN, fontFamily: "brandSans", headingFontFamily: "sans" },
+    "https://example.com"
+  );
+  assert.ok(css.includes("VulfSans-Regular.woff2"));
+  // The system stack needs nothing downloaded.
+  assert.ok(!css.includes("VulfMono"), css);
+});
+
+test("fontFaceCss declares a shared family once", () => {
+  const css = fontFaceCss(
+    { ...DEFAULT_DESIGN, fontFamily: "brandSans", headingFontFamily: "brandSans" },
+    "https://example.com"
+  );
+  assert.equal((css.match(/VulfSans-Regular\.woff2/g) ?? []).length, 1);
+});
+
+test("fontFaceCss emits nothing when no font needs downloading", () => {
+  const css = fontFaceCss(
+    { ...DEFAULT_DESIGN, fontFamily: "sans", headingFontFamily: "serif" },
+    "https://example.com"
+  );
+  assert.equal(css, "");
+});
+
+test("fontFaceCss builds absolute URLs", () => {
+  const css = fontFaceCss(DEFAULT_DESIGN, "https://example.com");
+  assert.ok(css.includes("https://example.com/email/fonts/"), css.slice(0, 200));
+});
+
+test("an unknown font key falls back rather than breaking the email", () => {
+  const font = fontByKey("something-we-removed");
+  assert.ok(font.stack.length > 0);
+  assert.equal(font.faces.length, 0, "the fallback should need no download");
+});
+
+test("a design saved before the heading font existed still opens", () => {
+  const doc = parseDocument([], { fontFamily: "serif" });
+  assert.equal(doc.design.fontFamily, "serif");
+  assert.equal(doc.design.headingFontFamily, "brandMono", "should take the default");
 });

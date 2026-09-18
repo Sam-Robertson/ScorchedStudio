@@ -23,7 +23,23 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { vulfMono } from "@/app/fonts";
-import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
+import {
+  Columns2,
+  Copy,
+  GripVertical,
+  Heading,
+  Image as ImageIcon,
+  Images,
+  Minus,
+  MousePointerClick,
+  Plus,
+  Quote,
+  Share2,
+  StretchVertical,
+  Ticket,
+  Trash2,
+  Type,
+} from "lucide-react";
 import {
   BLOCK_LABELS,
   BLOCK_ORDER,
@@ -34,6 +50,38 @@ import {
   type EmailBlockType,
 } from "@/lib/marketing/email-blocks";
 import { useState } from "react";
+
+// One icon per block type, so the menu and the outline can be scanned rather
+// than read. Kept next to the labels it pairs with.
+const BLOCK_ICONS: Record<EmailBlockType, React.ComponentType<{ className?: string }>> = {
+  text: Type,
+  heading: Heading,
+  image: ImageIcon,
+  button: MousePointerClick,
+  card: Ticket,
+  columns: Columns2,
+  imageRow: Images,
+  quote: Quote,
+  divider: Minus,
+  spacer: StretchVertical,
+  social: Share2,
+};
+
+// A line under each name, because several of these are not obvious from the
+// label alone. "Image and text" in particular reads as two separate things.
+const BLOCK_HINTS: Record<EmailBlockType, string> = {
+  text: "A paragraph",
+  heading: "A headline",
+  image: "One picture",
+  button: "A link people tap",
+  card: "Picture, details, book button",
+  columns: "Text beside a picture",
+  imageRow: "Two or three across",
+  quote: "A testimonial",
+  divider: "A horizontal line",
+  spacer: "Blank space",
+  social: "Instagram, Facebook, site",
+};
 
 type Props = {
   blocks: EmailBlock[];
@@ -140,23 +188,38 @@ export default function BlockCanvas({ blocks, selectedId, onSelect, onChange }: 
       )}
 
       {adding ? (
-        <div className="rounded-xl border border-black/10 p-2 grid grid-cols-2 gap-1">
-          {BLOCK_ORDER.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => add(type)}
-              className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-100"
-            >
-              {BLOCK_LABELS[type]}
-            </button>
-          ))}
+        <div className="rounded-xl border border-black/10 bg-white p-2">
+          <div className="grid grid-cols-1 gap-0.5">
+            {BLOCK_ORDER.map((type) => {
+              const Icon = BLOCK_ICONS[type];
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => add(type)}
+                  className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-neutral-100"
+                >
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm leading-tight text-neutral-800">
+                      {BLOCK_LABELS[type]}
+                    </span>
+                    <span className="block text-xs leading-tight text-neutral-400">
+                      {BLOCK_HINTS[type]}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <button
             type="button"
             onClick={() => setAdding(false)}
-            className="col-span-2 rounded-lg px-3 py-2 text-xs text-neutral-500 hover:bg-neutral-100"
+            className={`${vulfMono.className} mt-1 w-full rounded-lg px-3 py-2 text-xs tracking-[0.1em] text-neutral-400 hover:bg-neutral-100`}
           >
-            Cancel
+            CANCEL
           </button>
         </div>
       ) : (
@@ -208,11 +271,19 @@ function SortableBlock({
           <GripVertical className="w-4 h-4" />
         </button>
 
-        <button type="button" onClick={onSelect} className="flex-1 min-w-0 text-left px-1">
-          <div className={`${vulfMono.className} text-[10px] uppercase tracking-[0.1em] text-neutral-400`}>
-            {BLOCK_LABELS[block.type]}
-          </div>
-          <div className="text-sm text-neutral-700 truncate">{summarize(block)}</div>
+        <button type="button" onClick={onSelect} className="flex flex-1 min-w-0 items-center gap-2 text-left px-1">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-400">
+            {(() => {
+              const Icon = BLOCK_ICONS[block.type];
+              return <Icon className="h-3.5 w-3.5" />;
+            })()}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`${vulfMono.className} block text-[10px] uppercase tracking-[0.1em] text-neutral-400`}>
+              {BLOCK_LABELS[block.type]}
+            </span>
+            <span className="block text-sm text-neutral-700 truncate">{summarize(block)}</span>
+          </span>
         </button>
 
         <button

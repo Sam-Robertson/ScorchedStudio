@@ -29,7 +29,8 @@ import {
 } from "@react-email/components";
 import { BUSINESS_NAME, BUSINESS_POSTAL_ADDRESS } from "./consent-copy";
 import {
-  FONT_STACKS,
+  fontByKey,
+  fontFaceCss,
   type EmailBlock,
   type EmailDesign,
 } from "./email-blocks";
@@ -46,12 +47,21 @@ export type BlockEmailProps = {
   // Absolute, because an email client has no page to resolve a relative path
   // against.
   logoUrl?: string | null;
+  // Where the web fonts are served from. Absolute, for the same reason.
+  baseUrl?: string;
 };
 
 const SPACER_HEIGHT = { sm: 12, md: 28, lg: 48 };
 
-export default function BlockEmail({ blocks, design, previewText, logoUrl }: BlockEmailProps) {
-  const font = FONT_STACKS[design.fontFamily];
+export default function BlockEmail({
+  blocks,
+  design,
+  previewText,
+  logoUrl,
+  baseUrl = "",
+}: BlockEmailProps) {
+  const font = fontByKey(design.fontFamily).stack;
+  const headingFont = fontByKey(design.headingFontFamily).stack;
 
   return (
     <Html lang="en">
@@ -59,6 +69,7 @@ export default function BlockEmail({ blocks, design, previewText, logoUrl }: Blo
         {/* The only media query in the message. Outlook ignores it and keeps
             the desktop table, which is the correct fallback. */}
         <style>{`
+          ${fontFaceCss(design, baseUrl)}
           @media only screen and (max-width: 600px) {
             .sc-stack { display: block !important; width: 100% !important; padding: 0 0 16px 0 !important; }
             .sc-pad { padding-left: 20px !important; padding-right: 20px !important; }
@@ -101,7 +112,7 @@ export default function BlockEmail({ blocks, design, previewText, logoUrl }: Blo
                 handful of bytes it costs. */}
             {blocks.map((block) => (
               <div key={block.id} data-block-id={block.id}>
-                <BlockView block={block} design={design} font={font} />
+                <BlockView block={block} design={design} font={font} headingFont={headingFont} />
               </div>
             ))}
           </Section>
@@ -136,10 +147,12 @@ function BlockView({
   block,
   design,
   font,
+  headingFont,
 }: {
   block: EmailBlock;
   design: EmailDesign;
   font: string;
+  headingFont: string;
 }) {
   switch (block.type) {
     case "heading": {
@@ -151,7 +164,7 @@ function BlockView({
       return (
         <Tag
           style={{
-            fontFamily: font,
+            fontFamily: headingFont,
             fontSize: size,
             lineHeight: 1.3,
             fontWeight: 700,
@@ -172,6 +185,7 @@ function BlockView({
       return (
         <div
           style={{
+            fontFamily: font,
             fontSize: "15px",
             lineHeight: 1.65,
             color: design.textColor,
@@ -215,6 +229,7 @@ function BlockView({
           <Link
             href={block.href}
             style={{
+              fontFamily: font,
               backgroundColor: design.buttonColor,
               color: design.buttonTextColor,
               padding: "13px 26px",
@@ -245,11 +260,11 @@ function BlockView({
             margin: "0 0 20px",
           }}
         >
-          <Text style={{ fontSize: "17px", lineHeight: 1.5, fontStyle: "italic", color: design.textColor, margin: 0 }}>
+          <Text style={{ fontFamily: font, fontSize: "17px", lineHeight: 1.5, fontStyle: "italic", color: design.textColor, margin: 0 }}>
             {block.text}
           </Text>
           {block.attribution ? (
-            <Text style={{ fontSize: "13px", color: "#8a8378", margin: "8px 0 0" }}>
+            <Text style={{ fontFamily: font, fontSize: "13px", color: "#8a8378", margin: "8px 0 0" }}>
               {block.attribution}
             </Text>
           ) : null}
@@ -269,19 +284,25 @@ function BlockView({
         <>
           {block.title ? (
             <p
-              style={{ fontSize: "17px", fontWeight: 700, color: design.headingColor, margin: "0 0 6px" }}
+              style={{
+                fontFamily: headingFont,
+                fontSize: "17px",
+                fontWeight: 700,
+                color: design.headingColor,
+                margin: "0 0 6px",
+              }}
               dangerouslySetInnerHTML={{ __html: styleLinks(block.title, design.linkColor) }}
             />
           ) : null}
           {block.body ? (
             <div
-              style={{ fontSize: "14px", lineHeight: 1.6, color: design.textColor }}
+              style={{ fontFamily: font, fontSize: "14px", lineHeight: 1.6, color: design.textColor }}
               // Sanitized on save, same as the text block.
               dangerouslySetInnerHTML={{ __html: styleLinks(block.body, design.linkColor) }}
             />
           ) : null}
           {block.href ? (
-            <Text style={{ fontSize: "14px", margin: "8px 0 0" }}>
+            <Text style={{ fontFamily: font, fontSize: "14px", margin: "8px 0 0" }}>
               <Link href={block.href} style={{ color: design.linkColor }}>
                 Read more
               </Link>
@@ -345,15 +366,21 @@ function BlockView({
           <Section style={{ padding: "18px 20px" }}>
             {block.title ? (
               <p
-                style={{ fontSize: "18px", fontWeight: 700, color: design.headingColor, margin: "0 0 4px" }}
+                style={{
+                  fontFamily: headingFont,
+                  fontSize: "18px",
+                  fontWeight: 700,
+                  color: design.headingColor,
+                  margin: "0 0 4px",
+                }}
                 dangerouslySetInnerHTML={{ __html: styleLinks(block.title, design.linkColor) }}
               />
             ) : null}
             {block.meta ? (
-              <Text style={{ fontSize: "13px", color: "#8a8378", margin: "0 0 10px" }}>{block.meta}</Text>
+              <Text style={{ fontFamily: font, fontSize: "13px", color: "#8a8378", margin: "0 0 10px" }}>{block.meta}</Text>
             ) : null}
             {block.body ? (
-              <Text style={{ fontSize: "14px", lineHeight: 1.6, color: design.textColor, margin: "0 0 14px" }}>
+              <Text style={{ fontFamily: font, fontSize: "14px", lineHeight: 1.6, color: design.textColor, margin: "0 0 14px" }}>
                 {block.body}
               </Text>
             ) : null}
@@ -361,6 +388,7 @@ function BlockView({
               <Link
                 href={block.buttonHref}
                 style={{
+                  fontFamily: font,
                   backgroundColor: design.buttonColor,
                   color: design.buttonTextColor,
                   padding: "10px 20px",
@@ -443,7 +471,7 @@ function BlockView({
 
       return (
         <Section style={{ margin: "0 0 20px", textAlign: "center" }}>
-          <Text style={{ fontSize: "13px", margin: 0 }}>
+          <Text style={{ fontFamily: font, fontSize: "13px", margin: 0 }}>
             {links.map((l, i) => (
               <span key={l.label}>
                 {i > 0 ? <span style={{ color: "#c9c3ba" }}>{"  ·  "}</span> : null}

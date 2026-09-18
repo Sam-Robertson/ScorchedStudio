@@ -406,3 +406,27 @@ test("every block is tagged with its id so the preview can select it", async () 
   assert.ok(out.html.includes('data-block-id="first"'), out.html.slice(0, 300));
   assert.ok(out.html.includes('data-block-id="second"'));
 });
+
+test("the chosen fonts reach the message", async () => {
+  const out = await renderDocument(
+    [block({ id: "1", type: "heading", text: "Hello", level: 1, align: "left" })],
+    { ...DEFAULT_DESIGN, fontFamily: "brandSans", headingFontFamily: "brandMono" },
+    { subject: "Hi" }
+  );
+
+  assert.ok(out.html.includes("@font-face"), "the web fonts should be declared");
+  assert.ok(out.html.includes("VulfMono-Regular.woff2"));
+  assert.ok(out.html.includes("Vulf Mono"), "the heading should ask for the display face");
+  // And a fallback, for the clients that ignore all of the above.
+  assert.ok(out.html.includes("sans-serif") || out.html.includes("monospace"));
+});
+
+test("a system font adds no @font-face at all", async () => {
+  const out = await renderDocument(
+    [block({ id: "1", type: "heading", text: "Hello", level: 1, align: "left" })],
+    { ...DEFAULT_DESIGN, fontFamily: "sans", headingFontFamily: "serif" },
+    { subject: "Hi" }
+  );
+  assert.ok(!out.html.includes("@font-face"), "nothing should be downloaded");
+  assert.ok(out.html.includes("Georgia"), "the heading should use the serif stack");
+});
