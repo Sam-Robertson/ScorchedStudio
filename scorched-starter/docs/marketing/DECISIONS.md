@@ -367,3 +367,32 @@ across versions. Four tests cover it, including the unparseable-body case.
 
 Worth generalising: a cast that exists to silence a warning about `undefined` is
 worth treating as a bug report rather than a formality.
+
+## Marketing email is multipart now (Gmail tab placement)
+
+Sam's first two test emails landed in Gmail's Promotions tab; a deliberately
+plain third one landed in Primary. Useful, but the test was not as clean as it
+looked: three things differed, not one. The plain version had different styling,
+came from `sam@` rather than `hello@`, **and carried a `text/plain` part the
+branded template never sent.**
+
+That third difference was a real defect rather than a test variable. Campaign
+sends were HTML only. An HTML-only marketing email is a spam and Promotions
+signal in its own right and is unreadable in clients that prefer text, so it is
+now multipart: `render(element, { plainText: true })` produces the text half
+from the same component, which keeps the two from drifting apart.
+
+Deliberately **not** done: removing `List-Unsubscribe` to dodge the Promotions
+classifier. It is one of the stronger promotional signals, but Gmail and Yahoo
+require it from bulk senders, it drives the one-click unsubscribe, and mail
+without it is filtered harder. Trading compliance for a tab is a bad deal.
+
+Recommendation recorded rather than implemented: keep the branded template for
+ordinary campaigns, where Promotions is the right place for them to be, and send
+the legacy list re-introduction plain and from a person's address, since that one
+arrives from an unrecognised sender and needs to be read. Adding a per-campaign
+"plain or branded" switch is the obvious follow-up if that proves out.
+
+Caveat worth remembering: tab placement is per recipient and Gmail learns from
+behaviour, so testing against one inbox that has now seen four messages from the
+domain is a weak signal for the list as a whole.

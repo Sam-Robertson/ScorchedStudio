@@ -23,6 +23,11 @@ export type PreparedEmail = {
   to: string;
   subject: string;
   html: string;
+  // Every message goes out multipart. An HTML-only marketing email is a spam
+  // and Promotions signal in its own right, and it is unreadable in clients
+  // that prefer text. React Email generates this from the same component, so
+  // the two halves cannot drift apart.
+  text: string;
   headers: Record<string, string>;
 };
 
@@ -37,17 +42,19 @@ export async function prepareEmails(
   const prepared: PreparedEmail[] = [];
   for (const subscriber of recipients) {
     if (!subscriber.email) continue;
-    const html = await render(
-      MarketingEmail({
-        heading: campaign.subject,
-        bodyHtml,
-        unsubscribeUrl: unsubscribeUrlFor(subscriber.unsubscribe_token),
-      })
-    );
+    const element = MarketingEmail({
+      heading: campaign.subject,
+      bodyHtml,
+      unsubscribeUrl: unsubscribeUrlFor(subscriber.unsubscribe_token),
+    });
+    const html = await render(element);
+    const text = await render(element, { plainText: true });
+
     prepared.push({
       to: subscriber.email,
       subject: campaign.subject ?? campaign.name,
       html,
+      text,
       headers: unsubscribeHeaders(subscriber.unsubscribe_token),
     });
   }
@@ -93,6 +100,7 @@ export async function sendCampaignEmails(
           to: [m.to],
           subject: m.subject,
           html: m.html,
+          text: m.text,
           headers: m.headers,
           // Resend echoes tags back on every webhook, which is how each
           // delivery event is attributed to a campaign. Batch send has no
@@ -124,13 +132,13 @@ export async function sendTestEmail(
   token = "test-token"
 ): Promise<{ suppressed: boolean }> {
   const bodyHtml = await markdownToHtml(campaign.body);
-  const html = await render(
-    MarketingEmail({
-      heading: campaign.subject,
-      bodyHtml,
-      unsubscribeUrl: unsubscribeUrlFor(token),
-    })
-  );
+  const element = MarketingEmail({
+    heading: campaign.subject,
+    bodyHtml,
+    unsubscribeUrl: unsubscribeUrlFor(token),
+  });
+  const html = await render(element);
+  const text = await render(element, { plainText: true });
 
   if (!marketingIsLive()) {
     logSuppressedSend("email-test", { to: toEmail, subject: campaign.subject });
@@ -145,6 +153,7 @@ export async function sendTestEmail(
     to: toEmail,
     subject: `[TEST] ${campaign.subject ?? campaign.name}`,
     html,
+    text,
     headers: unsubscribeHeaders(token),
   });
 
