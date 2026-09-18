@@ -298,3 +298,76 @@ test("a formatted card title renders as markup", async () => {
   assert.ok(out.html.includes("<em>Beginner</em>"));
   assert.ok(out.text.includes("Beginner night"), out.text);
 });
+
+// ---------------------------------------------------------------------------
+// Images side by side
+// ---------------------------------------------------------------------------
+
+test("two images render as one table row, not stacked", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "r",
+        type: "imageRow",
+        images: [
+          { src: "https://example.com/1.jpg", alt: "One", href: "" },
+          { src: "https://example.com/2.jpg", alt: "Two", href: "https://example.com/book" },
+        ],
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+
+  assert.ok(out.html.includes("1.jpg"));
+  assert.ok(out.html.includes("2.jpg"));
+  assert.ok(out.html.includes("<table"), "side by side needs a table for Outlook");
+  assert.ok(out.html.includes("50%"), "two images should split the width evenly");
+  assert.ok(out.html.includes("https://example.com/book"), "a linked image keeps its link");
+  // Both cells stack on a phone.
+  assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 2);
+});
+
+test("three images split the width three ways", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "r",
+        type: "imageRow",
+        images: [
+          { src: "https://example.com/1.jpg", alt: "", href: "" },
+          { src: "https://example.com/2.jpg", alt: "", href: "" },
+          { src: "https://example.com/3.jpg", alt: "", href: "" },
+        ],
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.ok(out.html.includes("33%"));
+  assert.equal((out.html.match(/class="[^"]*sc-stack/g) ?? []).length, 3);
+});
+
+test("an image row with nothing chosen renders nothing rather than empty cells", async () => {
+  const out = await renderDocument(
+    [
+      block({
+        id: "r",
+        type: "imageRow",
+        images: [
+          { src: "", alt: "", href: "" },
+          { src: "", alt: "", href: "" },
+        ],
+      }),
+    ],
+    DEFAULT_DESIGN,
+    { subject: "Hi" }
+  );
+  assert.equal(
+    (out.html.match(/class="[^"]*sc-stack/g) ?? []).length,
+    0,
+    "no empty columns should be emitted"
+  );
+  // The footer still has to be there.
+  assert.ok(out.html.includes(BUSINESS_POSTAL_ADDRESS));
+});

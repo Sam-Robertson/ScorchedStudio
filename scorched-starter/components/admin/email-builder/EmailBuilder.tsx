@@ -17,8 +17,10 @@ import {
   blocksFromLegacyHtml,
   checkDocument,
   combineImageWithText,
+  combineImages,
   parseDocument,
   splitColumns,
+  splitImageRow,
   type EmailBlock,
   type EmailDesign,
 } from "@/lib/marketing/email-blocks";
@@ -206,11 +208,32 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
     setSelectedId(next[at]?.id ?? null);
   }
 
-  function separate(columnsId: string) {
-    const at = blocks.findIndex((b) => b.id === columnsId);
-    const next = splitColumns(blocks, columnsId);
+  function separate(blockId: string) {
+    const at = blocks.findIndex((b) => b.id === blockId);
+    const target = blocks[at];
+    const next =
+      target?.type === "imageRow"
+        ? splitImageRow(blocks, blockId)
+        : splitColumns(blocks, blockId);
     setBlocks(next);
     setSelectedId(next[at]?.id ?? null);
+  }
+
+  function pairWithNextImage(blockId: string) {
+    const at = blocks.findIndex((b) => b.id === blockId);
+    const next = combineImages(blocks, blockId);
+    // Unchanged means there was nothing to pair with, so the selection stays
+    // where it is rather than jumping somewhere arbitrary.
+    if (next === blocks) return;
+    setBlocks(next);
+    setSelectedId(next[at]?.id ?? null);
+  }
+
+  // Only offered when the block below really is an image, so the action never
+  // appears and then does nothing.
+  function hasImageBelow(blockId: string) {
+    const at = blocks.findIndex((b) => b.id === blockId);
+    return blocks[at + 1]?.type === "image";
   }
 
   function applyTemplate(template: Template) {
@@ -385,7 +408,18 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
                     onWrapTextBeside={
                       selected.type === "image" ? () => combineWithTextBelow(selected.id) : undefined
                     }
-                    onSplit={selected.type === "columns" ? () => separate(selected.id) : undefined}
+                    onSplit={
+                      selected.type === "columns" || selected.type === "imageRow"
+                        ? () => separate(selected.id)
+                        : undefined
+                    }
+                    onCombineImages={
+                      (selected.type === "image" ||
+                        (selected.type === "imageRow" && selected.images.length < 3)) &&
+                      hasImageBelow(selected.id)
+                        ? () => pairWithNextImage(selected.id)
+                        : undefined
+                    }
                   />
                 ) : (
                   <p className="text-sm text-neutral-400">

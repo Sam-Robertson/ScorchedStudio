@@ -6,7 +6,7 @@
 // stored and then ignored.
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
-import { Image as ImageIcon, PanelRight, Rows3, X } from "lucide-react";
+import { Columns2, Image as ImageIcon, PanelRight, Rows3, Trash2, X } from "lucide-react";
 import {
   BLOCK_LABELS,
   FONT_STACKS,
@@ -26,14 +26,18 @@ export function BlockInspector({
   onChange,
   onWrapTextBeside,
   onSplit,
+  onCombineImages,
 }: {
   block: EmailBlock;
   onChange: (block: EmailBlock) => void;
   // Turns this image block into an image-and-text block, absorbing the text
   // block below it if there is one. Offered on image blocks only.
   onWrapTextBeside?: () => void;
-  // The inverse, offered on image-and-text blocks.
+  // The inverse, offered on image-and-text blocks and on image rows.
   onSplit?: () => void;
+  // Puts this image beside the image that follows it. Offered when there is
+  // one to pair with.
+  onCombineImages?: () => void;
 }) {
   // A narrow cast in one place rather than a switch that rebuilds the whole
   // block for every field. The schema is the thing that actually guards the
@@ -99,19 +103,37 @@ export function BlockInspector({
             />
           </Field>
 
-          {onWrapTextBeside && (
-            <div className="rounded-lg bg-neutral-50 p-3">
-              <button
-                type="button"
-                onClick={onWrapTextBeside}
-                className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
-              >
-                <PanelRight className="w-3.5 h-3.5" /> Put text beside this image
-              </button>
-              <p className="text-xs text-neutral-500 mt-1">
-                Converts this into an image-and-text block. If there is a text block right below,
-                its words come along.
-              </p>
+          {(onWrapTextBeside || onCombineImages) && (
+            <div className="rounded-lg bg-neutral-50 p-3 space-y-3">
+              {onWrapTextBeside && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={onWrapTextBeside}
+                    className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+                  >
+                    <PanelRight className="w-3.5 h-3.5" /> Put text beside this image
+                  </button>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Converts this into an image-and-text block. If there is a text block right
+                    below, its words come along.
+                  </p>
+                </div>
+              )}
+              {onCombineImages && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={onCombineImages}
+                    className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+                  >
+                    <Columns2 className="w-3.5 h-3.5" /> Put beside the next image
+                  </button>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    The two sit side by side on a computer and stack on a phone.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -280,6 +302,108 @@ export function BlockInspector({
         </>
       )}
 
+      {block.type === "imageRow" && (
+        <>
+          {block.images.map((img, i) => (
+            <div key={i} className="rounded-lg border border-black/10 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className={`${vulfMono.className} text-xs text-neutral-500`}>
+                  Image {i + 1}
+                </span>
+                {block.images.length > 1 && (
+                  <button
+                    type="button"
+                    title="Remove this image"
+                    onClick={() =>
+                      set({ images: block.images.filter((_, n) => n !== i) })
+                    }
+                    className="text-neutral-300 hover:text-red-500"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <ImageField
+                label=""
+                value={img.src}
+                onChange={(src) =>
+                  set({ images: block.images.map((x, n) => (n === i ? { ...x, src } : x)) })
+                }
+              />
+              <input
+                className={inputCls}
+                placeholder="Alt text"
+                value={img.alt}
+                onChange={(e) =>
+                  set({
+                    images: block.images.map((x, n) =>
+                      n === i ? { ...x, alt: e.target.value } : x
+                    ),
+                  })
+                }
+              />
+              <input
+                className={inputCls}
+                placeholder="Link (optional)"
+                value={img.href}
+                onChange={(e) =>
+                  set({
+                    images: block.images.map((x, n) =>
+                      n === i ? { ...x, href: e.target.value } : x
+                    ),
+                  })
+                }
+              />
+            </div>
+          ))}
+
+          {block.images.length < 3 && (
+            <button
+              type="button"
+              onClick={() => set({ images: [...block.images, { src: "", alt: "", href: "" }] })}
+              className="text-sm text-[#884A20] hover:underline"
+            >
+              Add another image
+            </button>
+          )}
+          {block.images.length >= 3 && (
+            <p className="text-xs text-neutral-400">
+              Three is the most that fits. A fourth leaves each one too small to read.
+            </p>
+          )}
+
+          {(onSplit || onCombineImages) && (
+            <div className="rounded-lg bg-neutral-50 p-3 space-y-3">
+              {onCombineImages && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={onCombineImages}
+                    className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+                  >
+                    <Columns2 className="w-3.5 h-3.5" /> Add the image below to this row
+                  </button>
+                </div>
+              )}
+              {onSplit && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={onSplit}
+                    className="flex items-center gap-1.5 text-sm text-[#884A20] hover:underline"
+                  >
+                    <Rows3 className="w-3.5 h-3.5" /> Split back into separate blocks
+                  </button>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Each image becomes its own block again, stacked.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {block.type === "social" && (
         <>
           <Field label="Instagram">
@@ -393,7 +517,7 @@ export function DesignPanel({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className={labelCls}>{label}</label>
+      {label ? <label className={labelCls}>{label}</label> : null}
       {children}
     </div>
   );

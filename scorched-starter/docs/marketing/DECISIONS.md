@@ -678,6 +678,45 @@ on a phone with the image on top whatever width is chosen. A test counts the
 class attributes rather than mentions of the name, since the stylesheet mentions
 it too.
 
+### Headings hold inline HTML, not a plain string
+
+Formatting a heading was the second thing asked for. Headings and the titles on
+card and image-and-text blocks now hold inline HTML instead of a plain string,
+edited through a constrained toolbar: bold, italic, underline, links, and
+nothing else.
+
+Constrained for a reason. A paragraph or a list inside an `<h2>` is invalid
+markup that email clients recover from unpredictably, so the editor switches
+off every block node, swallows Enter, and strips the paragraph Tiptap requires
+as its root. `sanitizeInlineHtml` enforces the same rule on save, because the
+editor is not the only thing that can write to that column.
+
+Nothing saved needed converting: a plain string is already valid inline HTML.
+The emptiness checks and the block outline read through the markup, so a
+heading holding only `<strong></strong>` still counts as empty.
+
+Headings render as a native `h1`/`h2`/`h3` rather than react-email's `Heading`,
+for the same reason the text block uses a `div`: that component renders its
+children, and React refuses an element carrying both children and
+`dangerouslySetInnerHTML`. That is the third time this has come up, so it is
+worth stating as a rule: any block whose content is HTML uses a native tag.
+
+### Images side by side are one block too
+
+Same shape as image-and-text, same reason: two image blocks cannot sit beside
+each other, because side-by-side layout in email needs one table that owns both
+cells. The `imageRow` block holds two or three images and renders them as equal
+columns that stack on a phone.
+
+Three is the cap. A fourth column in a 600px email leaves each image too small
+to read, so `combineImages` refuses rather than producing a row nobody would
+want.
+
+It has the same combine and split actions as image-and-text, and the same rule
+about what they will absorb: only an actual image block, never whatever happens
+to sit below. An image row with nothing chosen renders nothing at all, rather
+than emitting empty table cells that show up as a gap.
+
 ### A second test runner
 
 The renderer is JSX, which `node --experimental-strip-types` cannot parse, so

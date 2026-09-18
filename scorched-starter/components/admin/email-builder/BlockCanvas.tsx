@@ -66,6 +66,10 @@ function summarize(block: EmailBlock): string {
       return htmlToPlainText(block.title) || "Image and text";
     case "card":
       return htmlToPlainText(block.title) || "Class card";
+    case "imageRow": {
+      const filled = block.images.filter((i) => i.src.trim()).length;
+      return `${block.images.length} across, ${filled} chosen`;
+    }
     case "social":
       return "Social links";
     default:

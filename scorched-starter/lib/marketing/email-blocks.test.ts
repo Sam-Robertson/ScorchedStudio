@@ -7,6 +7,7 @@ import {
   blocksToPlainText,
   checkDocument,
   combineImageWithText,
+  combineImages,
   createBlock,
   ensureHtml,
   escapeHtml,
@@ -14,6 +15,7 @@ import {
   mergeTagsUsed,
   parseDocument,
   splitColumns,
+  splitImageRow,
   DEFAULT_DESIGN,
   type EmailBlock,
 } from "./email-blocks.ts";
@@ -592,4 +594,136 @@ test("splitting carries a formatted title into the heading intact", () => {
   assert.ok(heading);
   if (heading?.type !== "heading") return;
   assert.equal(heading.text, "A <strong>big</strong> sale");
+});
+
+// ---------------------------------------------------------------------------
+// Images side by side
+// ---------------------------------------------------------------------------
+
+function img(id: string, src: string, alt = ""): EmailBlock {
+  return block({ id, type: "image", src, alt, width: "full", align: "center", href: "" });
+}
+
+test("combining two image blocks makes one row", () => {
+  const out = combineImages([img("a", "https://x/1.jpg", "One"), img("b", "https://x/2.jpg", "Two")], "a");
+
+  assert.equal(out.length, 1);
+  const row = out[0];
+  assert.equal(row.type, "imageRow");
+  if (row.type !== "imageRow") return;
+  assert.equal(row.images.length, 2);
+  assert.equal(row.images[0].src, "https://x/1.jpg");
+  assert.equal(row.images[1].alt, "Two");
+});
+
+test("a third image can join an existing row", () => {
+  const two = combineImages([img("a", "https://x/1.jpg"), img("b", "https://x/2.jpg")], "a");
+  const withThird = combineImages([...two, img("c", "https://x/3.jpg")], two[0].id);
+
+  assert.equal(withThird.length, 1);
+  const row = withThird[0];
+  if (row.type !== "imageRow") return assert.fail("expected a row");
+  assert.equal(row.images.length, 3);
+});
+
+test("a fourth image is refused", () => {
+  // A fourth column in a 600px email leaves each image too small to read.
+  const three = combineImages(
+    [
+      block({
+        id: "r",
+        type: "imageRow",
+        images: [
+          { src: "https://x/1.jpg", alt: "", href: "" },
+          { src: "https://x/2.jpg", alt: "", href: "" },
+          { src: "https://x/3.jpg", alt: "", href: "" },
+        ],
+      }),
+      img("d", "https://x/4.jpg"),
+    ],
+    "r"
+  );
+  assert.equal(three.length, 2, "the fourth image must stay its own block");
+});
+
+test("combining only absorbs an image, never something else", () => {
+  const text = block({ id: "t", type: "text", html: "<p>Words</p>", align: "left" });
+  const out = combineImages([img("a", "https://x/1.jpg"), text], "a");
+  assert.equal(out.length, 2);
+  assert.equal(out[1].id, "t");
+});
+
+test("splitting a row puts every image back on its own", () => {
+  const combined = combineImages(
+    [img("a", "https://x/1.jpg", "One"), img("b", "https://x/2.jpg", "Two")],
+    "a"
+  );
+  const out = splitImageRow(combined, combined[0].id);
+
+  assert.deepEqual(out.map((b) => b.type), ["image", "image"]);
+  if (out[0].type !== "image" || out[1].type !== "image") return;
+  assert.equal(out[0].src, "https://x/1.jpg");
+  assert.equal(out[0].alt, "One");
+  assert.equal(out[1].src, "https://x/2.jpg");
+});
+
+test("an image row round trip keeps the images and their order", () => {
+  const before = [img("a", "https://x/1.jpg", "One"), img("b", "https://x/2.jpg", "Two")];
+  const combined = combineImages(before, "a");
+  const restored = splitImageRow(combined, combined[0].id);
+
+  assert.deepEqual(
+    restored.map((b) => (b.type === "image" ? [b.src, b.alt] : null)),
+    [["https://x/1.jpg", "One"], ["https://x/2.jpg", "Two"]]
+  );
+});
+
+test("image rows keep surrounding blocks in place", () => {
+  const top = block({ id: "top", type: "heading", text: "Top", level: 1, align: "left" });
+  const rule = block({ id: "rule", type: "divider" });
+  const combined = combineImages([top, img("a", "https://x/1.jpg"), img("b", "https://x/2.jpg"), rule], "a");
+
+  assert.deepEqual(combined.map((b) => b.type), ["heading", "imageRow", "divider"]);
+  assert.equal(combined[0].id, "top");
+  assert.equal(combined[2].id, "rule");
+});
+
+test("an image row reports its alt text in the plain-text half", () => {
+  const text = blocksToPlainText([
+    block({
+      id: "r",
+      type: "imageRow",
+      images: [
+        { src: "https://x/1.jpg", alt: "Learn to burn poster", href: "" },
+        { src: "https://x/2.jpg", alt: "What you take home", href: "" },
+      ],
+    }),
+  ]);
+  assert.ok(text.includes("Learn to burn poster"), text);
+  assert.ok(text.includes("What you take home"), text);
+});
+
+test("an image row with no image is an error, missing alt only a warning", () => {
+  const issues = checkDocument(
+    [
+      block({
+        id: "r",
+        type: "imageRow",
+        images: [
+          { src: "", alt: "", href: "" },
+          { src: "https://x/2.jpg", alt: "", href: "" },
+        ],
+      }),
+    ],
+    { subject: "Hi", previewText: "Hi" }
+  );
+  assert.equal(issues.filter((i) => i.level === "error").length, 1);
+  assert.equal(issues.filter((i) => /alt text/i.test(i.message)).length, 2);
+});
+
+test("a new image row starts with two slots", () => {
+  const made = createBlock("imageRow");
+  assert.equal(made.type, "imageRow");
+  if (made.type !== "imageRow") return;
+  assert.equal(made.images.length, 2);
 });

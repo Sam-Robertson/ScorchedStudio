@@ -372,6 +372,52 @@ function BlockView({
         </Section>
       );
 
+    case "imageRow": {
+      const shown = block.images.filter((img) => img.src.trim());
+      if (!shown.length) return null;
+
+      // Equal columns. A table, not a flex row, because that is the only thing
+      // Outlook lays out side by side.
+      const width = Math.floor(100 / shown.length);
+
+      return (
+        <Section style={{ margin: "0 0 20px" }}>
+          <Row>
+            {shown.map((img, i) => {
+              const picture = (
+                <Img
+                  src={img.src}
+                  alt={img.alt}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: "100%",
+                    height: "auto",
+                    borderRadius: "8px",
+                  }}
+                />
+              );
+              return (
+                <Column
+                  key={i}
+                  className="sc-stack"
+                  style={{
+                    width: `${width}%`,
+                    verticalAlign: "top",
+                    // Gap between columns only, so the row still sits flush
+                    // with the email's margins on both outer edges.
+                    paddingRight: i < shown.length - 1 ? "12px" : undefined,
+                  }}
+                >
+                  {img.href ? <Link href={img.href}>{picture}</Link> : picture}
+                </Column>
+              );
+            })}
+          </Row>
+        </Section>
+      );
+    }
+
     case "social": {
       const links = [
         { label: "Instagram", href: block.instagram },

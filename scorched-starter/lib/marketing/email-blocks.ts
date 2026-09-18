@@ -145,6 +145,29 @@ export const cardBlockSchema = z.object({
   buttonHref: z.string().default(""),
 });
 
+// Two or three images across, side by side on a desktop and stacked on a
+// phone. Its own block for the same reason image-and-text is: two separate
+// image blocks cannot sit beside each other, because side-by-side layout in
+// email needs one table that owns both cells.
+export const imageRowBlockSchema = z.object({
+  ...base,
+  type: z.literal("imageRow"),
+  images: z
+    .array(
+      z.object({
+        src: z.string().default(""),
+        alt: z.string().default(""),
+        href: z.string().default(""),
+      })
+    )
+    .min(1)
+    .max(3)
+    .default([
+      { src: "", alt: "", href: "" },
+      { src: "", alt: "", href: "" },
+    ]),
+});
+
 export const socialBlockSchema = z.object({
   ...base,
   type: z.literal("social"),
@@ -163,6 +186,7 @@ export const blockSchema = z.discriminatedUnion("type", [
   quoteBlockSchema,
   columnsBlockSchema,
   cardBlockSchema,
+  imageRowBlockSchema,
   socialBlockSchema,
 ]);
 
@@ -212,6 +236,7 @@ export const BLOCK_LABELS: Record<EmailBlockType, string> = {
   quote: "Quote",
   columns: "Image and text",
   card: "Class card",
+  imageRow: "Images side by side",
   social: "Social links",
 };
 
@@ -223,6 +248,7 @@ export const BLOCK_ORDER: EmailBlockType[] = [
   "button",
   "card",
   "columns",
+  "imageRow",
   "quote",
   "divider",
   "spacer",
@@ -341,6 +367,64 @@ export function splitColumns(blocks: EmailBlock[], columnsId: string): EmailBloc
   const next = [...blocks];
   next.splice(at, 1, ...parts);
   return next;
+}
+
+// Puts an image beside the image that follows it. Applied to a row that
+// already exists, the next image joins it, up to three across.
+export function combineImages(blocks: EmailBlock[], blockId: string): EmailBlock[] {
+  const at = blocks.findIndex((b) => b.id === blockId);
+  const here = blocks[at];
+  const next = blocks[at + 1];
+  if (!here || next?.type !== "image") return blocks;
+
+  const joining = { src: next.src, alt: next.alt, href: next.href };
+
+  let merged: EmailBlock;
+  if (here.type === "image") {
+    merged = blockSchema.parse({
+      id: newBlockId(),
+      type: "imageRow",
+      images: [{ src: here.src, alt: here.alt, href: here.href }, joining],
+    });
+  } else if (here.type === "imageRow") {
+    // Three is the limit: a fourth column in a 600px email leaves each image
+    // too small to read.
+    if (here.images.length >= 3) return blocks;
+    merged = blockSchema.parse({
+      id: newBlockId(),
+      type: "imageRow",
+      images: [...here.images, joining],
+    });
+  } else {
+    return blocks;
+  }
+
+  const out = [...blocks];
+  out.splice(at, 2, merged);
+  return out;
+}
+
+// The inverse: every image in the row becomes its own block again.
+export function splitImageRow(blocks: EmailBlock[], blockId: string): EmailBlock[] {
+  const at = blocks.findIndex((b) => b.id === blockId);
+  const row = blocks[at];
+  if (!row || row.type !== "imageRow") return blocks;
+
+  const parts = row.images.map((img) =>
+    blockSchema.parse({
+      id: newBlockId(),
+      type: "image",
+      src: img.src,
+      alt: img.alt,
+      href: img.href,
+    })
+  );
+
+  if (!parts.length) return blocks;
+
+  const out = [...blocks];
+  out.splice(at, 1, ...parts);
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +608,13 @@ export function blocksToPlainText(blocks: EmailBlock[]): string {
         if (lines.length) parts.push(lines.join("\n"));
         break;
       }
+      case "imageRow": {
+        // Only the alt text is readable; an image with none contributes
+        // nothing and is skipped rather than leaving a stray bracket.
+        const alts = block.images.map((i) => i.alt.trim()).filter(Boolean);
+        if (alts.length) parts.push(alts.map((a) => `[${a}]`).join(" "));
+        break;
+      }
       case "social": {
         const links = [
           block.instagram.trim() ? `Instagram: ${block.instagram.trim()}` : "",
@@ -596,6 +687,24 @@ export function checkDocument(
             blockId: block.id,
           });
         }
+        break;
+      case "imageRow":
+        block.images.forEach((img, i) => {
+          if (!img.src.trim()) {
+            issues.push({
+              level: "error",
+              message: `Image ${i + 1} in a side-by-side row has no image.`,
+              blockId: block.id,
+            });
+          }
+          if (!img.alt.trim()) {
+            issues.push({
+              level: "warning",
+              message: `Image ${i + 1} in a side-by-side row has no alt text.`,
+              blockId: block.id,
+            });
+          }
+        });
         break;
       case "button":
         if (!HTTP_LINK.test(block.href.trim())) {
