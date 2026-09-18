@@ -107,6 +107,10 @@ ON CONFLICT (id) DO UPDATE
 -- ---------------------------------------------------------------------------
 -- 4. Seed the built-in templates
 -- ---------------------------------------------------------------------------
+-- Placeholder copy here is plain example text, never shaped like a merge tag.
+-- Only first_name and last_name resolve; anything else is left alone on
+-- purpose, so a tag-shaped placeholder would ship to real inboxes as literal
+-- braces. lib/marketing/seeded-templates.test.ts enforces this.
 -- Idempotent: re-running refreshes the built-ins in place and leaves any
 -- admin-saved template alone.
 
@@ -130,7 +134,7 @@ VALUES
     'class-announcement',
     'Class announcement',
     'Image, details, and a book-now button. For a new class or workshop date.',
-    'New class: {{class_name}}',
+    'New class: beginner woodburning',
     'Seats are limited, so grab one while they last.',
     '[
       {"id":"t-class-1","type":"image","src":"","alt":"","width":"full","href":""},
