@@ -336,6 +336,22 @@ function CampaignsTab() {
   const [confirmCount, setConfirmCount] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const [stats, setStats] = useState<Record<string, { sms?: SmsStats; email?: EmailStats }>>({});
+  // Which campaign's test panel is open, and what is typed in it.
+  const [testFor, setTestFor] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [defaults, setDefaults] = useState<{ email: string | null; phone: string | null }>({
+    email: null,
+    phone: null,
+  });
+
+  useEffect(() => {
+    // Pre-fills the box with whoever MARKETING_TEST_RECIPIENTS names, so the
+    // common case is one click.
+    api("/api/admin/marketing/test-recipients")
+      .then((b) => setDefaults({ email: b.email ?? null, phone: b.phone ?? null }))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -411,19 +427,32 @@ function CampaignsTab() {
     }
   }
 
+  function openTest(c: CampaignRecord) {
+    setError("");
+    setNotice("");
+    setTestFor(c.id);
+    setTestTo((c.channel === "email" ? defaults.email : defaults.phone) ?? "");
+  }
+
   async function sendTest(c: CampaignRecord) {
-    const to = prompt(
-      c.channel === "email" ? "Send a test to which email address?" : "Send a test to which phone number?"
-    );
-    if (!to) return;
+    if (!testTo.trim()) return;
+    setTestBusy(true);
+    setError("");
     try {
       const body = await api(`/api/admin/marketing/campaigns/${c.id}/test`, {
         method: "POST",
-        body: JSON.stringify({ to }),
+        body: JSON.stringify({ to: testTo.trim() }),
       });
-      setNotice(body.live ? `Test sent to ${to}.` : "MARKETING_LIVE is off, so the test was logged rather than sent.");
+      setNotice(
+        body.suppressed
+          ? `Nothing was sent. ${testTo.trim()} is not in MARKETING_TEST_RECIPIENTS, and MARKETING_LIVE is off.`
+          : `Test sent to ${testTo.trim()}. Check it before sending the real thing.`
+      );
+      setTestFor(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Test failed");
+    } finally {
+      setTestBusy(false);
     }
   }
 
@@ -476,13 +505,45 @@ function CampaignsTab() {
                   CANCEL
                 </button>
               )}
-              <button onClick={() => sendTest(c)} className={`${btnCls} border border-black/20 text-neutral-600`}>
+              <button
+                onClick={() => (testFor === c.id ? setTestFor(null) : openTest(c))}
+                className={`${btnCls} border border-black/20 text-neutral-600`}
+              >
                 TEST SEND
               </button>
               <button onClick={() => loadStats(c)} className={`${btnCls} border border-black/20 text-neutral-600`}>
                 STATS
               </button>
             </div>
+
+            {testFor === c.id && (
+              <div className="mt-3 rounded-lg border border-black/10 bg-neutral-50 p-3">
+                <label className={labelCls}>
+                  Send a copy of this {c.channel === "email" ? "email" : "text"} to
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className={`${inputCls} flex-1 min-w-[200px]`}
+                    placeholder={c.channel === "email" ? "you@example.com" : "(801) 555-0123"}
+                    value={testTo}
+                    onChange={(e) => setTestTo(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendTest(c)}
+                  />
+                  <button
+                    onClick={() => sendTest(c)}
+                    disabled={testBusy || !testTo.trim()}
+                    className={`${btnCls} bg-[#884A20] text-white disabled:opacity-40`}
+                  >
+                    {testBusy ? "SENDING…" : "SEND TEST"}
+                  </button>
+                </div>
+                <p className="text-xs text-neutral-500 mt-2">
+                  Goes to this one address only, using the same template and the same opt-out
+                  footer as the real send. Recipients on MARKETING_TEST_RECIPIENTS receive it even
+                  while MARKETING_LIVE is off; anyone else is logged and not sent.
+                </p>
+              </div>
+            )}
 
             {stats[c.id]?.sms && (
               <div className="mt-3 text-xs text-neutral-600 grid grid-cols-3 md:grid-cols-7 gap-2">

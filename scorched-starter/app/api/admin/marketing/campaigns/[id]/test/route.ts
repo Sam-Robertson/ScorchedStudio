@@ -11,7 +11,7 @@ import { sendTestEmail } from "@/lib/marketing/email-send";
 import { telnyx } from "@/lib/marketing/telnyx";
 import { withStopNotice } from "@/lib/marketing/message-rules";
 import { normalizePhone } from "@/lib/marketing/phone";
-import { marketingIsLive, siteUrl } from "@/lib/marketing/config";
+import { isTestRecipient, marketingIsLive, siteUrl } from "@/lib/marketing/config";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -31,7 +31,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     if (campaign.channel === "email") {
       const result = await sendTestEmail(campaign, to.trim());
-      return Response.json({ ok: true, channel: "email", live: marketingIsLive(), ...result });
+      return Response.json({
+        ok: true,
+        channel: "email",
+        live: marketingIsLive(),
+        allowlisted: isTestRecipient(to.trim()),
+        ...result,
+      });
     }
 
     const phone = normalizePhone(to);
@@ -42,12 +48,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       body: withStopNotice(campaign.body),
       mediaUrl: campaign.media_url,
       statusCallback: `${siteUrl()}/api/webhooks/telnyx`,
+      forTest: true,
     });
 
     if (!result.ok) {
       return Response.json({ error: result.errorMessage ?? "Test send failed" }, { status: 502 });
     }
-    return Response.json({ ok: true, channel: "sms", live: marketingIsLive(), suppressed: result.suppressed });
+    return Response.json({
+      ok: true,
+      channel: "sms",
+      live: marketingIsLive(),
+      allowlisted: isTestRecipient(phone),
+      suppressed: result.suppressed,
+    });
   } catch (err) {
     console.error("CAMPAIGN_TEST_ERROR", err);
     return Response.json({ error: "Server error" }, { status: 500 });

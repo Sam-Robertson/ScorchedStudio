@@ -475,3 +475,32 @@ SUPABASE_URL" while the script happily printed its summary. It failed cleanly
 with no partial state, but a script that reports success-shaped output while
 writing nothing is a bad failure mode. `scripts/load-env.ts` now handles it, and
 `import-legacy-sms.ts` had the identical gap and was fixed in the same change.
+
+## Test sends can reach an allowlist while the system is off
+
+`MARKETING_LIVE` gated everything, including the admin TEST SEND button, which
+made the gate circular: you could not see what a campaign looked like until you
+had already made every send possible. That is a bad place to be when the first
+real campaign goes to 540 people.
+
+`MARKETING_TEST_RECIPIENTS` is a comma separated allowlist. A test send to an
+address or number on it goes out for real even while `MARKETING_LIVE` is false;
+anything else is still logged and suppressed.
+
+An allowlist rather than a "test mode" flag on purpose. A flag is one mistake
+away from sending the whole list; an allowlist can only ever reach the handful
+of addresses written in the environment. Campaign sends never consult it, and
+the provider re-checks the recipient itself rather than trusting the `forTest`
+argument from the caller, so a future bug that sets that flag on a campaign path
+still cannot reach anyone who is not explicitly named.
+
+Also replaced the `window.prompt` the button used with an inline panel that
+pre-fills from the allowlist and says afterwards whether the message actually
+went out or was suppressed. The old version could not tell you the difference,
+which is how a "sent" message that went nowhere would have gone unnoticed.
+
+One bug found while testing the matcher: comparing raw digits made
+`(801) 555-0123` fail to match `+18015550123`, because those differ by the
+country code alone. It normalises through the same E.164 path as everything else
+now, with seven tests covering the cases, including that a short numeric string
+cannot accidentally match a phone entry.

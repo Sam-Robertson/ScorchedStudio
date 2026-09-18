@@ -5,6 +5,8 @@
 // usable send rate depends on the throughput carriers assign to the 10DLC
 // campaign, which is not known until it is approved.
 
+import { normalizePhone } from "./phone.ts";
+
 function intFromEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -61,6 +63,44 @@ export function smsLimits(): SmsLimits {
 // be what starts texting the customer list.
 export function marketingIsLive(): boolean {
   return process.env.MARKETING_LIVE === "true";
+}
+
+// Addresses and numbers that may receive a test even while MARKETING_LIVE is
+// off, so a campaign can be proofread in a real inbox before anyone flips the
+// switch. Without this the gate is circular: you cannot see what a send looks
+// like until you have already made every send possible.
+//
+// This is deliberately an allowlist rather than a "test mode" flag. A flag
+// would mean one mistake sends the whole list; an allowlist can only ever
+// reach the handful of addresses written in the environment.
+export function testRecipients(): string[] {
+  return (process.env.MARKETING_TEST_RECIPIENTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Emails compare case-insensitively. Phone numbers go through the same E.164
+// normalisation everything else uses, so "(801) 555-0123" in the environment
+// matches "+18015550123" from the form. Comparing raw digits does not work:
+// those two differ by the country code alone.
+export function isTestRecipient(target: string): boolean {
+  const wanted = target.trim().toLowerCase();
+  if (!wanted) return false;
+
+  const wantedPhone = normalizePhone(wanted);
+
+  return testRecipients().some((allowed) => {
+    if (allowed.toLowerCase() === wanted) return true;
+    if (!wantedPhone) return false;
+    return normalizePhone(allowed) === wantedPhone;
+  });
+}
+
+// Whether a single test send may actually go out: either the system is live, or
+// this specific recipient is on the allowlist. Campaign sends never call this.
+export function mayTestSendTo(target: string): boolean {
+  return marketingIsLive() || isTestRecipient(target);
 }
 
 // Shouted once per suppressed send so a dev environment makes it obvious that

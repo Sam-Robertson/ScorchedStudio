@@ -15,6 +15,7 @@
 // telnyx-webhook.ts instead, so the whole rule is visible and unit testable.
 // The dependency was therefore removed rather than left installed and unused.
 import {
+  isTestRecipient,
   logSuppressedSend,
   marketingIsLive,
   telnyxConfig,
@@ -76,7 +77,13 @@ export class TelnyxProvider implements SmsProvider {
     // "true". The suppressed result is flagged so the worker can tell it from a
     // real send: treating it as real would stamp last_sms_contact_at and record
     // a conversation that never happened.
-    if (!marketingIsLive()) {
+    // A test to an allowlisted number goes out even while the system is off, so
+    // a campaign can be proofread on a real handset first. The allowlist is
+    // re-checked here rather than trusted from the caller: forTest on its own
+    // must never be enough to reach someone.
+    const allowed = marketingIsLive() || (args.forTest === true && isTestRecipient(args.to));
+
+    if (!allowed) {
       logSuppressedSend("sms", {
         provider: "telnyx",
         to: args.to,

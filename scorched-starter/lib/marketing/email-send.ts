@@ -11,7 +11,7 @@ import { render } from "@react-email/render";
 import { markdownToHtml } from "@/lib/markdown";
 import type { CampaignRecord, SubscriberRecord } from "@/lib/supabase";
 import MarketingEmail from "./MarketingEmail";
-import { marketingFrom, marketingIsLive, logSuppressedSend } from "./config";
+import { marketingFrom, marketingIsLive, logSuppressedSend, isTestRecipient } from "./config";
 import { chunk, unsubscribeHeaders, unsubscribeUrlFor } from "./email-headers";
 
 export { chunk, unsubscribeHeaders, unsubscribeUrlFor };
@@ -140,7 +140,9 @@ export async function sendTestEmail(
   const html = await render(element);
   const text = await render(element, { plainText: true });
 
-  if (!marketingIsLive()) {
+  // Allowlisted addresses receive even while the system is off; everything else
+  // is still suppressed. Campaign sends do not consult this.
+  if (!marketingIsLive() && !isTestRecipient(toEmail)) {
     logSuppressedSend("email-test", { to: toEmail, subject: campaign.subject });
     return { suppressed: true };
   }

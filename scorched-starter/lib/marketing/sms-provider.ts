@@ -11,6 +11,10 @@ export type SendArgs = {
   mediaUrl?: string | null;
   // Where the provider should post delivery status updates.
   statusCallback?: string | null;
+  // Set only by the admin test-send path. The provider still checks the number
+  // against the allowlist itself, so a campaign that somehow set this could not
+  // reach anyone who is not explicitly named in the environment.
+  forTest?: boolean;
 };
 
 export type SendResult = {
