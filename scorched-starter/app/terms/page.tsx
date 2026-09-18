@@ -77,8 +77,9 @@ export default function TermsPage() {
         <section>
           <h2 className="h3 font-semibold mb-3">4. Email Marketing</h2>
           <p>
-            You can join our email list by ticking the email box on our waiver or at booking
-            checkout, or by entering your address in the signup form in our site footer. Every
+            You can join our email list by ticking the email box on our waiver, at booking
+            checkout, or in your account preferences, or by entering your address in the signup
+            form in our site footer. Every
             marketing email has a one-click unsubscribe link at the bottom and our postal address,
             and unsubscribing takes effect immediately. Booking confirmations, waiver copies, and
             receipts are not marketing and keep arriving either way.
@@ -101,10 +102,11 @@ export default function TermsPage() {
 
           <h3 className="font-semibold mt-6 mb-2">How you join</h3>
           <p className="mb-4">
-            You join by ticking the text message box in one of two places on our website: the
-            digital waiver, or the booking checkout. That box is separate from the email box, is
-            never ticked for you, and sits next to links to this page and our privacy policy. The
-            wording you agree to is:
+            You join by ticking the text message box in one of three places on our website: the
+            digital waiver, the booking checkout, or the preferences on your account page if you
+            have signed up for one. That box is separate from the email box, is never ticked for
+            you, and sits next to links to this page and our privacy policy. The wording you agree
+            to is:
           </p>
           <blockquote className="mb-4 border-l-2 border-neutral-300 pl-4 italic">
             Text me about classes, events, and offers from Scorched Studio. Message frequency

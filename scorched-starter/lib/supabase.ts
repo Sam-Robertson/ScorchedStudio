@@ -243,6 +243,7 @@ export type ConsentSource =
   | "booking"
   | "footer_form"
   | "popup"
+  | "account_settings"
   | "import_legacy_sms"
   | "import_legacy_newsletter"
   | "inbound_keyword"

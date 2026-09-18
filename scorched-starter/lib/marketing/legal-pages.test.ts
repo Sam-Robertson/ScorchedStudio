@@ -123,13 +123,20 @@ test("the terms page repeats the no-sharing promise", () => {
   assert.ok(terms.includes(NO_SHARING_MOBILE), "terms page is missing the no-sharing sentence");
 });
 
-test("the terms page names the SMS opt-in points, matching the registration", () => {
-  // Two, not three: the footer collects email only. The 10DLC campaign's
-  // opt-in description has to say the same thing or a reviewer comparing the
-  // two will find a mismatch.
-  for (const phrase of ["waiver", "booking checkout"]) {
+test("the terms page names every SMS opt-in point, matching the registration", () => {
+  // Three: the waiver, the booking checkout, and the account preferences page.
+  // The footer is email only. The 10DLC campaign's opt-in description has to
+  // say the same thing, or a reviewer comparing the two finds a mismatch.
+  for (const phrase of ["waiver", "booking checkout", "account page"]) {
     assert.ok(terms.toLowerCase().includes(phrase.toLowerCase()), `missing: ${phrase}`);
   }
+});
+
+test("the privacy policy names the account page as an opt-in point too", () => {
+  assert.ok(
+    /account preferences|preferences page of a customer account/i.test(privacy),
+    "the privacy policy does not mention the account preferences opt-in"
+  );
 });
 
 test("the footer form does not collect a phone number", () => {
@@ -256,4 +263,21 @@ test("the privacy policy names every tracker the layout can load", () => {
   if (/NEXT_PUBLIC_META_PIXEL_ID/.test(layout)) {
     assert.ok(privacy.includes("Meta (Facebook) Pixel"), "the pixel is loadable but undisclosed");
   }
+});
+
+test("the account preferences UI quotes the shared consent wording", () => {
+  // It must not grow its own copy of the sentence. The 10DLC registration
+  // quotes one exact sentence, and a reviewer can open any opt-in point and
+  // compare, so all of them render the same constant.
+  const component = readFileSync(
+    join(appDir, "..", "components", "account", "MarketingPreferences.tsx"),
+    "utf8"
+  );
+
+  assert.match(component, /SMS_CONSENT_TEXT/);
+  assert.match(component, /EMAIL_CONSENT_TEXT/);
+  assert.ok(
+    !component.includes("Msg and data rates may apply"),
+    "the consent wording is hardcoded here instead of imported"
+  );
 });

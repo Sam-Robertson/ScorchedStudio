@@ -10,6 +10,7 @@ import { getMembershipsByEmail, getPlanByKey } from "@/lib/memberships";
 import { getCohortWithCourse, getEnrollmentsByEmail } from "@/lib/courses";
 import CancelMembershipButton from "@/components/account/CancelMembershipButton";
 import LogoutButton from "@/components/account/LogoutButton";
+import MarketingPreferences from "@/components/account/MarketingPreferences";
 
 export const metadata = { title: "My Account | Scorched Studio" };
 export const dynamic = "force-dynamic";
@@ -144,6 +145,12 @@ export default async function AccountPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Marketing preferences */}
+          <div className="mt-10">
+            <h2 className="h3 font-bold mb-3">Emails and texts</h2>
+            <MarketingPreferences />
           </div>
         </Container>
       </section>

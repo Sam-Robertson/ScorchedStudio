@@ -396,3 +396,38 @@ arrives from an unrecognised sender and needs to be read. Adding a per-campaign
 Caveat worth remembering: tab placement is per recipient and Gmail learns from
 behaviour, so testing against one inbox that has now seen four messages from the
 domain is a weak signal for the list as a whole.
+
+## Marketing preferences on the account page (September 18, 2026)
+
+Signed-in customers can now turn email and text marketing on and off at
+`/account`. It is the first opt-in point that knows who you are, so unlike the
+waiver and the checkout it shows current state rather than an empty box, and
+turning something off is recorded as a consent event exactly like turning it on.
+
+- **Needs a migration.** `supabase-marketing-account-source.sql` adds
+  `account_settings` to the `consent_events.source` CHECK. Until it is run, saving
+  preferences fails with a 500 and the consent row is rejected, because the log
+  must record where consent actually came from rather than borrow a source that
+  is not true. This is exactly the case the TEXT + CHECK choice was made for: it
+  is a three-line alter rather than an `ALTER TYPE`.
+- **The wording is the shared constant**, not a new copy. The 10DLC registration
+  quotes one exact sentence and a reviewer can open any opt-in point and compare,
+  so a test now fails if this component hardcodes the text instead of importing it.
+- **Only changed channels are written**, so re-saving an untouched form does not
+  fill the append-only log with duplicate rows.
+- **A bounced or complained address cannot be re-enabled from here.** The provider
+  suppresses it, so a checkbox would silently do nothing; the page explains and
+  points at support instead.
+- **The phone number is pre-filled from their most recent booking** when we have
+  one, so nobody retypes a number they already gave us. It is only attached to the
+  record when they actually opt in.
+
+**SMS opt-in is three places again**, so both legal pages and the TCR campaign's
+opt-in description were updated in the same change. The campaign now reads "three
+places: the digital waiver, the booking checkout, and the marketing preferences on
+their signed-in account page", with the checkbox wording untouched. Carriers still
+show all seven APPROVED after the edit.
+
+Noted while there: the campaign has moved from `TCR_ACCEPTED` to `MNO_PENDING`,
+which is why number assignment still fails with 10036. That is the carrier
+provisioning stage, not a problem with the registration.

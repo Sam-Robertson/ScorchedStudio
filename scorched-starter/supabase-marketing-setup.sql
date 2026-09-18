@@ -61,8 +61,9 @@ CREATE TABLE IF NOT EXISTS consent_events (
   channel       TEXT        NOT NULL CHECK (channel IN ('email', 'sms')),
   action        TEXT        NOT NULL CHECK (action IN ('opt_in', 'opt_out')),
   source        TEXT        NOT NULL CHECK (source IN (
-                  'waiver', 'booking', 'footer_form', 'popup', 'import_legacy_sms',
-                  'import_legacy_newsletter', 'inbound_keyword', 'unsubscribe_link', 'admin'
+                  'waiver', 'booking', 'footer_form', 'popup', 'account_settings',
+                  'import_legacy_sms', 'import_legacy_newsletter', 'inbound_keyword',
+                  'unsubscribe_link', 'admin'
                 )),
   -- The exact checkbox wording shown at the time. Copy changes over the years;
   -- the log has to reflect what this person actually saw.
