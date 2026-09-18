@@ -292,3 +292,27 @@ Decisions inside the migration:
 `CRON_INTERVAL_MINUTES` in `sms-budget.ts` is 5 and is correct again. It was
 quietly wrong for as long as the daily placeholder stood, which is the other
 reason not to leave that in place.
+
+## Google Analytics was undisclosed (found while enabling the Meta Pixel)
+
+Turning the pixel on surfaced a second tracker the privacy policy never
+mentioned: Google Analytics 4 (`G-6587WEMW4K`), hardcoded in `app/layout.tsx`
+and running unconditionally on every page. It is not env gated, so unlike the
+pixel it has been live the whole time, including through the original carrier
+review copy that claimed the site used no tracking cookies.
+
+Added to both the processor list and the cookies section, described the same way
+as the pixel: what it sets, what it records, and that no name, email, or phone is
+sent to it. The line stating that mobile numbers never reach an advertising
+platform was broadened to name Google as well as Meta, so the SMS no-sharing
+promise covers both.
+
+Two things worth Sam knowing rather than me deciding:
+
+- GA is hardcoded rather than read from an env var, so it also runs on preview
+  deployments and pollutes analytics with non-production traffic. Gating it on
+  an env var the way the pixel is gated would fix that.
+- Neither tracker has a consent banner. That is defensible for a Utah business
+  with a US-only audience, but it would not satisfy GDPR or the newer state
+  privacy laws if the audience ever broadens. Worth a lawyer's view alongside
+  the rest of the policy.

@@ -85,6 +85,7 @@ export default function PrivacyPage() {
             <li><strong>Telnyx</strong> for delivering text messages</li>
             <li><strong>Vercel</strong> for website hosting</li>
             <li><strong>Meta</strong> for advertising measurement, as described in the cookies section below</li>
+            <li><strong>Google Analytics</strong> for understanding how the site is used, also described below</li>
           </ul>
           <p className="mt-4">
             Each of these processes your information only to provide that service to us. None of
@@ -216,9 +217,15 @@ export default function PrivacyPage() {
             address, or phone number from us. You can limit this through your browser settings, an ad
             blocker, or your Meta ad preferences.
           </p>
+          <p className="mb-4">
+            We use Google Analytics to understand how people find and move around the site, for
+            example which pages are popular and which links are followed. It sets cookies and records
+            page views, the approximate location your visit came from, and basic device and browser
+            details. We do not send it your name, email address, or phone number.
+          </p>
           <p>
-            We do not use the pixel, or any other advertising tool, with information you gave us for
-            text messaging. Your mobile number is never sent to Meta or any other advertising
+            Neither of these tools is used with the information you gave us for text messaging. Your
+            mobile number is never sent to Meta, to Google, or to any other advertising or analytics
             platform.
           </p>
         </section>
