@@ -504,3 +504,162 @@ One bug found while testing the matcher: comparing raw digits made
 country code alone. It normalises through the same E.164 path as everything else
 now, with seven tests covering the cases, including that a short numeric string
 cannot accidentally match a phone entry.
+
+---
+
+## Block-based email builder
+
+The plain textarea composer was replaced, for email only, with a full block
+editor at `/admin/marketing/campaigns/[id]`. Text campaigns keep the original
+modal: an SMS is 160 characters with no layout, and a block editor for it would
+be ceremony around a single field.
+
+### One renderer, not three
+
+The preview, the test send, and the real send all go through
+`lib/marketing/email-render.ts`. This was the main structural decision. A
+preview that renders separately from the send is not evidence of anything, and
+the whole point of a visual builder is being able to trust what you are looking
+at.
+
+That is also why the preview renders on the server rather than in the browser.
+Rendering it client side would have meant a second implementation and would have
+pulled `@react-email/render` into the admin bundle. Instead
+`POST /api/admin/marketing/render` returns HTML and the editor drops it into a
+sandboxed iframe with `srcDoc`. The iframe is not cosmetic: an email carries its
+own styles, and rendering it inline would let the admin page's Tailwind reset
+bleed in, so the preview would look like nothing a recipient will see.
+
+### Render once, substitute per recipient
+
+The obvious shape is to render the React tree once per recipient, since each
+person's unsubscribe token differs. That makes send time scale with list size
+multiplied by block count, for the sake of a name and a URL.
+
+Instead a campaign renders once into a template holding placeholders, and each
+copy is produced by string replacement. The unsubscribe placeholder is
+deliberately not a valid URL (`__SCORCHED_UNSUBSCRIBE_URL__`): if substitution
+were ever skipped, a visibly broken link is far better than a plausible one that
+unsubscribes the wrong person.
+
+The two halves of the message are escaped differently. A name going into HTML is
+escaped, a name going into the text half is not, because a subscriber called
+`<script>` should neither inject markup nor read as `&lt;script&gt;`.
+
+### The footer is not a block
+
+CAN-SPAM requires a postal address and a working unsubscribe link in every
+marketing message. If the footer were a block, it would be one drag away from
+deletion, and the campaign that went out without it would be the one nobody
+checked.
+
+So it lives in the shell of `BlockEmail.tsx`, unreachable from the editor. The
+test that matters is the one asserting an **empty** block array still produces
+both. The plain-text half carries them too, since the rule applies to a
+multipart message as a whole.
+
+### `campaigns.body` stays populated
+
+`body` is `TEXT NOT NULL` and predates the builder. Rather than relaxing the
+constraint or filling it with a placeholder, block campaigns store the generated
+plain-text version there. The multipart send needs that text regardless, so the
+column holds something useful, the campaign list still shows a readable preview,
+and nothing existing had to change.
+
+Campaigns written before the builder have `blocks IS NULL` and still render
+through the markdown template. They were deliberately not migrated: rewriting
+them into blocks would change what an already-sent campaign looked like.
+
+### Templates live in their own table
+
+A template stored as a campaign row with an `is_builtin` flag would appear in
+the campaign list, in the scheduler's scan for due campaigns, and in every
+audience count, each needing a `WHERE` clause that someone eventually forgets.
+`campaign_templates` avoids all of it.
+
+### Images go through the server, not a signed URL
+
+The social-post uploader hands the browser a signed URL so the file bypasses the
+server. That pattern cannot work here, because the server has to see the bytes:
+it resizes to 1200px for email, strips EXIF (phone photos carry GPS
+coordinates), and re-encodes, which is what actually proves the file is an image
+rather than something with an image extension.
+
+The browser shrinks pictures to 1600px first, so a phone photo does not hit the
+serverless request body limit. That is a convenience, not the thing being
+trusted. Animated GIFs skip both steps, since a canvas or a sharp re-encode
+flattens them to the first frame and silently breaks the only thing a GIF is
+for.
+
+The bucket is public. Email clients fetch images with no cookies and no auth
+header, so a signed URL simply renders as a broken image; the alternative is CID
+attachments, which hurt deliverability.
+
+### Rich text is stored as HTML and sanitized on save
+
+Tiptap can emit either its own JSON or HTML. HTML is what the renderer wants, so
+storing JSON would mean writing a second renderer for it.
+
+Either way the sanitize step is mandatory, since that content is author-supplied
+HTML going into a message sent to hundreds of people, and pasting from a web
+page drags in scripts and event handlers. `sanitize-email-html.ts` allowlists the
+tags email clients actually render, keeps `text-align` and nothing else from
+`style`, and blocks every URL scheme except http, https, mailto, and tel.
+Sanitizing happens on save rather than on send, and every write path goes
+through `normalizeDocument`, so a second route cannot skip it.
+
+### Errors block the send, warnings do not
+
+The pre-send checklist splits deliberately. A button linking nowhere is an
+error, because it is guaranteed to reach every recipient broken. A missing alt
+attribute is a warning, because it should never be the reason a campaign does
+not go out. Clicking an issue selects the block it came from.
+
+### A raster logo had to be added
+
+`public/illustrations/LogoWordmark.svg` is the brand asset, and Gmail, Outlook,
+and Yahoo all refuse to render SVG in a message body. `scripts/make-email-logo.mjs`
+generates `public/email/logo-wordmark.png` from it at 600px, flattened onto the
+cream background because a transparent PNG can come out black-on-black in a
+dark-mode client. Re-run it if the wordmark ever changes.
+
+### Opening a pre-builder campaign converts it, carefully
+
+Every email campaign that existed before the migration has `blocks IS NULL` and
+its copy in `body` as markdown. The editor cannot simply open those blank:
+`body` is regenerated from the block array on every save, so one keystroke on an
+empty document would have wiped the original email and left a row that renders
+as nothing but a footer from then on.
+
+So the campaign GET returns the markdown already rendered to HTML, and the
+editor seeds a single text block from it. The saved snapshot is taken from the
+seeded state, which means opening a campaign writes nothing; the conversion is
+only persisted when someone actually edits it.
+
+One text block rather than an attempt to infer headings and buttons. Guessing
+would silently reshape a campaign that has already gone out, and the point here
+is to not lose anything.
+
+### A second test runner
+
+The renderer is JSX, which `node --experimental-strip-types` cannot parse, so
+the compliance tests could not have been written under the existing runner. The
+`test` script now also runs `tsx --tsconfig tsconfig.test.json --test` over
+`*.test.tsx`. The extra tsconfig exists only because Next sets `jsx: "preserve"`
+for its own compiler, which leaves tsx with nothing to transform.
+
+Everything worth testing that is not JSX stays in `email-blocks.ts`, which
+imports no JSX and uses no `@/` alias, so it still runs under the original
+runner.
+
+### A pre-existing bug found by these tests
+
+`MarketingEmail.tsx` passed `dangerouslySetInnerHTML` to react-email's
+`Section`. `Section` wraps its children in a table, and React refuses an element
+carrying both children and `dangerouslySetInnerHTML`, so that template threw at
+render time under the installed React 19: every email campaign send would have
+failed. It is now a plain `div`, which every email client renders, and the
+legacy path has a test covering it.
+
+This was not introduced by the builder. It was found because the new renderer
+hit the same wall, and the fix is the same in both files.

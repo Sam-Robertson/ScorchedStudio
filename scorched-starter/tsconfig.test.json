@@ -1,0 +1,7 @@
+{
+  "//": "Test-only. Next sets jsx to \"preserve\" because its own compiler handles JSX, but the tsx test runner needs a real transform, so this switches on the automatic runtime. Nothing here affects the build.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

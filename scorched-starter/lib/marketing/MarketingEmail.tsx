@@ -67,8 +67,13 @@ export default function MarketingEmail({
           ) : null}
 
           {/* The campaign body arrives as HTML already rendered from markdown
-              by the caller, which is the same remark pipeline the blog uses. */}
-          <Section
+              by the caller, which is the same remark pipeline the blog uses.
+
+              A div rather than react-email's Section: Section wraps its
+              children in a table, and React refuses an element carrying both
+              children and dangerouslySetInnerHTML, so this threw at render
+              time under React 19. */}
+          <div
             style={{ fontSize: "15px", lineHeight: 1.6, color: "#555555" }}
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />

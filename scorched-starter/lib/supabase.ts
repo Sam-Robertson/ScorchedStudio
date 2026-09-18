@@ -300,6 +300,12 @@ export type CampaignRecord = {
   name: string;
   subject: string | null;
   body: string;
+  // The block document for email campaigns built in the visual editor. NULL on
+  // SMS campaigns and on email campaigns written before the builder existed,
+  // which still render through the markdown template.
+  blocks: unknown | null;
+  design: unknown | null;
+  preview_text: string | null;
   media_url: string | null;
   segment: CampaignSegment;
   status: CampaignStatus;

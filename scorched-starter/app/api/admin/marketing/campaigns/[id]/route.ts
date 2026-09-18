@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import type { CampaignRecord, CampaignStatus } from "@/lib/supabase";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
+import { normalizeDocument, DocumentError } from "@/lib/marketing/email-document";
+import { markdownToHtml } from "@/lib/markdown";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,7 +16,19 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { data, error } = await getSupabase().from("campaigns").select("*").eq("id", id).maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!data) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json({ campaign: data as CampaignRecord });
+
+  const campaign = data as CampaignRecord;
+
+  // A campaign written before the builder holds markdown in `body` and nothing
+  // in `blocks`. The editor needs that copy as HTML so it can seed a text
+  // block from it, rather than opening blank and overwriting the original on
+  // the first keystroke.
+  const legacyHtml =
+    campaign.channel === "email" && !campaign.blocks && campaign.body.trim()
+      ? await markdownToHtml(campaign.body)
+      : null;
+
+  return Response.json({ campaign, legacyHtml });
 }
 
 // Edits a draft, or changes status for pause, resume, cancel, and schedule.
@@ -35,7 +49,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     // Content is only editable while the campaign has not started. Once it is
     // sending, half the list already has the old wording and changing it would
     // make the two halves differ.
-    if (patch.name !== undefined || patch.subject !== undefined || patch.body !== undefined) {
+    const touchesContent =
+      patch.name !== undefined ||
+      patch.subject !== undefined ||
+      patch.body !== undefined ||
+      patch.blocks !== undefined ||
+      patch.design !== undefined ||
+      patch.previewText !== undefined;
+
+    if (touchesContent) {
       if (campaign.status !== "draft" && campaign.status !== "scheduled") {
         return Response.json(
           { error: "This campaign has already started sending, so its content is locked." },
@@ -53,6 +75,35 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
           }
         }
         update.body = body;
+      }
+
+      // The block document. Saved through normalizeDocument so the rich-text
+      // HTML is sanitized and the plain-text half is regenerated from the same
+      // blocks, rather than drifting from whatever the body column held.
+      if (patch.blocks !== undefined || patch.design !== undefined) {
+        if (campaign.channel !== "email") {
+          return Response.json(
+            { error: "Only email campaigns have a block layout." },
+            { status: 400 }
+          );
+        }
+        const doc = normalizeDocument(
+          patch.blocks !== undefined ? patch.blocks : campaign.blocks,
+          patch.design !== undefined ? patch.design : campaign.design
+        );
+        update.blocks = doc.blocks;
+        update.design = doc.design;
+        update.body = doc.plainText;
+      }
+
+      if (patch.previewText !== undefined) {
+        update.preview_text = String(patch.previewText).trim() || null;
+      }
+
+      // The email subject constraint is NOT NULL, so an email draft clearing
+      // its subject stores an empty string rather than null.
+      if (patch.subject !== undefined && campaign.channel === "email") {
+        update.subject = String(patch.subject).trim();
       }
     }
 
@@ -74,6 +125,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     return Response.json({ campaign: data as CampaignRecord });
   } catch (err) {
+    if (err instanceof DocumentError) {
+      return Response.json({ error: err.message }, { status: 400 });
+    }
     console.error("CAMPAIGN_PATCH_ERROR", err);
     return Response.json({ error: "Server error" }, { status: 500 });
   }

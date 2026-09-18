@@ -17,7 +17,8 @@ import type {
   ConsentEventRecord,
   SubscriberRecord,
 } from "@/lib/supabase";
-import { Download, Loader2, Mail, MessageSquare, Plus, X } from "lucide-react";
+import { Copy, Download, Loader2, Mail, MessageSquare, Pencil, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -328,6 +329,7 @@ type EmailStats = {
 };
 
 function CampaignsTab() {
+  const router = useRouter();
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -412,6 +414,18 @@ function CampaignsTab() {
       setError(err instanceof Error ? err.message : "Send failed");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function duplicate(c: CampaignRecord) {
+    try {
+      const body = await api(`/api/admin/marketing/campaigns/${c.id}/duplicate`, { method: "POST" });
+      // An email copy opens straight in the builder, which is where it would
+      // be edited anyway. A text copy just appears in the list.
+      if (c.channel === "email") router.push(`/admin/marketing/campaigns/${body.campaign.id}`);
+      else load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not duplicate");
     }
   }
 
@@ -505,6 +519,21 @@ function CampaignsTab() {
                   CANCEL
                 </button>
               )}
+              {c.channel === "email" && (
+                <button
+                  onClick={() => router.push(`/admin/marketing/campaigns/${c.id}`)}
+                  className={`${btnCls} border border-black/20 text-neutral-600 flex items-center gap-1.5`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {["draft", "scheduled"].includes(c.status) ? "EDIT" : "VIEW"}
+                </button>
+              )}
+              <button
+                onClick={() => duplicate(c)}
+                className={`${btnCls} border border-black/20 text-neutral-600 flex items-center gap-1.5`}
+              >
+                <Copy className="w-3.5 h-3.5" /> DUPLICATE
+              </button>
               <button
                 onClick={() => (testFor === c.id ? setTestFor(null) : openTest(c))}
                 className={`${btnCls} border border-black/20 text-neutral-600`}
@@ -593,9 +622,9 @@ function CampaignsTab() {
 // ── Composer ─────────────────────────────────────────────────────────────────
 
 function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const router = useRouter();
   const [channel, setChannel] = useState<"email" | "sms">("email");
   const [name, setName] = useState("");
-  const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [tags, setTags] = useState("");
   const [match, setMatch] = useState<"any" | "all">("any");
@@ -630,17 +659,25 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
     setSaving(true);
     setError("");
     try {
-      await api("/api/admin/marketing/campaigns", {
+      const created = await api("/api/admin/marketing/campaigns", {
         method: "POST",
         body: JSON.stringify({
           channel,
           name,
-          subject,
           body,
+          // An email starts as an empty block document and is written in the
+          // builder. Sending this key is what tells the route to take the
+          // block path; SMS still posts a body and passes carrier validation.
+          ...(channel === "email" ? { blocks: [], design: {} } : {}),
           mediaUrl: mediaUrl.trim() || undefined,
           segment: { tags: tags.split(",").map((t) => t.trim()).filter(Boolean), match },
         }),
       });
+
+      if (channel === "email") {
+        router.push(`/admin/marketing/campaigns/${created.campaign.id}`);
+        return;
+      }
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -672,13 +709,13 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
           </div>
 
           {channel === "email" && (
-            <div>
-              <label className={labelCls}>Subject</label>
-              <input className={inputCls} value={subject} onChange={(e) => setSubject(e.target.value)} />
-            </div>
+            <p className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
+              The subject line and the email itself are written in the builder, which opens as soon
+              as this draft is created.
+            </p>
           )}
 
-          <div>
+          <div className={channel === "email" ? "hidden" : undefined}>
             <label className={labelCls}>
               Message {channel === "sms" && <span className="text-neutral-400">(markdown not supported in texts)</span>}
             </label>
@@ -761,7 +798,7 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
             disabled={saving || issues.some((i) => i.level === "error")}
             className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
           >
-            {saving ? "SAVING…" : "SAVE DRAFT"}
+            {saving ? "SAVING…" : channel === "email" ? "OPEN THE BUILDER" : "SAVE DRAFT"}
           </button>
         </div>
       </div>

@@ -319,6 +319,51 @@ Only after all eleven pass, and after the 10DLC campaign is approved, should the
 
 ---
 
+## 11. Email builder migration (not yet applied)
+
+Email campaigns are now written in a block editor at
+`/admin/marketing/campaigns/<id>`. It needs one migration, which has **not** been
+run:
+
+**File:** `supabase-marketing-email-builder.sql`
+
+Apply it the same way as the others: Supabase dashboard -> SQL Editor -> paste
+the file -> Run. It is additive and safe to run more than once. It does three
+things:
+
+1. Adds `blocks`, `design`, and `preview_text` to `campaigns`. Nothing is
+   dropped or rewritten, and existing campaigns keep working unchanged: a row
+   with `blocks IS NULL` still renders through the old markdown template.
+2. Creates `campaign_templates` and seeds three built-in templates (Blank, Class
+   announcement, Monthly newsletter).
+3. Creates the public `marketing-media` storage bucket for images used in
+   emails, with a 10 MB limit and a public-read policy.
+
+Verify it worked:
+
+```sql
+SELECT column_name FROM information_schema.columns
+  WHERE table_name = 'campaigns' AND column_name IN ('blocks','design','preview_text');
+SELECT slug, name FROM campaign_templates ORDER BY sort_order;
+SELECT id, public FROM storage.buckets WHERE id = 'marketing-media';
+```
+
+Expect three columns, three templates, and one bucket with `public = true`.
+
+Until this is applied, the Campaigns tab still works for text messages, but
+creating or opening an email campaign will error on the missing columns.
+
+### After applying
+
+Nothing else is required. `MARKETING_LIVE` still gates real sending exactly as
+before, and `MARKETING_TEST_RECIPIENTS` still lets the builder's test-send
+button reach you while everything else stays suppressed.
+
+One thing worth doing once: open a draft, add a couple of blocks, and use the
+**Send** tab's test field to mail yourself a copy. The preview, the test, and
+the real send all render through the same code, so a test send that looks right
+is genuine evidence the campaign will.
+
 ## Things deliberately not done
 
 - The migration is written but **not applied**.
