@@ -19,7 +19,6 @@ import { loadEnv } from "./load-env.ts";
 
 loadEnv();
 
-import { getSupabase } from "../lib/supabase.ts";
 import { normalizePhone } from "../lib/marketing/phone.ts";
 import { parseCsv } from "../lib/marketing/csv-import.ts";
 import { recordConsent } from "../lib/marketing/consent.ts";
