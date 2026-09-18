@@ -2,6 +2,10 @@
 import { Resend } from "resend";
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
+import { recordConsentSafe } from "@/lib/marketing/consent";
+import { EMAIL_CONSENT_TEXT, SMS_CONSENT_TEXT } from "@/lib/marketing/consent-copy";
+import { consentMetaFrom } from "@/lib/marketing/request-meta";
+import { syncSubscriberToResend } from "@/lib/marketing/resend-audience";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -20,6 +24,8 @@ const schema = z.object({
   signatureData: z.string().min(1, "Signature required"),
   minors: z.array(minorSchema).optional().default([]),
   location: z.enum(["orem", "slc"]).optional(),
+  emailOptIn: z.boolean().optional().default(false),
+  smsOptIn: z.boolean().optional().default(false),
 });
 
 export async function POST(req: Request) {
@@ -56,6 +62,40 @@ export async function POST(req: Request) {
     if (dbError) {
       console.error("WAIVER_DB_ERROR", dbError);
       return Response.json({ error: "Failed to save waiver" }, { status: 500 });
+    }
+
+    // Marketing opt-in, recorded only after the waiver itself is safely
+    // stored. recordConsentSafe swallows its own failures: a signature on file
+    // is the point of this endpoint, and a marketing list write must never be
+    // what turns a signed waiver into a 500.
+    if (data.emailOptIn || data.smsOptIn) {
+      const { ip: consentIp, userAgent } = consentMetaFrom(req);
+      const consentText = [
+        data.emailOptIn ? EMAIL_CONSENT_TEXT : null,
+        data.smsOptIn ? SMS_CONSENT_TEXT : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const consent = await recordConsentSafe({
+        email: data.email,
+        phone: data.smsOptIn ? data.phone : null,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        channels: [
+          ...(data.emailOptIn ? [{ channel: "email" as const, optIn: true }] : []),
+          ...(data.smsOptIn ? [{ channel: "sms" as const, optIn: true }] : []),
+        ],
+        source: "waiver",
+        consentText,
+        ip: consentIp,
+        userAgent,
+        tags: [data.location ?? "orem"],
+      });
+
+      if (consent?.applied.includes("email")) {
+        await syncSubscriberToResend(consent.subscriber);
+      }
     }
 
     const signedDate = new Date().toLocaleDateString("en-US", {
