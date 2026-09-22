@@ -20,6 +20,7 @@ import type {
 } from "@/lib/supabase";
 import { CalendarClock, Copy, Download, Loader2, Mail, MessageSquare, Pencil, Plus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import SubscriberHistory from "@/components/admin/marketing/SubscriberHistory";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -230,6 +231,8 @@ function SubscribersTab() {
 
   return (
     <div>
+      <SubscriberHistory />
+
       <div className="flex flex-wrap gap-2 mb-4 items-end">
         <div className="flex-1 min-w-[200px]">
           <label className={labelCls}>Search</label>
