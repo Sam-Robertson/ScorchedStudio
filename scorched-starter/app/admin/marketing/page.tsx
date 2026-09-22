@@ -159,6 +159,7 @@ function ConfirmSend({
 
 function SubscribersTab() {
   const [subscribers, setSubscribers] = useState<SubscriberRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
@@ -178,6 +179,7 @@ function SubscribersTab() {
       if (tag) params.set("tag", tag);
       const body = await api(`/api/admin/marketing/subscribers?${params}`);
       setSubscribers(body.subscribers);
+      setTotal(body.total ?? body.subscribers.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -279,7 +281,9 @@ function SubscribersTab() {
       ) : (
         <>
           <p className={`${vulfMono.className} text-xs text-neutral-400 mb-2`}>
-            {subscribers.length} shown{subscribers.length === 500 ? " (capped at 500)" : ""}
+            {total > subscribers.length
+              ? `Newest ${subscribers.length} of ${total.toLocaleString()} shown. Search to find anyone else.`
+              : `${subscribers.length} shown`}
           </p>
           <div className="overflow-x-auto rounded-xl border border-black/10">
             <table className="w-full text-sm">
@@ -402,6 +406,15 @@ function CampaignsTab() {
   const [composing, setComposing] = useState(false);
   const [confirming, setConfirming] = useState<CampaignRecord | null>(null);
   const [confirmCount, setConfirmCount] = useState<number | null>(null);
+  // A sent email campaign whose send stopped partway. Holds the preview from
+  // the server so the confirm can say exactly how many people are affected.
+  const [resendFor, setResendFor] = useState<{
+    campaign: CampaignRecord;
+    audience: number;
+    accepted: number;
+    missed: number;
+  } | null>(null);
+  const [resendBusy, setResendBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [stats, setStats] = useState<Record<string, { sms?: SmsStats; email?: EmailStats }>>({});
   // Which campaign's test panel is open, and what is typed in it.
@@ -501,6 +514,40 @@ function CampaignsTab() {
       setError(err instanceof Error ? err.message : "Could not schedule");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function previewResend(c: CampaignRecord) {
+    setError("");
+    setNotice("");
+    setResendBusy(true);
+    try {
+      const body = await api(`/api/admin/marketing/campaigns/${c.id}/resend-missed`);
+      setResendFor({ campaign: c, audience: body.audience, accepted: body.accepted, missed: body.missed });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not check this campaign");
+    } finally {
+      setResendBusy(false);
+    }
+  }
+
+  async function doResend() {
+    if (!resendFor) return;
+    setResendBusy(true);
+    try {
+      const body = await api(`/api/admin/marketing/campaigns/${resendFor.campaign.id}/resend-missed`, {
+        method: "POST",
+      });
+      setNotice(
+        body.live
+          ? `Sent to ${body.sent} of the ${body.missed} people who had not received it${body.failed ? `, ${body.failed} failed` : ""}.`
+          : "MARKETING_LIVE is off, so nothing was actually sent. The run was logged instead."
+      );
+      setResendFor(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Resend failed");
+    } finally {
+      setResendBusy(false);
     }
   }
 
@@ -625,6 +672,16 @@ function CampaignsTab() {
                   {["draft", "scheduled"].includes(c.status) ? "EDIT" : "VIEW"}
                 </button>
               )}
+              {c.channel === "email" && c.status === "sent" && (
+                <button
+                  onClick={() => previewResend(c)}
+                  disabled={resendBusy}
+                  className={`${btnCls} border border-black/20 text-neutral-600 disabled:opacity-50`}
+                  title="Send to anyone in the audience who never received this"
+                >
+                  SEND TO MISSED
+                </button>
+              )}
               <button
                 onClick={() => duplicate(c)}
                 className={`${btnCls} border border-black/20 text-neutral-600 flex items-center gap-1.5`}
@@ -702,6 +759,43 @@ function CampaignsTab() {
       </div>
 
       {composing && <Composer onClose={() => setComposing(false)} onSaved={() => { setComposing(false); load(); }} />}
+
+      {resendFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <h2 className={`${vulfMono.className} text-sm tracking-[0.15em] uppercase mb-4`}>
+              Send to missed
+            </h2>
+            {resendFor.missed === 0 ? (
+              <p className="text-sm text-neutral-700 mb-3">
+                Everyone in the audience for <strong>{resendFor.campaign.name}</strong> already
+                received it ({resendFor.accepted} of {resendFor.audience}). Nothing to send.
+              </p>
+            ) : (
+              <p className="text-sm text-neutral-700 mb-3">
+                <strong>{resendFor.campaign.name}</strong> reached{" "}
+                <strong>{resendFor.accepted}</strong> of the {resendFor.audience} people currently
+                subscribed. Send it now to the <strong>{resendFor.missed}</strong> who never got it?
+                Nobody who already received it will get it again.
+              </p>
+            )}
+            <div className="flex gap-2 justify-end mt-6">
+              <button onClick={() => setResendFor(null)} className={`${btnCls} border border-black/20 text-neutral-600`}>
+                {resendFor.missed === 0 ? "CLOSE" : "CANCEL"}
+              </button>
+              {resendFor.missed > 0 && (
+                <button
+                  onClick={doResend}
+                  disabled={resendBusy}
+                  className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
+                >
+                  {resendBusy ? "SENDING…" : `SEND TO ${resendFor.missed}`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <ConfirmSend

@@ -7,6 +7,8 @@ import { recordConsent } from "@/lib/marketing/consent";
 import { ADMIN_UNSUBSCRIBE_CONSENT_TEXT } from "@/lib/marketing/consent-copy";
 import { syncSubscriberToResend } from "@/lib/marketing/resend-audience";
 
+const PAGE_SIZE = 20;
+
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -17,11 +19,14 @@ export async function GET(req: NextRequest) {
   const tag = url.searchParams.get("tag")?.trim() ?? "";
 
   try {
+    // A short page: the list is for finding one person, not browsing all of
+    // them, and the search box above it covers the rest. The count still
+    // reports the full match so the page can say how many are not shown.
     let query = getSupabase()
       .from("subscribers")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(500);
+      .limit(PAGE_SIZE);
 
     if (search) {
       // Matches either channel, since staff searching for a person may have
@@ -42,10 +47,10 @@ export async function GET(req: NextRequest) {
     if (smsStatus) query = query.eq("sms_status", smsStatus);
     if (tag) query = query.contains("tags", [tag]);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return Response.json({ error: error.message }, { status: 500 });
 
-    return Response.json({ subscribers: data as SubscriberRecord[] });
+    return Response.json({ subscribers: data as SubscriberRecord[], total: count ?? data?.length ?? 0 });
   } catch {
     return Response.json({ error: "Server error" }, { status: 500 });
   }
