@@ -5,6 +5,9 @@
 // this again if the wordmark changes.
 //
 //   node scripts/make-email-logo.mjs
+//
+// Then bump LOGO_VERSION in lib/marketing/email-render.ts, or Gmail's image
+// proxy will keep serving the previous file from its cache.
 import sharp from "sharp";
 import { readFileSync } from "node:fs";
 

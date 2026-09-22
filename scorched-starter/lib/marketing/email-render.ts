@@ -37,10 +37,15 @@ export type RenderedTemplate = {
   text: string;
 };
 
+// Bump this whenever scripts/make-email-logo.mjs regenerates the PNG. Gmail
+// fetches images through its own proxy and caches them by URL, so a changed
+// file at the same address keeps showing the old version for days.
+const LOGO_VERSION = "2";
+
 export function logoUrl(): string {
   // A raster copy of the wordmark. The brand asset in public/illustrations is
   // SVG, which Gmail, Outlook, and Yahoo all refuse to render in a message.
-  return `${siteUrl()}/email/logo-wordmark.png`;
+  return `${siteUrl()}/email/logo-wordmark.png?v=${LOGO_VERSION}`;
 }
 
 // The plain-text footer, mirroring the one BlockEmail renders in HTML. Both
