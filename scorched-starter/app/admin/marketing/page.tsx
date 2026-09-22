@@ -5,7 +5,7 @@
 // Every send passes through a confirm dialog that states the recipient count
 // and the channel, and says plainly when MARKETING_LIVE is off so nobody
 // mistakes a suppressed run for a real one.
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { formatPhoneForDisplay } from "@/lib/marketing/phone";
@@ -18,7 +18,7 @@ import type {
   SubscriberRecord,
 } from "@/lib/supabase";
 import { Copy, Download, Loader2, Mail, MessageSquare, Pencil, Plus, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -808,8 +808,15 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function MarketingAdminPage() {
-  const [tab, setTab] = useState<Tab>("subscribers");
+// The tab lives in the URL (?tab=campaigns) so the campaign builder can send
+// you back to the list you came from. A local useState would reset to
+// subscribers on every return, which is never where you were.
+function MarketingAdmin() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const tab: Tab = params.get("tab") === "campaigns" ? "campaigns" : "subscribers";
+  const setTab = (t: Tab) =>
+    router.replace(t === "subscribers" ? "/admin/marketing" : `/admin/marketing?tab=${t}`);
 
   return (
     <div className="p-6">
@@ -829,5 +836,15 @@ export default function MarketingAdminPage() {
 
       {tab === "subscribers" ? <SubscribersTab /> : <CampaignsTab />}
     </div>
+  );
+}
+
+// useSearchParams needs a Suspense boundary above it or the build bails out of
+// static rendering for the whole page.
+export default function MarketingAdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <MarketingAdmin />
+    </Suspense>
   );
 }

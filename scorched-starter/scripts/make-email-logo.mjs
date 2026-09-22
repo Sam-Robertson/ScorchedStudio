@@ -11,12 +11,13 @@ import { readFileSync } from "node:fs";
 const svg = readFileSync("public/illustrations/LogoWordmark.svg");
 
 // 600px wide so it stays sharp on a retina screen at its 300px display width.
-// Flattened onto the cream background because email clients do not agree on
-// how to composite transparency, and a dark-mode client can turn a transparent
-// PNG into black-on-black.
+// Kept transparent: the card it sits on is white by default and editable per
+// campaign, so any flattened color would show as a box on most of them. Gmail,
+// Outlook, and Yahoo all composite PNG alpha correctly. Dark-mode clients that
+// recolor backgrounds can dim a dark logo on transparency, and that is the
+// accepted trade for a logo that matches every card color.
 await sharp(svg, { density: 300 })
   .resize({ width: 600 })
-  .flatten({ background: "#F7F6F3" })
   .png({ compressionLevel: 9 })
   .toFile("public/email/logo-wordmark.png");
 

@@ -272,7 +272,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
     try {
       await save();
       await api(`/api/admin/marketing/campaigns/${campaignId}/send`, { method: "POST" });
-      router.push("/admin/marketing");
+      router.push("/admin/marketing?tab=campaigns");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not send");
       setSending(false);
@@ -292,7 +292,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
     return (
       <div className="p-6">
         <p className="text-sm text-red-500 mb-3">{loadError || "Not found"}</p>
-        <Link href="/admin/marketing" className="text-sm underline">
+        <Link href="/admin/marketing?tab=campaigns" className="text-sm underline">
           Back to marketing
         </Link>
       </div>
@@ -303,7 +303,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
     <div className="flex flex-col h-[calc(100vh-0px)]">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-black/10 px-4 py-3 shrink-0">
-        <Link href="/admin/marketing" className="text-neutral-400 hover:text-neutral-700">
+        <Link href="/admin/marketing?tab=campaigns" className="text-neutral-400 hover:text-neutral-700">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <input

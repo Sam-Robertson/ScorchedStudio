@@ -101,7 +101,14 @@ export default function BlockEmail({
                 src={logoUrl}
                 alt={BUSINESS_NAME}
                 width="200"
-                style={{ display: "block", margin: "0 0 28px", maxWidth: "200px" }}
+                style={{
+                  display: "block",
+                  margin: "0 0 28px",
+                  maxWidth: "200px",
+                  // The PNG is transparent, so this is the color that shows
+                  // through: the card's own, whatever a campaign sets it to.
+                  backgroundColor: design.contentBackgroundColor,
+                }}
               />
             ) : null}
 
