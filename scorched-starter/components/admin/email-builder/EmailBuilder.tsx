@@ -9,7 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
-import { ArrowLeft, Check, Loader2, Send, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, Loader2, Send, TriangleAlert } from "lucide-react";
+import { checkSchedule, formatScheduled, isoToLocalInput, localInputToIso } from "@/lib/marketing/schedule";
 import type { CampaignRecord } from "@/lib/supabase";
 import { describeSegment } from "@/lib/marketing/segment";
 import {
@@ -75,6 +76,9 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
   const [testMessage, setTestMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmingSend, setConfirmingSend] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
 
   // What was last written to the server. Autosave compares against this rather
   // than firing on every render.
@@ -110,6 +114,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
         setDesign(doc.design);
         setTags((record.segment?.tags ?? []).join(", "));
         setMatch(record.segment?.match === "all" ? "all" : "any");
+        setScheduleAt(isoToLocalInput(record.scheduled_for));
 
         savedSnapshot.current = JSON.stringify({
           name: record.name,
@@ -277,6 +282,44 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
       setSaveError(err instanceof Error ? err.message : "Could not send");
       setSending(false);
       setConfirmingSend(false);
+    }
+  }
+
+  // Saves first, like send does, so what goes out at the scheduled time is
+  // what is on screen now and not the last autosave.
+  async function schedule() {
+    const iso = localInputToIso(scheduleAt);
+    if (!iso) return;
+    setScheduling(true);
+    setScheduleError("");
+    try {
+      await save();
+      const body = await api(`/api/admin/marketing/campaigns/${campaignId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "scheduled", scheduledFor: iso }),
+      });
+      setCampaign(body.campaign as CampaignRecord);
+      router.push("/admin/marketing?tab=campaigns");
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : "Could not schedule");
+      setScheduling(false);
+    }
+  }
+
+  async function unschedule() {
+    setScheduling(true);
+    setScheduleError("");
+    try {
+      const body = await api(`/api/admin/marketing/campaigns/${campaignId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "draft" }),
+      });
+      setCampaign(body.campaign as CampaignRecord);
+      setScheduleAt("");
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : "Could not unschedule");
+    } finally {
+      setScheduling(false);
     }
   }
 
@@ -569,9 +612,66 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
                       className={`${btnCls} ${vulfMono.className} bg-[#884A20] text-white flex items-center gap-1.5 disabled:opacity-40`}
                       title={errors.length > 0 ? "Fix the errors above first" : undefined}
                     >
-                      <Send className="w-3.5 h-3.5" /> SEND CAMPAIGN
+                      <Send className="w-3.5 h-3.5" /> {campaign.status === "scheduled" ? "SEND NOW" : "SEND CAMPAIGN"}
                     </button>
                   )}
+                </div>
+
+                <hr className="border-black/10" />
+
+                <div>
+                  <label className={labelCls}>Or schedule it</label>
+                  {campaign.status === "scheduled" && campaign.scheduled_for && (
+                    <p className="text-sm text-neutral-700 mb-2 flex items-center gap-1.5">
+                      <CalendarClock className="w-4 h-4" /> Scheduled for{" "}
+                      {formatScheduled(campaign.scheduled_for)}.
+                    </p>
+                  )}
+                  {(() => {
+                    const iso = localInputToIso(scheduleAt);
+                    const check = checkSchedule(campaign.status, iso);
+                    return (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="datetime-local"
+                            className={inputCls}
+                            value={scheduleAt}
+                            onChange={(e) => setScheduleAt(e.target.value)}
+                            disabled={locked}
+                          />
+                          <button
+                            type="button"
+                            onClick={schedule}
+                            disabled={scheduling || locked || errors.length > 0 || !check.ok}
+                            className={`${btnCls} ${vulfMono.className} border border-black/20 text-neutral-700 shrink-0 disabled:opacity-40`}
+                            title={errors.length > 0 ? "Fix the errors above first" : undefined}
+                          >
+                            {scheduling ? "SAVING…" : campaign.status === "scheduled" ? "RESCHEDULE" : "SCHEDULE"}
+                          </button>
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-1.5">
+                          {scheduleError
+                            ? scheduleError
+                            : check.ok
+                              ? `Goes out ${formatScheduled(iso)} Mountain time. You can keep editing until then.`
+                              : scheduleAt
+                                ? check.error
+                                : "Times are Mountain time. It starts within 5 minutes of the time you pick."}
+                        </p>
+                        {campaign.status === "scheduled" && (
+                          <button
+                            type="button"
+                            onClick={unschedule}
+                            disabled={scheduling}
+                            className="text-xs underline text-neutral-500 mt-2 disabled:opacity-40"
+                          >
+                            Unschedule and keep as a draft
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}

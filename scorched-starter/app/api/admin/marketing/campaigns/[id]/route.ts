@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import type { CampaignRecord, CampaignStatus } from "@/lib/supabase";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
+import { checkSchedule } from "@/lib/marketing/schedule";
 import { normalizeDocument, DocumentError } from "@/lib/marketing/email-document";
 import { markdownToHtml } from "@/lib/markdown";
 
@@ -115,6 +116,22 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       if (!allowed.includes(patch.status)) {
         return Response.json({ error: "Invalid status" }, { status: 400 });
       }
+
+      // Scheduling is the one status change with a precondition: the time has
+      // to exist and be in the future, or the cron would fire it immediately
+      // and "schedule" would silently mean "send now".
+      if (patch.status === "scheduled") {
+        const when =
+          patch.scheduledFor !== undefined ? patch.scheduledFor : campaign.scheduled_for;
+        const check = checkSchedule(campaign.status, when);
+        if (!check.ok) return Response.json({ error: check.error }, { status: 400 });
+        update.scheduled_for = check.at.toISOString();
+      }
+
+      // Taking a campaign back to draft is how a schedule is undone, so the
+      // time goes with it rather than lingering to confuse the next edit.
+      if (patch.status === "draft") update.scheduled_for = null;
+
       // Pausing or cancelling takes effect on the worker's next run: its claim
       // only picks up rows whose campaign is 'sending'. Nothing else to undo.
       update.status = patch.status;

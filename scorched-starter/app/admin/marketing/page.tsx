@@ -11,13 +11,14 @@ import { getAdminToken } from "@/lib/adminAuth";
 import { formatPhoneForDisplay } from "@/lib/marketing/phone";
 import { describeSegment } from "@/lib/marketing/segment";
 import { validateSmsBody, withStopNotice } from "@/lib/marketing/message-rules";
+import { checkSchedule, formatScheduled, isoToLocalInput, localInputToIso } from "@/lib/marketing/schedule";
 import { costEstimate, formatUsd } from "@/lib/marketing/sms-segments";
 import type {
   CampaignRecord,
   ConsentEventRecord,
   SubscriberRecord,
 } from "@/lib/supabase";
-import { Copy, Download, Loader2, Mail, MessageSquare, Pencil, Plus, X } from "lucide-react";
+import { CalendarClock, Copy, Download, Loader2, Mail, MessageSquare, Pencil, Plus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const inputCls =
@@ -48,26 +49,78 @@ function ConfirmSend({
   recipientCount,
   onCancel,
   onConfirm,
+  onSchedule,
   busy,
 }: {
   campaign: CampaignRecord;
   recipientCount: number | null;
   onCancel: () => void;
   onConfirm: () => void;
+  onSchedule: (scheduledFor: string) => void;
   busy: boolean;
 }) {
+  // A campaign that already has a time opens on the schedule side, since the
+  // likely intent is to move it rather than fire it early.
+  const [mode, setMode] = useState<"now" | "later">(campaign.status === "scheduled" ? "later" : "now");
+  const [when, setWhen] = useState(isoToLocalInput(campaign.scheduled_for));
+
+  const iso = localInputToIso(when);
+  const check = checkSchedule(campaign.status, iso);
+  const who = (
+    <>
+      <strong>{recipientCount === null ? "an unknown number of" : recipientCount}</strong>{" "}
+      {recipientCount === 1 ? "person" : "people"} ({describeSegment(campaign.segment)})
+    </>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6">
         <h2 className={`${vulfMono.className} text-sm tracking-[0.15em] uppercase mb-4`}>
-          Confirm send
+          {mode === "now" ? "Confirm send" : "Schedule"}
         </h2>
-        <p className="text-sm text-neutral-700 mb-3">
-          You are about to send <strong>{campaign.name}</strong> by{" "}
-          <strong>{campaign.channel === "sms" ? "text message" : "email"}</strong> to{" "}
-          <strong>{recipientCount === null ? "an unknown number of" : recipientCount}</strong>{" "}
-          {recipientCount === 1 ? "person" : "people"} ({describeSegment(campaign.segment)}).
-        </p>
+
+        <div className="flex gap-2 mb-4">
+          {(["now", "later"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`${btnCls} ${mode === m ? "bg-neutral-900 text-white" : "border border-black/20 text-neutral-600"}`}
+            >
+              {m === "now" ? "SEND NOW" : "SCHEDULE"}
+            </button>
+          ))}
+        </div>
+
+        {mode === "now" ? (
+          <p className="text-sm text-neutral-700 mb-3">
+            You are about to send <strong>{campaign.name}</strong> by{" "}
+            <strong>{campaign.channel === "sms" ? "text message" : "email"}</strong> to {who}.
+          </p>
+        ) : (
+          <div className="mb-3">
+            <p className="text-sm text-neutral-700 mb-3">
+              <strong>{campaign.name}</strong> will go out by{" "}
+              <strong>{campaign.channel === "sms" ? "text message" : "email"}</strong> to {who}.
+            </p>
+            <label className={labelCls}>Send on</label>
+            <input
+              type="datetime-local"
+              className={inputCls}
+              value={when}
+              onChange={(e) => setWhen(e.target.value)}
+            />
+            <p className="text-xs text-neutral-500 mt-1.5">
+              {check.ok
+                ? `Goes out ${formatScheduled(iso)} Mountain time. Whoever is subscribed at that moment gets it.`
+                : when
+                  ? check.error
+                  : "Times are Mountain time. It starts within 5 minutes of the time you pick."}
+            </p>
+          </div>
+        )}
+
         {campaign.channel === "sms" && (
           <p className="text-xs text-neutral-500 mb-3">
             Texts are paced at the configured throughput and pause overnight for quiet hours. You
@@ -78,13 +131,23 @@ function ConfirmSend({
           <button onClick={onCancel} className={`${btnCls} border border-black/20 text-neutral-600`}>
             CANCEL
           </button>
-          <button
-            onClick={onConfirm}
-            disabled={busy}
-            className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
-          >
-            {busy ? "SENDING…" : "SEND"}
-          </button>
+          {mode === "now" ? (
+            <button
+              onClick={onConfirm}
+              disabled={busy}
+              className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
+            >
+              {busy ? "SENDING…" : "SEND"}
+            </button>
+          ) : (
+            <button
+              onClick={() => iso && onSchedule(iso)}
+              disabled={busy || !check.ok}
+              className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
+            >
+              {busy ? "SAVING…" : "SCHEDULE"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -417,6 +480,27 @@ function CampaignsTab() {
     }
   }
 
+  // Scheduling is a status change, not a send: the 5 minute cron starts the
+  // campaign when the time arrives, through the same path SEND uses.
+  async function doSchedule(scheduledFor: string) {
+    if (!confirming) return;
+    setSending(true);
+    setError("");
+    try {
+      const body = await api(`/api/admin/marketing/campaigns/${confirming.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "scheduled", scheduledFor }),
+      });
+      setNotice(`"${confirming.name}" will go out ${formatScheduled(body.campaign.scheduled_for)}.`);
+      setConfirming(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not schedule");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function duplicate(c: CampaignRecord) {
     try {
       const body = await api(`/api/admin/marketing/campaigns/${c.id}/duplicate`, { method: "POST" });
@@ -497,6 +581,11 @@ function CampaignsTab() {
                   <span className={`${vulfMono.className} text-[11px] rounded px-2 py-0.5 bg-neutral-100 text-neutral-600`}>
                     {c.status}
                   </span>
+                  {c.status === "scheduled" && c.scheduled_for && (
+                    <span className="text-xs text-neutral-500 flex items-center gap-1">
+                      <CalendarClock className="w-3.5 h-3.5" /> {formatScheduled(c.scheduled_for)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">{describeSegment(c.segment)}</p>
                 <p className="text-sm text-neutral-600 mt-2 whitespace-pre-wrap">{c.body}</p>
@@ -506,7 +595,12 @@ function CampaignsTab() {
             <div className="flex gap-2 mt-3 flex-wrap">
               {["draft", "scheduled", "paused"].includes(c.status) && (
                 <button onClick={() => beginSend(c)} className={`${btnCls} bg-[#884A20] text-white`}>
-                  {c.status === "paused" ? "RESUME" : "SEND"}
+                  {c.status === "paused" ? "RESUME" : c.status === "scheduled" ? "SEND NOW / RESCHEDULE" : "SEND"}
+                </button>
+              )}
+              {c.status === "scheduled" && (
+                <button onClick={() => setStatus(c, "draft")} className={`${btnCls} border border-black/20 text-neutral-600`}>
+                  UNSCHEDULE
                 </button>
               )}
               {c.status === "sending" && (
@@ -514,7 +608,7 @@ function CampaignsTab() {
                   PAUSE
                 </button>
               )}
-              {["sending", "paused", "scheduled"].includes(c.status) && (
+              {["sending", "paused"].includes(c.status) && (
                 <button onClick={() => setStatus(c, "cancelled")} className={`${btnCls} border border-red-200 text-red-600`}>
                   CANCEL
                 </button>
@@ -613,6 +707,7 @@ function CampaignsTab() {
           busy={sending}
           onCancel={() => setConfirming(null)}
           onConfirm={doSend}
+          onSchedule={doSchedule}
         />
       )}
     </div>
