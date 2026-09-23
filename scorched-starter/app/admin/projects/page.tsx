@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
+import { clearBoardUser, getBoardUser, setBoardUser } from "@/lib/boardUser";
 import {
   Archive,
   ArchiveX,
@@ -131,7 +132,10 @@ function avatarColor(name: string | null): { bg: string; text: string } {
 
 // ── UserSelect ────────────────────────────────────────────────────────────────
 
-function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
+function UserSelect({ onSelect }: { onSelect: (name: string, remember: boolean) => void }) {
+  // On by default, like the admin login: the same person opens this board
+  // from the same device most days.
+  const [remember, setRemember] = useState(true);
   return (
     <section className="container-px py-20 max-w-md mx-auto">
       <div className="mb-8">
@@ -149,7 +153,7 @@ function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
           return (
             <button
               key={u.name}
-              onClick={() => onSelect(u.name)}
+              onClick={() => onSelect(u.name, remember)}
               className="w-full flex items-center gap-4 rounded-2xl border border-black/10 bg-white p-5 shadow-sm hover:shadow-md hover:border-black/20 transition-all text-left"
             >
               <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${colors.bg}`}>
@@ -160,6 +164,15 @@ function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
           );
         })}
       </div>
+    <label className="flex items-center gap-2 text-sm text-neutral-600 select-none mt-6">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-4 w-4 rounded border-black/20"
+        />
+        Remember me on this device
+      </label>
     </section>
   );
 }
@@ -1665,17 +1678,17 @@ export default function AdminProjectsPage() {
       return;
     }
     setToken(saved);
-    const user = sessionStorage.getItem("projectsUser");
+    const user = getBoardUser("projectsUser");
     if (user) setCurrentUser(user);
   }, [router]);
 
-  function handleSelectUser(name: string) {
-    sessionStorage.setItem("projectsUser", name);
+  function handleSelectUser(name: string, remember: boolean) {
+    setBoardUser("projectsUser", name, remember);
     setCurrentUser(name);
   }
 
   function handleSwitchUser() {
-    sessionStorage.removeItem("projectsUser");
+    clearBoardUser("projectsUser");
     setCurrentUser(null);
   }
 

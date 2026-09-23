@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { setBoardUser, type BoardKey } from "@/lib/boardUser";
 import { ChevronLeft } from "lucide-react";
 import { vulfMono } from "@/app/fonts";
 
@@ -12,7 +14,7 @@ const BOARDS = [
     label: "Operations Board",
     bg: "bg-violet-100",
     text: "text-violet-700",
-    sessionKey: "projectsUser",
+    sessionKey: "projectsUser" as BoardKey,
     href: "/admin/projects",
   },
   {
@@ -22,16 +24,19 @@ const BOARDS = [
     label: "Social Board",
     bg: "bg-sky-100",
     text: "text-sky-700",
-    sessionKey: "socialUser",
+    sessionKey: "socialUser" as BoardKey,
     href: "/admin/social",
   },
 ];
 
 export default function AdminBoardsPage() {
   const router = useRouter();
+  // On by default, like the admin login: these run on studio devices where
+  // the same person opens the same board every day.
+  const [remember, setRemember] = useState(true);
 
   function handleSelect(board: (typeof BOARDS)[0]) {
-    sessionStorage.setItem(board.sessionKey, board.fullName);
+    setBoardUser(board.sessionKey, board.fullName, remember);
     router.push(board.href);
   }
 
@@ -72,6 +77,15 @@ export default function AdminBoardsPage() {
           </button>
         ))}
       </div>
+      <label className="flex items-center gap-2 text-sm text-neutral-600 select-none mt-6">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-4 w-4 rounded border-black/20"
+        />
+        Remember me on this device
+      </label>
     </section>
   );
 }

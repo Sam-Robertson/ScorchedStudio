@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
+import { clearBoardUser, getBoardUser, setBoardUser } from "@/lib/boardUser";
 import clsx from "clsx";
 import {
   CalendarDays,
@@ -123,7 +124,10 @@ function initials(name: string | null) {
 
 // ── UserSelect ────────────────────────────────────────────────────────────────
 
-function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
+function UserSelect({ onSelect }: { onSelect: (name: string, remember: boolean) => void }) {
+  // On by default, like the admin login: the same person opens this board
+  // from the same device most days.
+  const [remember, setRemember] = useState(true);
   return (
     <section className="container-px py-20 max-w-md mx-auto">
       <div className="mb-8">
@@ -144,7 +148,7 @@ function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
           return (
             <button
               key={u.name}
-              onClick={() => onSelect(u.name)}
+              onClick={() => onSelect(u.name, remember)}
               className="w-full flex items-center gap-4 rounded-2xl border border-black/10 bg-white p-5 shadow-sm hover:shadow-md hover:border-black/20 transition-all text-left"
             >
               <div
@@ -166,6 +170,15 @@ function UserSelect({ onSelect }: { onSelect: (name: string) => void }) {
           );
         })}
       </div>
+    <label className="flex items-center gap-2 text-sm text-neutral-600 select-none mt-6">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-4 w-4 rounded border-black/20"
+        />
+        Remember me on this device
+      </label>
     </section>
   );
 }
@@ -1549,7 +1562,7 @@ export default function AdminSocialPage() {
     const saved = getAdminToken();
     if (!saved) { router.replace("/admin"); return; }
     setToken(saved);
-    const user = sessionStorage.getItem("socialUser");
+    const user = getBoardUser("socialUser");
     if (user) setCurrentUser(user);
   }, [router]);
 
@@ -1557,8 +1570,8 @@ export default function AdminSocialPage() {
   if (!currentUser)
     return (
       <UserSelect
-        onSelect={(name) => {
-          sessionStorage.setItem("socialUser", name);
+        onSelect={(name, remember) => {
+          setBoardUser("socialUser", name, remember);
           setCurrentUser(name);
         }}
       />
@@ -1569,7 +1582,7 @@ export default function AdminSocialPage() {
       token={token}
       currentUser={currentUser}
       onSwitchUser={() => {
-        sessionStorage.removeItem("socialUser");
+        clearBoardUser("socialUser");
         setCurrentUser(null);
       }}
     />
