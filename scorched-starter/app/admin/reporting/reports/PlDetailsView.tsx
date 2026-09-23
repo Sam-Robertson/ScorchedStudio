@@ -130,7 +130,7 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
   const Th = ({ label, col, right, sticky }: { label: string; col: SortCol; right?: boolean; sticky?: boolean }) => (
     <th
       onClick={() => toggleSort(col)}
-      className={`px-4 pb-3 pt-4 font-medium whitespace-nowrap cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""} ${sticky ? "sticky left-0 z-10 bg-white" : ""}`}
+      className={`px-3 pb-3 pt-4 font-medium leading-tight align-bottom cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""} ${sticky ? "sticky left-0 z-10 bg-white whitespace-nowrap" : ""}`}
     >
       {label}{sortCol === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
     </th>
@@ -143,7 +143,7 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
   function drillCell(row: Row, col: DrillCol, className: string) {
     const active = drill?.month === row.period_month && drill?.col === col;
     return (
-      <td className={`px-4 py-2.5 text-right tabular-nums ${className}`}>
+      <td className={`px-3 py-2.5 text-right tabular-nums ${className}`}>
         <button
           onClick={() => toggleDrill(row.period_month, col)}
           className={`underline decoration-dotted underline-offset-4 cursor-pointer hover:text-[#884A20] transition-colors ${
@@ -165,9 +165,9 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
             <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No posted activity in this range.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className={`${vulfMono.className} w-full min-w-[960px] text-sm`}>
+              <table className={`${vulfMono.className} w-full text-[13px]`}>
                 <thead>
-                  <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
+                  <tr className="border-b border-black/10 text-left text-[10px] uppercase tracking-wide text-neutral-400">
                     <Th label="Month" col="month" sticky />
                     <Th label="Net Revenue" col="revenue" right />
                     <Th label="COGS" col="cogs" right />
@@ -183,20 +183,20 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
                 <tbody>
                   {rows.map((r) => renderRowGroup(r))}
                   <tr className="border-t border-black/15 bg-neutral-50/60">
-                    <td className="px-4 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide sticky left-0 z-10 bg-neutral-50">Total</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totals.revenue)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.cogs)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.labor)}</td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums font-bold ${totals.gross < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+                    <td className="px-3 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide sticky left-0 z-10 bg-neutral-50">Total</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totals.revenue)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.cogs)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.labor)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.gross < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
                       {fmtMoney0(totals.gross)}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.opex)}</td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums font-bold ${totals.ebitda < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.opex)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.ebitda < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
                       {fmtMoney0(totals.ebitda)}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.depreciation)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.interest)}</td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums font-bold ${totals.net < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.depreciation)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-neutral-700">{fmtMoney0(totals.interest)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.net < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
                       {fmtMoney0(totals.net)}
                     </td>
                   </tr>
@@ -221,29 +221,29 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
     return (
       <Fragment key={r.period_month}>
         <tr className="group border-b border-black/5 hover:bg-neutral-50/60">
-          <td className="px-4 py-2.5 font-semibold text-neutral-800 sticky left-0 z-10 bg-white group-hover:bg-neutral-50">
+          <td className="px-3 py-2.5 font-semibold text-neutral-800 whitespace-nowrap sticky left-0 z-10 bg-white group-hover:bg-neutral-50">
             {monthShort(r.period_month)}
           </td>
           {drillCell(r, "revenue", "text-neutral-700")}
           {drillCell(r, "cogs", "text-neutral-600")}
           {drillCell(r, "labor", "text-neutral-600")}
-          <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.gross < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${r.gross < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
             {fmtMoney0(r.gross)}
           </td>
           {drillCell(r, "opex", "text-neutral-600")}
-          <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.ebitda < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${r.ebitda < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
             {fmtMoney0(r.ebitda)}
           </td>
           {drillCell(r, "depreciation", "text-neutral-600")}
           {drillCell(r, "interest", "text-neutral-600")}
-          <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.net < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
+          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${r.net < 0 ? "text-[#C25B5B]" : "text-neutral-800"}`}>
             {fmtMoney0(r.net)}
           </td>
         </tr>
         {expanded && drill && (
           <tr className="border-b border-black/5">
-            <td colSpan={10} className="px-4 py-4 bg-neutral-50/60">
-              <div className="rounded-xl border border-black/10 bg-white p-4">
+            <td colSpan={10} className="px-3 py-4 bg-neutral-50/60">
+              <div className="rounded-xl border border-black/10 bg-white p-4 max-w-2xl sticky left-3">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-500`}>
                     {DRILL_LABEL[drill.col]} — {monthShort(r.period_month)}
