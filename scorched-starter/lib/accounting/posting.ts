@@ -75,6 +75,12 @@ export function buildLinesForBankRule(
       break;
     case "card_payoff": {
       if (!targetAccountCode) return { ok: false, reason: "rule needs a target card account" };
+      // A card_payoff rule on the card's own feed (a statement credit or
+      // cash-back reward pointed at the same card) would debit and credit
+      // one account and change nothing. Six such no-op entries hid $1,177
+      // of rewards until the September 2026 audit; those belong on an
+      // expense/misc account instead.
+      if (targetAccountCode === srcAccountCode) return { ok: false, reason: "card_payoff needs the checking feed as source and the card as target, not the card itself; use an expense template for a card credit" };
       input = { template: "card_payoff", input: { amount, checkingAccountCode: srcAccountCode, cardAccountCode: targetAccountCode, memo } };
       break;
     }

@@ -93,11 +93,17 @@ from projection_months pm
 left join (select period_month, sum(revenue) revenue, sum(ebitda) ebitda from v_pl_monthly group by 1) a using (period_month);
 
 -- Trailing-12 DSCR (EBITDA / principal + interest actually paid)
+--
+-- A loan payment debits the liability (principal, positive in journal_lines)
+-- and debits 8000 (interest, positive). Both are money out, so both are added
+-- as-is. This used to negate the principal leg, which made a $574.66 LiftFund
+-- payment count as $55.34 of debt service (interest minus principal). Found in
+-- the September 2026 audit. Re-run this statement in the SQL editor to apply.
 create or replace view v_dscr_ttm as
 with e as (select period_month, sum(ebitda) ebitda from v_pl_monthly group by 1),
      ds as (
        select date_trunc('month', je.entry_date)::date period_month,
-              sum(case when a.type='liability' and a.code in ('2500','2510','2520') then -jl.amount else 0 end)
+              sum(case when a.type='liability' and a.code in ('2500','2510','2520') then jl.amount else 0 end)
               + sum(case when a.code='8000' then jl.amount else 0 end) as debt_service
        from journal_lines jl join journal_entries je on je.id=jl.entry_id join accounts a on a.id=jl.account_id
        where je.template = 'loan_payment' group by 1)

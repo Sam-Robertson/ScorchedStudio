@@ -133,3 +133,9 @@ test("transfer: inflow (credit) makes the feed account the destination, not the 
     assert.equal(clearing.amount, -500); // Cr 1100 — clearing account drains
   }
 });
+
+test("card_payoff refuses a rule whose target is the feed account itself (a no-op posting)", () => {
+  const r = rule({ template: "card_payoff", targetAccountId: "acct-2000" });
+  const result = buildLinesForBankRule(r, txn({ amount: -961.24 }), { srcAccountCode: "2000", targetAccountCode: "2000" });
+  assert.equal(result.ok, false);
+});
