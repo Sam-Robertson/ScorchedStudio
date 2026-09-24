@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
+import { todayInDenverYmd } from "@/lib/timezone";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -36,7 +37,7 @@ export default function PlOverviewView({ token, query }: { token: string; query:
   // dramatically "below average" early in the month, which is misleading
   // rather than useful (e.g. "99% below" on the 2nd of the month).
   const seasonalityNow = useMemo(() => {
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentMonth = todayInDenverYmd().slice(0, 7); // UTC rolls over at 6pm Denver on the last day of a month
     const rows = [...(seasonality?.rows ?? [])]
       .filter((r) => r.index != null && r.period_month.slice(0, 7) !== currentMonth)
       .sort((a, b) => a.period_month.localeCompare(b.period_month));

@@ -6,6 +6,7 @@
 
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
+import { denverDateKey } from "@/lib/timezone";
 
 // ── Source config ─────────────────────────────────────────────────────────────
 
@@ -86,12 +87,15 @@ export function getBuckets(tf: TimeFrame): { key: string; label: string }[] {
   return out;
 }
 
+// created_at is a UTC timestamp; bucket it by the studio's calendar day so
+// an 8pm booking lands on the day it was made, not the next UTC day, and so
+// every chart on these tabs agrees with the range filter below.
 export function bucketKey(createdAt: string, tf: TimeFrame): string {
-  const d = new Date(createdAt);
-  if (tf === "day") return toDateStr(d);
-  if (tf === "month") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const day = denverDateKey(createdAt);
+  if (tf === "day") return day;
+  if (tf === "month") return day.slice(0, 7);
+  const d = new Date(day + "T12:00:00");
   const sun = addDays(d, -d.getDay());
-  sun.setHours(0, 0, 0, 0);
   return toDateStr(sun);
 }
 
@@ -281,7 +285,7 @@ export function buildRepeatData(bookings: BookingRecord[]) {
 
   const cohortMap: Record<string, { total: number; returned: number }> = {};
   for (const bs of customers) {
-    const month = bs[0].created_at.slice(0, 7);
+    const month = denverDateKey(bs[0].created_at).slice(0, 7);
     if (!cohortMap[month]) cohortMap[month] = { total: 0, returned: 0 };
     cohortMap[month].total++;
     if (bs.length >= 2) cohortMap[month].returned++;
@@ -317,7 +321,7 @@ export function bookingsInRange(bookings: BookingRecord[], query: string): Booki
   const { start, end } = rangeBounds(query);
   if (!start && !end) return bookings;
   return bookings.filter((b) => {
-    const d = b.created_at.slice(0, 10);
+    const d = denverDateKey(b.created_at);
     if (start && d < start) return false;
     if (end && d > end) return false;
     return true;

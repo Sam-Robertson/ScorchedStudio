@@ -64,10 +64,15 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
     const cutoverMonth = ONLINE_BOOKING_LAUNCH.slice(0, 7);
     return months.map((m) => {
       const isEstimate = m < cutoverMonth;
+      // The launch month is both: estimated seats up to the launch date plus
+      // real bookings after it. Showing only the real part made March 2026
+      // read as a collapse against February.
+      const isMixed = m === cutoverMonth;
       return {
         label: monthShort(`${m}-01`),
-        seats: isEstimate ? (estByMonth.get(m) ?? 0) : (realByMonth.get(m) ?? 0),
+        seats: isEstimate ? (estByMonth.get(m) ?? 0) : (realByMonth.get(m) ?? 0) + (isMixed ? (estByMonth.get(m) ?? 0) : 0),
         estimated: isEstimate,
+        mixed: isMixed,
       };
     });
   }, [bookings, estimated, query]);
@@ -149,12 +154,12 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null;
-                    const row = payload[0]?.payload as { seats: number; estimated: boolean } | undefined;
+                    const row = payload[0]?.payload as { seats: number; estimated: boolean; mixed?: boolean } | undefined;
                     if (!row) return null;
                     return (
                       <div style={{ fontFamily: "var(--font-display,monospace)", fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", padding: "10px 14px" }}>
                         <p style={{ fontWeight: "bold", color: "#374151", marginBottom: 4 }}>{label}</p>
-                        <p style={{ color: GREEN }}>{row.seats} seats {row.estimated ? "(estimated)" : "booked"}</p>
+                        <p style={{ color: GREEN }}>{row.seats} seats {row.estimated ? "(estimated)" : row.mixed ? "(estimated before launch, booked after)" : "booked"}</p>
                       </div>
                     );
                   }}

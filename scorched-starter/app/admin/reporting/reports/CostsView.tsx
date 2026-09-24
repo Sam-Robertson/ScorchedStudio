@@ -228,8 +228,9 @@ export default function CostsView({ token, query }: { token: string; query: stri
                     <span className="tabular-nums">{fmtMoney0(pieTotal)}</span>
                   </div>
                   <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-3 px-2.5`}>
-                    Operating expenses plus labor (COGS excluded), matching the monthly chart below. Click an account to
-                    isolate it in that chart. Full account list in the table at the bottom of this page.
+                    Operating expenses plus labor (COGS excluded). The monthly chart below also includes COGS, so its
+                    bars sum higher than this total. Click an account to isolate it in that chart. Full account list in
+                    the table at the bottom of this page.
                   </p>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>

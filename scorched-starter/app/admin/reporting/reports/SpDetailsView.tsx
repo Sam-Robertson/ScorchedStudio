@@ -15,7 +15,7 @@ import {
 const RECENT_DAYS = 15;   // default window: the 15 most recent days with data
 const JUMP_PAD_DAYS = 3;  // jump mode: the picked day ± this many days
 
-type Row = { date: string; dow: number; orders: number; items: number; netSales: number | null; avgOrderValue: number };
+type Row = { date: string; dow: number; orders: number; items: number; netSales: number | null; avgOrderValue: number; grossOrderRevenue: number };
 type SortCol = "date" | "dow" | "orders" | "items" | "netSales" | "aov";
 type SortDir = "desc" | "asc";
 
@@ -42,6 +42,7 @@ export default function SpDetailsView({ token }: { token: string }) {
       items: d.items,
       netSales: salesByDate.get(d.date) ?? null,
       avgOrderValue: d.avgOrderValue,
+      grossOrderRevenue: d.grossOrderRevenue ?? d.avgOrderValue * d.orders,
     }));
   }, [data]);
 
@@ -68,9 +69,12 @@ export default function SpDetailsView({ token }: { token: string }) {
     return out;
   }, [allRows, jumpDate, sortCol, sortDir]);
 
+  // Per-row average order value is gross (line items before discounts and
+  // refunds), so the total row averages the same figure; dividing net sales
+  // by orders here used to give a number lower than every row above it.
   const totals = useMemo(() => rows.reduce(
-    (t, r) => ({ orders: t.orders + r.orders, items: t.items + r.items, netSales: t.netSales + (r.netSales ?? 0) }),
-    { orders: 0, items: 0, netSales: 0 },
+    (t, r) => ({ orders: t.orders + r.orders, items: t.items + r.items, netSales: t.netSales + (r.netSales ?? 0), gross: t.gross + r.grossOrderRevenue }),
+    { orders: 0, items: 0, netSales: 0, gross: 0 },
   ), [rows]);
 
   function toggleSort(col: SortCol) {
@@ -127,7 +131,7 @@ export default function SpDetailsView({ token }: { token: string }) {
                     <Th label="Orders" col="orders" right />
                     <Th label="Items" col="items" right />
                     <Th label="Net Sales" col="netSales" right />
-                    <Th label="Avg Order Value" col="aov" right />
+                    <Th label="Avg Order Value (gross)" col="aov" right />
                   </tr>
                 </thead>
                 <tbody>
@@ -151,7 +155,7 @@ export default function SpDetailsView({ token }: { token: string }) {
                     <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{totals.items.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totals.netSales)}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">
-                      {totals.orders > 0 ? fmtMoney2(totals.netSales / totals.orders) : "—"}
+                      {totals.orders > 0 ? fmtMoney2(totals.gross / totals.orders) : "—"}
                     </td>
                   </tr>
                 </tbody>

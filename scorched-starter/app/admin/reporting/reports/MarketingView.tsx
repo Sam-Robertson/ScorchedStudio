@@ -8,6 +8,7 @@
 import { useMemo, useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import type { BookingRecord } from "@/lib/supabase";
+import { denverDateKey } from "@/lib/timezone";
 import {
   BarChart, Bar, Cell, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -63,7 +64,23 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
     [costs],
   );
   const top = useMemo(() => topChannel(rangedConfirmed), [rangedConfirmed]);
-  const costPerBooking = rangedConfirmed.length > 0 ? marketingSpend / rangedConfirmed.length : null;
+  // Spend covers the whole range, so the denominator has to as well: before
+  // ONLINE_BOOKING_LAUNCH the bookings table is empty and the Square-order
+  // estimate stands in, the same way the chart below handles it. Without
+  // this, YTD and ALL divided a year of spend by six months of bookings.
+  const estimatedInRange = useMemo(() => {
+    const { start, end } = rangeBounds(query);
+    let n = 0;
+    for (const row of estimated?.daily ?? []) {
+      if (row.date >= ONLINE_BOOKING_LAUNCH) continue;
+      if (start && row.date < start) continue;
+      if (end && row.date > end) continue;
+      n += row.orders;
+    }
+    return n;
+  }, [estimated, query]);
+  const bookingsForCost = rangedConfirmed.length + estimatedInRange;
+  const costPerBooking = bookingsForCost > 0 ? marketingSpend / bookingsForCost : null;
 
   // ── Spend vs bookings by month ─────────────────────────────────────────────
   // Three sources merged by month: the Costs report's monthly Marketing
@@ -84,7 +101,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
     }
     const bookingsByMonth = new Map<string, number>();
     for (const b of rangedConfirmed) {
-      const key = b.created_at.slice(0, 7);
+      const key = denverDateKey(b.created_at).slice(0, 7); // studio month, not UTC
       bookingsByMonth.set(key, (bookingsByMonth.get(key) ?? 0) + 1);
     }
     const estByMonth = new Map<string, number>();
@@ -180,11 +197,15 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Marketing spend" value={costsLoading ? "…" : fmtMoney0(marketingSpend)} sub="account 6200, selected range" />
-        <KpiCard label="Confirmed bookings" value={rangedConfirmed.length.toLocaleString()} sub="selected range" />
+        <KpiCard
+          label="Confirmed bookings"
+          value={rangedConfirmed.length.toLocaleString()}
+          sub={estimatedInRange > 0 ? `selected range, plus ~${estimatedInRange.toLocaleString()} estimated pre-launch` : "selected range"}
+        />
         <KpiCard
           label="Cost per booking"
           value={costsLoading ? "…" : costPerBooking == null ? "—" : fmtMoney0(costPerBooking)}
-          sub="spend ÷ confirmed bookings"
+          sub={estimatedInRange > 0 ? "spend ÷ bookings (incl. pre-launch estimate)" : "spend ÷ confirmed bookings"}
         />
         <KpiCard
           label="Top channel"

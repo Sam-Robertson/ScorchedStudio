@@ -47,6 +47,10 @@ export default function SalesOverviewView({ token, query }: { token: string; que
   const [dailyDetailMounted, setDailyDetailMounted] = useState(false);
 
   const dataStartsAt = data?.dataStartsAt ?? DATA_STARTS_AT;
+  // Everything on this tab is Square only (in-studio register sales); online
+  // bookings paid through Stripe are on the P&L, not here. The KPI sub-label
+  // used to claim "since grand opening" for every range.
+  const rangeSub = query ? "selected range, Square only" : `since ${dateShort(dataStartsAt)} (grand opening), Square only`;
 
   // dataStartsAt is the first date with real per-day Square order data
   // (a few days after the 2025-07-28 grand opening) — filtering to it here
@@ -130,15 +134,13 @@ export default function SalesOverviewView({ token, query }: { token: string; que
           {/* KPI strip — order-level stats; no customer count exists in the data */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {isCount ? (
-              <KpiCard label="Items Sold" value={fmtCount(stats?.totalItems ?? 0)}
-                sub={`since ${dateShort(dataStartsAt)} (grand opening)`} />
+              <KpiCard label="Items Sold" value={fmtCount(stats?.totalItems ?? 0)} sub={rangeSub} />
             ) : (
-              <KpiCard label="Net Sales" value={fmtMoney0(netSalesOrderPeriod)}
-                sub={`since ${dateShort(dataStartsAt)} (grand opening)`} />
+              <KpiCard label="Square Net Sales" value={fmtMoney0(netSalesOrderPeriod)} sub={rangeSub} />
             )}
             <KpiCard label="Total Orders" value={(stats?.totalOrders ?? 0).toLocaleString()}
               sub={`${stats?.daysWithOrderData ?? 0} days with order data`} />
-            <KpiCard label="Avg Order Value" value={fmtMoney2(stats?.avgOrderValue ?? 0)} />
+            <KpiCard label="Avg Order Value" value={fmtMoney2(stats?.avgOrderValue ?? 0)} sub="gross, before discounts and refunds" />
             <KpiCard label="Avg Items per Order" value={(stats?.avgItemsPerOrder ?? 0).toFixed(1)} />
           </div>
 

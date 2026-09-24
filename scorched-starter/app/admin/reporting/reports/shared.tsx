@@ -43,7 +43,7 @@ export type SalesResponse = {
   revenueByDayOfWeek: { day: string; revenue: number }[];
   orderStats: { totalOrders: number; avgOrderValue: number; avgItemsPerOrder: number; totalItems: number; daysWithOrderData: number };
   topItems: { name: string; revenue: number; quantity: number }[];
-  dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[];
+  dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number; grossOrderRevenue: number }[];
   dataStartsAt?: string;
 };
 
@@ -470,7 +470,11 @@ export function JournalDrillDown({ token, from, to, accountCodes }: {
   const codeSet = new Set(accountCodes);
   const rows = (entries ?? []).map((e) => {
     const matching = e.journal_lines.filter((l) => l.accounts && codeSet.has(l.accounts.code));
-    const amount = matching.reduce((s, l) => s + Number(l.amount), 0);
+    // Ledger lines are debit-positive, so revenue is stored negative. The
+    // P&L cells this panel opens from already show revenue positive (the SQL
+    // views flip it), so flip it here too or a $42,000 revenue cell drills
+    // down to a list of negatives and a -$42,000 total.
+    const amount = matching.reduce((s, l) => s + (l.accounts?.type === "revenue" ? -Number(l.amount) : Number(l.amount)), 0);
     const accountNames = [...new Set(matching.map((l) => l.accounts!.name))];
     const lineMemo = matching.map((l) => l.memo).find((m) => m) ?? null;
     return { id: e.id, date: e.entry_date, memo: e.memo ?? lineMemo, amount, accountNames };
