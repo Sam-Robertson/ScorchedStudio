@@ -74,9 +74,10 @@ export default function ReconcileTab({ token }: { token: string }) {
         <div className="rounded-2xl border border-black/10 bg-neutral-50 px-4 py-3 flex items-start gap-3">
           <Info className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
           <p className="text-xs text-neutral-500 flex-1">
-            Small differences here are expected and not a bug — these bank connections are test-scoped,
-            so each one&apos;s live balance doesn&apos;t necessarily match the ledger to the cent.
-            A large or growing gap is still worth investigating.
+            The Plaid balance is the bank&apos;s live figure, so a difference here is real: usually a
+            transaction that landed on one side but not the other, or one that was categorized against
+            the wrong account. Timing (pending charges, payouts in transit) explains a few days of drift
+            at most. A gap that persists is worth tracing.
           </p>
           <button onClick={dismissNote} aria-label="Dismiss note" className="text-neutral-400 hover:text-neutral-600 shrink-0">
             <X className="w-4 h-4" />
