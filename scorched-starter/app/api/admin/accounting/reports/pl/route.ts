@@ -68,12 +68,19 @@ function mergeLines(rows: PlLineRow[]): PlLineRow[] {
   return [...byKey.values()].sort((a, b) => a.period_month.localeCompare(b.period_month) || a.code.localeCompare(b.code));
 }
 
+function firstOfMonth(date: string | null): string | null {
+  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(0, 7)}-01` : date;
+}
+
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const sb = getSupabase();
     const { searchParams } = new URL(req.url);
-    const start = searchParams.get("start"); // YYYY-MM-DD
+    // period_month is always the 1st, so a start date inside a month has to
+    // be pulled back to the 1st or that whole month drops out (a custom range
+    // from Jul 15 lost July here while the Sales tab kept Jul 15-31).
+    const start = firstOfMonth(searchParams.get("start")); // YYYY-MM-DD
     const end = searchParams.get("end");
     const locationId = searchParams.get("locationId");
 

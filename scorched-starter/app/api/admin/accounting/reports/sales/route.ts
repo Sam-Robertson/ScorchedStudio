@@ -9,6 +9,10 @@
 // comment used to warn about have since been replaced with real per-day
 // settlements).
 //
+// Order-level figures are gross line-item sales (before discounts and
+// refunds, gift card lines excluded); daily net sales are net of both. The
+// UI labels them as such.
+//
 // No product "category" is buildable: Square line items only carry a
 // catalog_object_id and a name, not a category — that needs a separate
 // Catalog API sync this system doesn't have. "Top items by revenue" (by
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest) {
     const itemRevenueCents = new Map<string, number>();
     const itemQty = new Map<string, number>();
     let daysWithOrderData = 0;
-    const dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number }[] = [];
+    const dailyOrderStats: { date: string; orders: number; items: number; avgOrderValue: number; grossOrderRevenue: number }[] = [];
 
     for (const r of rows) {
       const raw = r.raw as SettlementRaw;
@@ -94,6 +98,10 @@ export async function GET(req: NextRequest) {
         dayOrders++;
         let orderCents = 0;
         for (const li of order.line_items ?? []) {
+          // Same exclusion as lib/square-revenue.ts: a gift card sale is
+          // deferred revenue, not an item sold, so it stays out of the item
+          // count, average order value and the top-items list.
+          if (li.item_type === "GIFT_CARD") continue;
           const qty = parseFloat(li.quantity ?? "1") || 1;
           const cents = li.gross_sales_money?.amount ?? 0;
           totalItems += qty;
@@ -115,6 +123,7 @@ export async function GET(req: NextRequest) {
         orders: dayOrders,
         items: dayItems,
         avgOrderValue: dayOrders > 0 ? Math.round(dayCents / dayOrders) / 100 : 0,
+        grossOrderRevenue: Math.round(dayCents) / 100,
       });
     }
 

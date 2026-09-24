@@ -19,12 +19,16 @@ const COGS_TYPE = "cogs";
 
 type PlLineRow = { period_month: string; location_id: string | null; code: string; name: string; type: string; amount: number };
 
+function firstOfMonth(date: string | null): string | null {
+  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(0, 7)}-01` : date;
+}
+
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const sb = getSupabase();
     const { searchParams } = new URL(req.url);
-    const start = searchParams.get("start");
+    const start = firstOfMonth(searchParams.get("start")); // see pl/route.ts: period_month is always the 1st
     const end = searchParams.get("end");
 
     let query = sb.from("v_pl_lines").select("*").in("type", ["expense", "cogs"]).order("period_month").order("code");

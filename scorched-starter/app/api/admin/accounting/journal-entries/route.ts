@@ -27,32 +27,60 @@ export async function GET(req: NextRequest) {
       .filter(Boolean);
 
     const sb = getSupabase();
-    let query = sb
-      .from("journal_entries")
-      .select("*, locations(key,name), journal_lines(*, accounts(code,name,type))")
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      // When filtering by account, over-fetch and filter in JS (the nested
-      // account code isn't a top-level column), then trim to the requested
-      // limit afterwards so the caller still gets up to `limit` matches.
-      .limit(accountCodes.length > 0 ? 2000 : limit);
 
-    if (from) query = query.gte("entry_date", from);
-    if (to) query = query.lte("entry_date", to);
-
-    const { data, error } = await query;
-    if (error) {
-      console.error("ACCOUNTING_JOURNAL_GET_ERROR", error);
-      return Response.json({ error: "Failed to fetch journal entries" }, { status: 500 });
+    // With an account filter, find the matching entry ids first (journal_lines
+    // joined to accounts and entries), then load those entries whole. This
+    // used to over-fetch the 2000 newest entries in the window and filter in
+    // JS, which silently dropped older matches once the ledger outgrew that.
+    let entryIds: string[] | null = null;
+    if (accountCodes.length > 0) {
+      let idQuery = sb
+        .from("journal_lines")
+        .select("entry_id, accounts!inner(code), journal_entries!inner(entry_date)")
+        .in("accounts.code", accountCodes);
+      if (from) idQuery = idQuery.gte("journal_entries.entry_date", from);
+      if (to) idQuery = idQuery.lte("journal_entries.entry_date", to);
+      const { data: idRows, error: idErr } = await idQuery;
+      if (idErr) {
+        console.error("ACCOUNTING_JOURNAL_GET_ERROR", idErr);
+        return Response.json({ error: "Failed to fetch journal entries" }, { status: 500 });
+      }
+      entryIds = [...new Set((idRows ?? []).map((r) => r.entry_id as string))];
+      if (entryIds.length === 0) return Response.json({ entries: [] });
     }
 
-    let entries = data ?? [];
-    if (accountCodes.length > 0) {
-      const codeSet = new Set(accountCodes);
-      type EntryWithLines = { journal_lines?: { accounts?: { code?: string } | null }[] };
-      entries = entries
-        .filter((e: EntryWithLines) => (e.journal_lines ?? []).some((l) => l.accounts?.code && codeSet.has(l.accounts.code)))
-        .slice(0, limit);
+    const select = "*, locations(key,name), journal_lines(*, accounts(code,name,type))";
+    type EntryRow = { entry_date: string; created_at: string };
+    let entries: EntryRow[] = [];
+    if (entryIds) {
+      // Chunked so the id list stays inside URL limits; sorted and trimmed
+      // after, since each chunk is only ordered within itself.
+      const CHUNK = 200;
+      for (let i = 0; i < entryIds.length; i += CHUNK) {
+        const { data, error } = await sb.from("journal_entries").select(select).in("id", entryIds.slice(i, i + CHUNK));
+        if (error) {
+          console.error("ACCOUNTING_JOURNAL_GET_ERROR", error);
+          return Response.json({ error: "Failed to fetch journal entries" }, { status: 500 });
+        }
+        entries.push(...((data ?? []) as EntryRow[]));
+      }
+      entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || b.created_at.localeCompare(a.created_at));
+      entries = entries.slice(0, limit);
+    } else {
+      let query = sb
+        .from("journal_entries")
+        .select(select)
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (from) query = query.gte("entry_date", from);
+      if (to) query = query.lte("entry_date", to);
+      const { data, error } = await query;
+      if (error) {
+        console.error("ACCOUNTING_JOURNAL_GET_ERROR", error);
+        return Response.json({ error: "Failed to fetch journal entries" }, { status: 500 });
+      }
+      entries = (data ?? []) as EntryRow[];
     }
     return Response.json({ entries });
   } catch (err) {
