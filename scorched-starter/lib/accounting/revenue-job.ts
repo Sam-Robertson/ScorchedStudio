@@ -9,6 +9,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getSquareDailySettlement } from "@/lib/square-revenue";
 import { getStripeDailySettlement } from "@/lib/stripe-revenue";
 import { revenueSettlement } from "@/lib/accounting/templates";
+import { summarizeSquareOrders } from "@/lib/accounting/settlement-summary";
 
 // Only one Square location exists today (Orem). SLC gets a second entry
 // here once it opens and has its own Square location.
@@ -131,7 +132,8 @@ export async function postSquareRevenueForDay(squareLocationId: string, location
     giftCardRedeemed: settlement.giftCardRedeemed,
     processingFees: settlement.processingFees,
     cashCollected: settlement.cashCollected,
-    raw: settlement.raw,
+    // raw.summary is what the reports read; the full payload stays for audit.
+    raw: { ...settlement.raw, summary: summarizeSquareOrders(settlement.raw.orders) },
   });
 }
 
