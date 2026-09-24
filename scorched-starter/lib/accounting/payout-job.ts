@@ -1,4 +1,4 @@
-// lib/accounting/payout-job.ts — server-only
+// lib/accounting/payout-job.ts (server-only)
 //
 // Posts what Square withheld from each paid payout: Square Capital
 // repayments (Dr 2510 Square Capital Advance) and payout-level fees

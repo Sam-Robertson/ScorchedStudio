@@ -1,4 +1,4 @@
-// lib/square-payouts.ts — server-only
+// lib/square-payouts.ts (server-only)
 //
 // Square Payouts API listing. See lib/accounting/payouts.ts for why payouts
 // matter to the ledger and for the pure summarising helpers.
