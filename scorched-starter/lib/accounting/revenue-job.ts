@@ -139,7 +139,10 @@ export async function postStripeRevenueForDay(dateStr: string, locationKey: stri
   if (await alreadyPosted(`stripe:${locationKey}:${dateStr}`)) return { status: "already_posted" };
 
   const settlement = await getStripeDailySettlement(dateStr);
-  if (settlement.raw.transactions.length === 0) return { status: "skipped_no_activity" };
+  // Payouts to the bank are balance transactions too. A day with only a payout
+  // has nothing to recognise, and used to post an all-zero settlement entry.
+  const hadSales = settlement.raw.transactions.some((t) => t.reporting_category === "charge" || t.reporting_category === "refund");
+  if (!hadSales) return { status: "skipped_no_activity" };
 
   return postSettlement("stripe", "1110", locationKey, dateStr, {
     grossSales: settlement.grossSales,

@@ -17,6 +17,7 @@ import { getDecryptedAccessToken, PlaidApiError, syncTransactions, type PlaidTra
 import { classifyUnreviewed } from "@/lib/accounting/classify-job";
 import { postSquareRevenueForDay, postStripeRevenueForDay, SQUARE_LOCATION_MAP } from "@/lib/accounting/revenue-job";
 import { postDepreciationForMonth } from "@/lib/accounting/depreciation-job";
+import { postSquarePayoutWithholdings } from "@/lib/accounting/payout-job";
 import { notifyBankNeedsLogin } from "@/lib/bank-connection-notify";
 import { todayInDenver, yesterdayInDenverYmd } from "@/lib/timezone";
 
@@ -30,6 +31,10 @@ export const maxDuration = 60;
 // record would leave the next run unaware and posting that day twice.
 const REVENUE_LOOKBACK_DAYS = 14;
 const REVENUE_TIME_BUDGET_MS = 25_000;
+// Square payouts: how far back to look for paid payouts whose Square Capital
+// repayment / payout fees have not been posted yet (payout-job.ts). Payouts
+// usually pay out within a day or two; a month covers any run that was down.
+const PAYOUT_LOOKBACK_DAYS = 30;
 
 // "2026-09-14", 2 -> "2026-09-12". Pure calendar arithmetic on the date.
 function daysBefore(ymd: string, n: number): string {
@@ -81,11 +86,16 @@ async function syncOneItem(
         .eq("plaid_transaction_id", r.transaction_id)
         .maybeSingle();
       if (!existing) continue;
+      // Drop the pointer before deleting the entry: bank_transactions.journal_entry_id
+      // is a plain foreign key, so deleting the entry first fails and leaves the
+      // entry (and its expense) in the ledger while the transaction is marked
+      // ignored. A pending Amazon charge categorised by hand, then replaced by
+      // Plaid with its posted twin, was double-counted this way in September 2026.
+      await sb.from("bank_transactions").update({ status: "ignored", journal_entry_id: null }).eq("id", existing.id);
       if (existing.journal_entry_id) {
         const { error: delErr } = await sb.from("journal_entries").delete().eq("id", existing.journal_entry_id);
         if (delErr) console.error("PLAID_SYNC_REVERSE_ENTRY_ERROR", delErr.message);
       }
-      await sb.from("bank_transactions").update({ status: "ignored" }).eq("id", existing.id);
       removed++;
     }
 
@@ -172,6 +182,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // What Square kept back from each payout (Square Capital repayments and
+    // payout-level fees) never appears in the daily settlement above, so the
+    // clearing account would drift from the bank without this step.
+    const payoutResults: Record<string, unknown> = {};
+    for (const [squareLocationId, locationKey] of Object.entries(SQUARE_LOCATION_MAP)) {
+      try {
+        payoutResults[locationKey] = await postSquarePayoutWithholdings(squareLocationId, daysBefore(yesterday, PAYOUT_LOOKBACK_DAYS), yesterday);
+      } catch (err) {
+        console.error("SQUARE_PAYOUT_CRON_ERROR", locationKey, err);
+        payoutResults[locationKey] = { status: "error", message: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
     const { y: depYear, m: depMonth } = todayInDenver();
     let depreciationResult: unknown;
     try {
@@ -185,6 +208,7 @@ export async function GET(req: NextRequest) {
       synced: results,
       ...classifyResult,
       revenue: { through: yesterday, results: revenueResults },
+      payouts: payoutResults,
       depreciation: depreciationResult,
     });
   } catch (err) {

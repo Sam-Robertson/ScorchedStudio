@@ -100,6 +100,13 @@ export async function POST(req: NextRequest) {
       .single();
     if (txnErr || !txn) return Response.json({ error: "Transaction not found" }, { status: 404 });
     if (txn.status !== "unreviewed") return Response.json({ error: `Transaction is already ${txn.status}` }, { status: 400 });
+    // Plaid replaces a pending transaction with a new posted one (new id, often
+    // a different date or amount) and removes the pending row. Anything posted
+    // against the pending row is then orphaned and the posted twin gets
+    // categorised again, double-counting the charge. Wait for it to settle.
+    if (txn.pending && template !== "ignore") {
+      return Response.json({ error: "This transaction is still pending at the bank. It will be replaced by the settled version within a day or two; categorize that one." }, { status: 400 });
+    }
 
     const srcAccountCode = (txn.bank_accounts as unknown as { accounts: { code: string } | null } | null)?.accounts?.code;
     if (!srcAccountCode) return Response.json({ error: "This transaction's bank account has no ledger mapping" }, { status: 400 });
