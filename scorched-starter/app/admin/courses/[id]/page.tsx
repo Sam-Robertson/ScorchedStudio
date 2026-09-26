@@ -6,8 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
-import { ArrowLeft, Plus, X } from "lucide-react";
-import type { CohortRecord, CourseRecord } from "@/lib/courses";
+import { ArrowLeft, Copy, Plus, X } from "lucide-react";
+import type { CohortRecord, CohortSessionRecord, CourseRecord } from "@/lib/courses";
+import { formatSessionDateShort } from "@/lib/courses";
 import { CourseModal, type CourseModalMode } from "@/components/admin/CourseModal";
 import CohortDetailModal from "@/components/admin/CohortDetailModal";
 
@@ -118,6 +119,98 @@ function NewCohortModal({
   );
 }
 
+function DuplicateCohortModal({
+  source,
+  token,
+  onClose,
+  onCreated,
+}: {
+  source: CohortRecord;
+  token: string;
+  onClose: () => void;
+  onCreated: (cohort: CohortRecord) => void;
+}) {
+  const [sessions, setSessions] = useState<CohortSessionRecord[] | null>(null);
+  const [label, setLabel] = useState("");
+  const [firstDate, setFirstDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // The cohort list doesn't carry sessions, so fetch the source's schedule to
+  // show what will be copied and which date the shift is anchored to.
+  useEffect(() => {
+    fetch(`/api/admin/courses/cohorts/${source.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { sessions: [] }))
+      .then((data) => setSessions(data.sessions ?? []))
+      .catch(() => setSessions([]));
+  }, [source.id, token]);
+
+  const earliest = sessions && sessions.length > 0
+    ? sessions.reduce((min, s) => (s.session_date < min ? s.session_date : min), sessions[0].session_date)
+    : null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/admin/courses/cohorts/${source.id}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      // A cohort with no sessions has nothing to shift; the date is only
+      // required when there's a schedule to move.
+      body: JSON.stringify({ label, first_session_date: firstDate || earliest || "1970-01-01" }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Failed to duplicate cohort.");
+      return;
+    }
+    const { cohort } = await res.json();
+    onCreated(cohort);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
+          <h2 className={`${vulfMono.className} font-bold text-sm`}>Duplicate {source.label}</h2>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-xs text-neutral-500">
+            {sessions === null
+              ? "Loading schedule…"
+              : sessions.length === 0
+                ? "This cohort has no sessions yet, so only its location, price, and capacity will be copied."
+                : `Copies ${sessions.length} session${sessions.length === 1 ? "" : "s"} (currently starting ${formatSessionDateShort(earliest!)}), keeping the same weekly spacing and times. Enrollments stay with the original.`}
+          </p>
+          <div>
+            <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>NEW LABEL *</label>
+            <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Tuesday (November)" required autoFocus />
+          </div>
+          {sessions && sessions.length > 0 && (
+            <div>
+              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>FIRST SESSION DATE *</label>
+              <input type="date" className={inputCls} value={firstDate} onChange={(e) => setFirstDate(e.target.value)} required />
+            </div>
+          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={saving || sessions === null}
+            className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-2.5 text-xs tracking-wide text-white hover:opacity-90 disabled:opacity-60`}
+          >
+            {saving ? "Duplicating…" : "Duplicate Cohort"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -127,6 +220,7 @@ export default function AdminCourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState<CourseModalMode | null>(null);
   const [newCohortOpen, setNewCohortOpen] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<CohortRecord | null>(null);
   const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -174,12 +268,20 @@ export default function AdminCourseDetailPage() {
                 {fmtCents(course.default_price_cents)} default · capacity {course.default_capacity} · {course.session_count} sessions
               </p>
             </div>
-            <button
-              onClick={() => setEditModal({ mode: "edit", course })}
-              className={`${vulfMono.className} shrink-0 rounded-lg border border-black/20 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50`}
-            >
-              Edit Course
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => setEditModal({ mode: "duplicate", course })}
+                className={`${vulfMono.className} rounded-lg border border-black/20 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50`}
+              >
+                Duplicate
+              </button>
+              <button
+                onClick={() => setEditModal({ mode: "edit", course })}
+                className={`${vulfMono.className} rounded-lg border border-black/20 px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50`}
+              >
+                Edit Course
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mb-4">
@@ -198,21 +300,33 @@ export default function AdminCourseDetailPage() {
           ) : (
             <div className="space-y-2">
               {cohorts.map((cohort) => (
-                <button
+                <div
                   key={cohort.id}
-                  onClick={() => setSelectedCohortId(cohort.id)}
-                  className="w-full text-left rounded-xl border border-black/10 bg-white px-4 py-3 hover:border-black/25 transition-colors flex items-center justify-between gap-3"
+                  className="rounded-xl border border-black/10 bg-white hover:border-black/25 transition-colors flex items-center gap-3 pr-3"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-neutral-900">{cohort.label}</p>
-                    <p className={`${vulfMono.className} text-xs text-neutral-400`}>
-                      {cohort.confirmed_count ?? 0}/{cohort.capacity} enrolled · {fmtCents(cohort.price_cents)} · {cohort.location === "orem" ? "Orem" : "Salt Lake City"}
-                    </p>
-                  </div>
-                  <span className={`${vulfMono.className} shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${COHORT_STATUS_BADGE[cohort.status]}`}>
-                    {cohort.status}
-                  </span>
-                </button>
+                  <button
+                    onClick={() => setSelectedCohortId(cohort.id)}
+                    className="min-w-0 flex-1 text-left px-4 py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-900">{cohort.label}</p>
+                      <p className={`${vulfMono.className} text-xs text-neutral-400`}>
+                        {cohort.confirmed_count ?? 0}/{cohort.capacity} enrolled · {fmtCents(cohort.price_cents)} · {cohort.location === "orem" ? "Orem" : "Salt Lake City"}
+                      </p>
+                    </div>
+                    <span className={`${vulfMono.className} shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${COHORT_STATUS_BADGE[cohort.status]}`}>
+                      {cohort.status}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setDuplicateSource(cohort)}
+                    title="Duplicate this cohort for different weeks"
+                    className={`${vulfMono.className} shrink-0 inline-flex items-center gap-1 rounded-lg border border-black/15 px-2.5 py-1.5 text-[11px] text-neutral-600 hover:bg-neutral-50`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Duplicate
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -224,7 +338,11 @@ export default function AdminCourseDetailPage() {
           modal={editModal}
           token={token}
           onClose={() => setEditModal(null)}
-          onSaved={(saved) => { setCourse(saved); setEditModal(null); }}
+          onSaved={(saved, wasEdit) => {
+            setEditModal(null);
+            if (wasEdit) setCourse(saved);
+            else router.push(`/admin/courses/${saved.id}`);
+          }}
         />
       )}
 
@@ -236,6 +354,19 @@ export default function AdminCourseDetailPage() {
           token={token}
           onClose={() => setNewCohortOpen(false)}
           onCreated={(cohort) => { setCohorts((prev) => [...prev, cohort]); setNewCohortOpen(false); }}
+        />
+      )}
+
+      {duplicateSource && token && (
+        <DuplicateCohortModal
+          source={duplicateSource}
+          token={token}
+          onClose={() => setDuplicateSource(null)}
+          onCreated={(cohort) => {
+            setCohorts((prev) => [...prev, { ...cohort, confirmed_count: 0 }]);
+            setDuplicateSource(null);
+            setSelectedCohortId(cohort.id);
+          }}
         />
       )}
 

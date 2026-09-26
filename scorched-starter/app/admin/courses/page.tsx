@@ -131,6 +131,13 @@ export default function AdminCoursesPage() {
                   >
                     Edit
                   </button>
+                  <button
+                    onClick={() => setModal({ mode: "duplicate", course })}
+                    title="Create a new course prefilled from this one"
+                    className={`${vulfMono.className} shrink-0 text-xs text-brand underline underline-offset-2`}
+                  >
+                    Duplicate
+                  </button>
                 </div>
               );
             })}

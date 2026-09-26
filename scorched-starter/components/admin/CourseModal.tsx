@@ -7,7 +7,13 @@ import type { CourseRecord, CurriculumWeek } from "@/lib/courses";
 
 const inputCls = "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
 
-export type CourseModalMode = { mode: "create" } | { mode: "edit"; course: CourseRecord };
+// "duplicate" is a create prefilled from an existing course: same form and
+// endpoint as "create", so the new listing gets its own name and slug before
+// anything is saved. Cohorts are not copied; those are scheduled per course.
+export type CourseModalMode =
+  | { mode: "create" }
+  | { mode: "edit"; course: CourseRecord }
+  | { mode: "duplicate"; course: CourseRecord };
 type ModalMode = CourseModalMode;
 
 function slugify(name: string): string {
@@ -52,11 +58,12 @@ export function CourseModal({
   onSaved: (course: CourseRecord, isEdit: boolean) => void;
 }) {
   const isEdit = modal.mode === "edit";
-  const c = isEdit ? modal.course : null;
+  const isDuplicate = modal.mode === "duplicate";
+  const c = modal.mode === "create" ? null : modal.course;
 
   const [form, setForm] = useState({
-    name: c?.name ?? "",
-    slug: c?.slug ?? "",
+    name: isDuplicate ? `${c!.name} (copy)` : (c?.name ?? ""),
+    slug: isDuplicate ? `${c!.slug}-copy` : (c?.slug ?? ""),
     description: c?.description ?? "",
     curriculumText: c ? curriculumToText(c.curriculum) : "",
     default_price_cents: c ? String(c.default_price_cents / 100) : "",
@@ -116,7 +123,7 @@ export function CourseModal({
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-black/10">
             <h2 className={`${vulfMono.className} font-bold text-sm`}>
-              {isEdit ? "Edit Course" : "New Course"}
+              {isEdit ? "Edit Course" : isDuplicate ? "Duplicate Course" : "New Course"}
             </h2>
             <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
               <X className="w-5 h-5" />
@@ -124,6 +131,11 @@ export function CourseModal({
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            {isDuplicate && (
+              <p className="text-xs text-neutral-500">
+                Prefilled from {c!.name}. Give it a new name and slug; cohorts and enrollments are not copied.
+              </p>
+            )}
             <div>
               <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>NAME *</label>
               <input

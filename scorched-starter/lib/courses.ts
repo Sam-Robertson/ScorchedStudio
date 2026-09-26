@@ -492,6 +492,72 @@ export async function deleteSession(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Whole days between two "YYYY-MM-DD" dates, computed in UTC so a DST change
+// between the two cohorts can't shave the shift to 23 hours and round down.
+function daysBetween(fromDate: string, toDate: string): number {
+  const from = Date.UTC(Number(fromDate.slice(0, 4)), Number(fromDate.slice(5, 7)) - 1, Number(fromDate.slice(8, 10)));
+  const to = Date.UTC(Number(toDate.slice(0, 4)), Number(toDate.slice(5, 7)) - 1, Number(toDate.slice(8, 10)));
+  return Math.round((to - from) / 86_400_000);
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Copies a cohort (location, price, capacity) and its whole session schedule
+// under a new label, shifting every session by the same number of days so the
+// first session lands on `first_session_date`. Week-to-week spacing and the
+// session times carry over unchanged. Enrollments and the waitlist stay with
+// the original; the copy always starts out open with empty seats.
+export async function duplicateCohort(
+  cohortId: string,
+  input: { label: string; first_session_date: string }
+): Promise<{ cohort: CohortRecord; sessions: CohortSessionRecord[] }> {
+  const [source, sessions] = await Promise.all([getCohortById(cohortId), getSessionsForCohort(cohortId)]);
+  if (!source) throw new Error("Cohort not found.");
+
+  const cohort = await createCohort({
+    course_id: source.course_id,
+    label: input.label,
+    location: source.location,
+    price_cents: source.price_cents,
+    capacity: source.capacity,
+    status: "open",
+  });
+
+  if (sessions.length === 0) return { cohort, sessions: [] };
+
+  // Sessions come back ordered by session_number, which is the schedule order;
+  // the earliest date is what anchors the shift in case numbering and dates
+  // ever disagree.
+  const earliest = sessions.reduce((min, s) => (s.session_date < min ? s.session_date : min), sessions[0].session_date);
+  const shift = daysBetween(earliest, input.first_session_date);
+
+  const { data, error } = await getSupabase()
+    .from("course_sessions")
+    .insert(
+      sessions.map((s) => ({
+        cohort_id: cohort.id,
+        session_number: s.session_number,
+        session_date: addDays(s.session_date, shift),
+        start_time: s.start_time,
+        end_time: s.end_time,
+      }))
+    )
+    .select()
+    .order("session_number", { ascending: true });
+
+  if (error) {
+    // Don't leave a cohort behind with no schedule; the cascade drops any
+    // partial session rows too.
+    await getSupabase().from("course_cohorts").delete().eq("id", cohort.id);
+    throw error;
+  }
+  return { cohort, sessions: data as CohortSessionRecord[] };
+}
+
 // Full detail payload for the admin cohort management view — cohort fields,
 // its sessions, confirmed enrollments, waitlist, and derived availability,
 // fetched in parallel, same shape as membership's [id] detail route.
