@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { getCohortAvailability, getCohortWithCourse } from "@/lib/courses";
+import { getCohortAvailability, getCohortWithCourse, getSessionsForCohort } from "@/lib/courses";
+import { cohortEnrollmentWindow } from "@/lib/course-rules";
 import { attachCustomerSession, resolveCustomerForCourseAction } from "@/lib/course-guest-account";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -32,6 +33,15 @@ export async function POST(req: NextRequest) {
   }
   if (preflight.cohort.status !== "open") {
     return Response.json({ error: "This cohort isn't open for enrollment." }, { status: 409 });
+  }
+  // Sign-ups close once the first session date has passed. Checked with the
+  // rest of the cohort validation, ahead of the account step, so a guest never
+  // ends up with an account made for a cohort they can't join.
+  if (cohortEnrollmentWindow(await getSessionsForCohort(cohort_id)) !== "open") {
+    return Response.json(
+      { error: "This cohort has already started, so sign-ups are closed.", started: true },
+      { status: 409 }
+    );
   }
 
   const resolved = await resolveCustomerForCourseAction(req, {

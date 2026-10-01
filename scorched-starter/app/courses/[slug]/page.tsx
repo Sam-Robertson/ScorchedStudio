@@ -9,6 +9,7 @@ import {
   getCourseBySlug,
   getSessionsForCohort,
 } from "@/lib/courses";
+import { cohortEnrollmentWindow, cohortFirstSessionDate } from "@/lib/course-rules";
 import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
 import CourseCohortPicker from "@/components/courses/CourseCohortPicker";
 
@@ -41,11 +42,20 @@ export default async function CourseDetailPage({
     getAvailabilityForCohorts(cohorts.map((c) => c.id)),
   ]);
 
-  const cohortsWithDetail = cohorts.map((cohort, i) => ({
-    ...cohort,
-    sessions: sessionsByCohort[i],
-    availability: availability.find((a) => a.cohort_id === cohort.id) ?? null,
-  }));
+  // A cohort that has started stays on the page with sign-ups closed until its
+  // last session, then drops off. Sorted by start date so the next cohort to
+  // run comes first, whatever order the cohorts were created in.
+  const now = new Date();
+  const startKey = (sessions: { session_date: string }[]) => cohortFirstSessionDate(sessions) ?? "9999-12-31";
+  const cohortsWithDetail = cohorts
+    .map((cohort, i) => ({
+      ...cohort,
+      sessions: sessionsByCohort[i],
+      availability: availability.find((a) => a.cohort_id === cohort.id) ?? null,
+      enrollment: cohortEnrollmentWindow(sessionsByCohort[i], now),
+    }))
+    .filter((cohort) => cohort.enrollment !== "ended")
+    .sort((a, b) => startKey(a.sessions).localeCompare(startKey(b.sessions)));
 
   return (
     <main className="pb-16">

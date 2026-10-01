@@ -6,6 +6,7 @@ import {
   getCourseBySlug,
   getSessionsForCohort,
 } from "@/lib/courses";
+import { cohortEnrollmentWindow } from "@/lib/course-rules";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -28,6 +29,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       ...cohort,
       sessions: sessionsByCohort[i],
       availability: availability.find((a) => a.cohort_id === cohort.id) ?? null,
+      // "open" is the only value a cohort can be joined in; see lib/course-rules.ts.
+      enrollment: cohortEnrollmentWindow(sessionsByCohort[i]),
     }));
 
     return Response.json({ course, cohorts: cohortsWithDetail });

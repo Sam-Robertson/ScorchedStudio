@@ -6,10 +6,14 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import type { CohortAvailability, CohortSessionRecord, CohortRecord } from "@/lib/courses";
 import { formatSessionDate, formatSessionDateShort, formatSessionTime } from "@/lib/courses";
+import { cohortFirstSessionDate, type CohortEnrollmentWindow } from "@/lib/course-rules";
 
 type CohortWithDetail = CohortRecord & {
   sessions: CohortSessionRecord[];
   availability: CohortAvailability | null;
+  // Worked out on the server from the Denver date; anything but "open" means
+  // the first session date has passed and sign-ups are closed.
+  enrollment: CohortEnrollmentWindow;
 };
 
 const inputCls = "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
@@ -31,6 +35,12 @@ function uniformSessionTime(sessions: CohortSessionRecord[]): string | null {
   return sessions.every((s) => range(s) === first) ? first : null;
 }
 
+// "Sep 29" for the cohort's first session, or null if it has none scheduled.
+function startDateShort(cohort: CohortWithDetail): string | null {
+  const first = cohortFirstSessionDate(cohort.sessions);
+  return first ? formatSessionDateShort(first) : null;
+}
+
 export default function CourseCohortPicker({
   cohorts,
   initialCohortId,
@@ -40,9 +50,16 @@ export default function CourseCohortPicker({
   initialCohortId?: string;
   accountEmail: string | null;
 }) {
-  const preselected = initialCohortId && cohorts.some((c) => c.id === initialCohortId) ? initialCohortId : null;
-  const [selectedId, setSelectedId] = useState<string | null>(preselected ?? cohorts[0]?.id ?? null);
+  // Only a cohort that is still open can be picked. A ?cohort= link to one
+  // that has started falls through to the next open cohort, with a note.
+  const initiallyOpen = cohorts.filter((c) => c.enrollment === "open");
+  const preselected = initialCohortId && initiallyOpen.some((c) => c.id === initialCohortId) ? initialCohortId : null;
+  const linkedStarted = initialCohortId
+    ? cohorts.find((c) => c.id === initialCohortId && c.enrollment !== "open") ?? null
+    : null;
+  const [selectedId, setSelectedId] = useState<string | null>(preselected ?? initiallyOpen[0]?.id ?? null);
   const [fullOverride, setFullOverride] = useState<Record<string, boolean>>({});
+  const [startedOverride, setStartedOverride] = useState<Record<string, boolean>>({});
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -63,8 +80,27 @@ export default function CourseCohortPicker({
     `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`
   );
 
-  const selected = cohorts.find((c) => c.id === selectedId) ?? null;
+  // Cohorts arrive sorted by start date, so the first open one is the next to run.
+  const isClosed = (c: CohortWithDetail) => startedOverride[c.id] || c.enrollment !== "open";
+  const openCohorts = cohorts.filter((c) => !isClosed(c));
+  const startedCohorts = cohorts.filter(isClosed);
+
+  const selected = openCohorts.find((c) => c.id === selectedId) ?? null;
   const isFull = selected ? fullOverride[selected.id] ?? (selected.availability?.is_full ?? true) : false;
+
+  // The page was loaded before the cohort's first session date passed and
+  // submitted after it: close the cohort here too and move on to the next one.
+  function closeStartedCohort(cohort: CohortWithDetail) {
+    const next = openCohorts.find((c) => c.id !== cohort.id) ?? null;
+    const nextStart = next ? startDateShort(next) : null;
+    setStartedOverride((prev) => ({ ...prev, [cohort.id]: true }));
+    setSelectedId(next?.id ?? null);
+    setError(
+      next
+        ? `The ${cohort.label} cohort has already started, so sign-ups are closed. The next cohort is ${next.label}${nextStart ? `, starting ${nextStart}` : ""}.`
+        : null
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,6 +136,10 @@ export default function CourseCohortPicker({
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
+          if (data.started) {
+            closeStartedCohort(selected);
+            return;
+          }
           if (data.requiresLogin) setShowLoginLink(true);
           setError(data.error || "Something went wrong joining the waitlist. Please try again.");
           return;
@@ -113,7 +153,9 @@ export default function CourseCohortPicker({
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.url) {
-          if (data.requiresLogin) {
+          if (data.started) {
+            closeStartedCohort(selected);
+          } else if (data.requiresLogin) {
             setShowLoginLink(true);
             setError(data.error || "Log in to enroll.");
           } else if (data.full) {
@@ -150,29 +192,36 @@ export default function CourseCohortPicker({
   return (
     <div>
       <h2 className="h3 font-bold mb-4">Choose a cohort</h2>
+      {linkedStarted && (
+        <p className={`${vulfMono.className} rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-neutral-700 mb-4`}>
+          The {linkedStarted.label} cohort started on {startDateShort(linkedStarted)}, so sign-ups for it are closed.
+          {openCohorts[0] &&
+            ` The next cohort is ${openCohorts[0].label}${
+              startDateShort(openCohorts[0]) ? `, starting ${startDateShort(openCohorts[0])}` : ""
+            }.`}
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        {cohorts.map((cohort) => {
+        {[...openCohorts, ...startedCohorts].map((cohort) => {
+          const closed = isClosed(cohort);
           const full = fullOverride[cohort.id] ?? (cohort.availability?.is_full ?? true);
           const seatsRemaining = cohort.availability?.seats_remaining ?? 0;
           const active = selectedId === cohort.id;
           const sharedTime = uniformSessionTime(cohort.sessions);
-          return (
-            <button
-              key={cohort.id}
-              type="button"
-              onClick={() => setSelectedId(cohort.id)}
-              className={`text-left rounded-2xl border p-5 transition-colors ${
-                active ? "border-brand bg-[#F6E4E1]" : "border-black/10 bg-white hover:border-black/25"
-              }`}
-            >
+          const body = (
+            <>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-neutral-900">{cohort.label}</h3>
+                <h3 className={`font-semibold ${closed ? "text-neutral-500" : "text-neutral-900"}`}>{cohort.label}</h3>
                 <span
                   className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                    full ? "bg-neutral-100 text-neutral-500" : "bg-green-100 text-green-700"
+                    closed || full ? "bg-neutral-100 text-neutral-500" : "bg-green-100 text-green-700"
                   }`}
                 >
-                  {full ? "Full" : `${seatsRemaining} seat${seatsRemaining === 1 ? "" : "s"} left`}
+                  {closed
+                    ? "Sign-ups closed"
+                    : full
+                      ? "Full"
+                      : `${seatsRemaining} seat${seatsRemaining === 1 ? "" : "s"} left`}
                 </span>
               </div>
               {sharedTime && (
@@ -196,11 +245,40 @@ export default function CourseCohortPicker({
                   ))}
                 </ul>
               )}
-              <p className="text-lg font-bold">{formatCents(cohort.price_cents)}</p>
+              {closed ? (
+                <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+                  Started {startDateShort(cohort)}
+                </p>
+              ) : (
+                <p className="text-lg font-bold">{formatCents(cohort.price_cents)}</p>
+              )}
+            </>
+          );
+          // A started cohort is shown for context only: no button, nothing to select.
+          return closed ? (
+            <div key={cohort.id} className="rounded-2xl border border-black/10 bg-neutral-50 p-5">
+              {body}
+            </div>
+          ) : (
+            <button
+              key={cohort.id}
+              type="button"
+              onClick={() => setSelectedId(cohort.id)}
+              className={`text-left rounded-2xl border p-5 transition-colors ${
+                active ? "border-brand bg-[#F6E4E1]" : "border-black/10 bg-white hover:border-black/25"
+              }`}
+            >
+              {body}
             </button>
           );
         })}
       </div>
+
+      {openCohorts.length === 0 && (
+        <p className={`${vulfMono.className} text-sm text-neutral-500`}>
+          Sign-ups are closed for the cohorts already underway. New dates are on the way, check back soon.
+        </p>
+      )}
 
       {selected && (
         <form onSubmit={handleSubmit} className="rounded-2xl border border-black/10 bg-white p-6 space-y-4">

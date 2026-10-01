@@ -2,7 +2,8 @@
 import { NextRequest } from "next/server";
 import { Resend } from "resend";
 import { requireAdmin } from "@/lib/admin-session";
-import { getCohortWithCourse, markWaitlistNotified } from "@/lib/courses";
+import { getCohortWithCourse, getSessionsForCohort, markWaitlistNotified } from "@/lib/courses";
+import { cohortEnrollmentWindow } from "@/lib/course-rules";
 import { getSupabase } from "@/lib/supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -40,6 +41,15 @@ export async function POST(
     return Response.json({ error: "Cohort not found." }, { status: 404 });
   }
   const { cohort, course } = found;
+
+  // The email is a checkout link, and checkout refuses a cohort that has
+  // started, so don't send anyone a link that can't work.
+  if (cohortEnrollmentWindow(await getSessionsForCohort(cohortId)) !== "open") {
+    return Response.json(
+      { error: "This cohort has already started, so sign-ups are closed and the checkout link would not work." },
+      { status: 409 }
+    );
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
   const checkoutLink = `${baseUrl}/courses/${course.slug}?cohort=${cohort.id}`;

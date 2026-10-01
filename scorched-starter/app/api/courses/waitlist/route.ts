@@ -1,7 +1,8 @@
 // app/api/courses/waitlist/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { addToWaitlist, getCohortById } from "@/lib/courses";
+import { addToWaitlist, getCohortById, getSessionsForCohort } from "@/lib/courses";
+import { cohortEnrollmentWindow } from "@/lib/course-rules";
 import { attachCustomerSession, resolveCustomerForCourseAction } from "@/lib/course-guest-account";
 
 const schema = z.object({
@@ -24,6 +25,14 @@ export async function POST(req: NextRequest) {
   const cohort = await getCohortById(cohort_id);
   if (!cohort) {
     return Response.json({ error: "Cohort not found." }, { status: 404 });
+  }
+  // The waitlist is a queue for a seat in this cohort, and nobody can take a
+  // seat once it has started, so there is nothing left to wait for.
+  if (cohortEnrollmentWindow(await getSessionsForCohort(cohort_id)) !== "open") {
+    return Response.json(
+      { error: "This cohort has already started, so its waitlist is closed.", started: true },
+      { status: 409 }
+    );
   }
 
   const resolved = await resolveCustomerForCourseAction(req, {
