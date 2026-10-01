@@ -6,6 +6,8 @@ import { vulfMono } from "@/app/fonts";
 import { formatDenverDate } from "@/lib/timezone";
 import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
 import { getBookingsByEmail } from "@/lib/customer-account";
+import { manageBookingPath } from "@/lib/booking-link";
+import { isBookingEditable } from "@/lib/booking-rules";
 import { getMembershipsByEmail, getPlanByKey } from "@/lib/memberships";
 import { getCohortWithCourse, getEnrollmentsByEmail } from "@/lib/courses";
 import CancelMembershipButton from "@/components/account/CancelMembershipButton";
@@ -141,6 +143,14 @@ export default async function AccountPage() {
                     <p className={`${vulfMono.className} text-xs text-neutral-400`}>
                       {b.party_size} {b.party_size === 1 ? "person" : "people"} · {b.location === "orem" ? "Orem" : "Salt Lake City"}
                     </p>
+                    {b.status === "confirmed" && isBookingEditable(b.date, b.time_slot) && (
+                      <a
+                        href={manageBookingPath(b.id)}
+                        className={`${vulfMono.className} inline-block mt-3 text-xs text-[#884A20] underline underline-offset-2 hover:opacity-70`}
+                      >
+                        Edit booking
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>

@@ -60,13 +60,18 @@ export async function GET(req: NextRequest) {
 
     const capacity = await capacityFor(location);
 
-    const { data } = await getSupabase()
+    // Someone editing a booking must not see their own day struck through as
+    // full because of the seats they already hold.
+    const excludeId = searchParams.get("exclude_id");
+    let query = getSupabase()
       .from("bookings")
       .select("date, time_slot, party_size")
       .gte("date", startDate)
       .lte("date", endDate)
       .eq("location", location)
       .eq("status", "confirmed");
+    if (excludeId) query = query.neq("id", excludeId);
+    const { data } = await query;
 
     // Group: date → slot → total booked
     const map: Record<string, Record<string, number>> = {};

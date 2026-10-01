@@ -2,102 +2,43 @@
 
 import { useState, useEffect } from "react";
 import MarketingOptIns, { EMPTY_OPT_INS, type OptInState } from "@/components/marketing/MarketingOptIns";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
-import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-
-const stripeAppearance = {
-  theme: "stripe" as const,
-  variables: {
-    colorPrimary: "#884A20",
-    colorBackground: "#ffffff",
-    colorText: "#3A3A3A",
-    colorDanger: "#ef4444",
-    borderRadius: "12px",
-    fontSizeBase: "14px",
-  },
-};
+import { MAX_PARTY_SIZE } from "@/lib/booking-rules";
+import ManageBookings from "@/components/booking/ManageBookings";
+import {
+  Calendar,
+  PaymentForm,
+  SlotGrid,
+  formatDateLong,
+  inputCls,
+  isPast,
+  partyLabel,
+  stripeAppearance,
+  stripePromise,
+  type SlotInfo,
+} from "@/components/booking/shared";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tab = "book" | "manage";
 type BookStep = 1 | 2 | 3;
-type ManageScreen = "lookup" | "list" | "editing";
-type EditStep = 1 | 2 | 3;
 type PaymentMethod = "gift_card" | null;
 
-type SlotInfo = { time: string; available: number; isFull: boolean };
+type LocationOption = { key: "orem" | "slc"; name: string };
 
-type SimpleBooking = {
+// A booking this person already holds on the day they are booking.
+type ExistingBooking = {
   id: string;
-  name: string;
   date: string;
   time_slot: string;
   party_size: number;
   payment_method: string | null;
-  status: string;
   amount_paid: number;
   location: "orem" | "slc";
+  token: string | null;
 };
-
-type LocationOption = { key: "orem" | "slc"; name: string };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function toDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function formatDateLong(dateStr: string): string {
-  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
-}
-
-function formatDateShort(dateStr: string): string {
-  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
-
-function isPast(dateStr: string): boolean {
-  return dateStr < toDateStr(new Date());
-}
-
-function isBookingEditable(date: string, timeSlot: string): boolean {
-  const today = toDateStr(new Date());
-  if (date > today) return true;
-  if (date < today) return false;
-  const match = timeSlot.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
-  if (!match) return false;
-  let hours = parseInt(match[1]);
-  const minutes = parseInt(match[2]);
-  const ampm = match[3].toUpperCase();
-  if (ampm === "PM" && hours !== 12) hours += 12;
-  if (ampm === "AM" && hours === 12) hours = 0;
-  const slotTime = new Date();
-  slotTime.setHours(hours, minutes, 0, 0);
-  return new Date() < slotTime;
-}
-
-function calMonthForDate(dateStr: string): Date {
-  const d = new Date(dateStr + "T12:00:00");
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function PaymentBadge({ method }: { method: string | null }) {
-  if (!method || method === "stripe") return null;
-  if (method === "gift_card")
-    return <span className="rounded-full bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5">Gift card</span>;
-  return <span className="rounded-full bg-purple-100 text-purple-700 text-[11px] px-2 py-0.5">Get Out Pass</span>;
-}
-
-const inputCls =
-  "w-full rounded-xl border border-black/20 bg-white px-4 py-3 text-sm outline-none focus:border-[#884A20] transition-colors";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -157,30 +98,16 @@ export default function BookPage() {
   const [referralOther, setReferralOther] = useState("");
   const [optIns, setOptIns] = useState<OptInState>(EMPTY_OPT_INS);
 
-  // ── Manage tab state ────────────────────────────────────────────────────────
-  const [manageScreen, setManageScreen] = useState<ManageScreen>("lookup");
-  const [manageEmail, setManageEmail] = useState("");
-  const [bookings, setBookings] = useState<SimpleBooking[]>([]);
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupError, setLookupError] = useState("");
-  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelError, setCancelError] = useState("");
-  const [editingBooking, setEditingBooking] = useState<SimpleBooking | null>(null);
-  const [editStep, setEditStep] = useState<EditStep>(1);
-  const [editCalMonth, setEditCalMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [editFullDates, setEditFullDates] = useState<Set<string>>(new Set());
-  const [editClosedDates, setEditClosedDates] = useState<Set<string>>(new Set());
-  const [newDate, setNewDate] = useState("");
-  const [editSlots, setEditSlots] = useState<SlotInfo[]>([]);
-  const [editSlotsLoading, setEditSlotsLoading] = useState(false);
-  const [newSlot, setNewSlot] = useState("");
-  const [newPartySize, setNewPartySize] = useState(1);
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  // ── Already-booked check ────────────────────────────────────────────────────
+  // Shown instead of the review step when this person already has a booking on
+  // the chosen day, so they edit that one rather than making a second.
+  const [existingBookings, setExistingBookings] = useState<ExistingBooking[] | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
+  // Remembers "no, this is a separate booking" for one date and contact, so
+  // going back and forward does not ask again.
+  const [separateBookingKey, setSeparateBookingKey] = useState("");
+  // The booking the Manage tab should open when sent there from that prompt.
+  const [manageTarget, setManageTarget] = useState<{ id: string; token: string } | null>(null);
 
   // ── Book tab effects ────────────────────────────────────────────────────────
 
@@ -213,34 +140,6 @@ export default function BookPage() {
     setSelectedSlot("");
   }
 
-  // ── Manage tab effects ──────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (manageScreen !== "editing") return;
-    const monthStr = `${editCalMonth.getFullYear()}-${String(editCalMonth.getMonth() + 1).padStart(2, "0")}`;
-    const excludeId = editingBooking?.id ?? "";
-    const editLocation = editingBooking?.location ?? "orem";
-    fetch(`/api/bookings/availability?month=${monthStr}&exclude_id=${excludeId}&location=${editLocation}`)
-      .then((r) => (r.ok ? r.json() : { fullDates: [], closedDates: [] }))
-      .then((data) => {
-        setEditFullDates(new Set(data.fullDates ?? []));
-        setEditClosedDates(new Set(data.closedDates ?? []));
-      })
-      .catch(() => {});
-  }, [editCalMonth, manageScreen, editingBooking?.id, editingBooking?.location]);
-
-  useEffect(() => {
-    if (!newDate || manageScreen !== "editing") return;
-    setEditSlotsLoading(true);
-    setEditSlots([]);
-    const excludeId = editingBooking?.id ?? "";
-    const editLocation = editingBooking?.location ?? "orem";
-    fetch(`/api/bookings/availability?date=${newDate}&exclude_id=${excludeId}&location=${editLocation}`)
-      .then((r) => (r.ok ? r.json() : { slots: [] }))
-      .then((data) => { setEditSlots(data.slots ?? []); setEditSlotsLoading(false); })
-      .catch(() => setEditSlotsLoading(false));
-  }, [newDate, manageScreen, editingBooking?.id, editingBooking?.location]);
-
   // ── Book tab handlers ───────────────────────────────────────────────────────
 
   function handleDateClick(dateStr: string) {
@@ -256,15 +155,62 @@ export default function BookPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleStep2Continue() {
+  // Identifies "this person on this day" for the already-booked check.
+  function existingCheckKey() {
+    return `${selectedDate}|${email.trim().toLowerCase()}|${phone.replace(/\D/g, "")}`;
+  }
+
+  function goToReview() {
+    setExistingBookings(null);
+    setBookStep(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleStep2Continue() {
     if (!name.trim()) { setFormError("Name is required."); return; }
     if (!email.trim()) { setFormError("Email is required."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setFormError("Please enter a valid email address."); return; }
     if (!referralSource) { setFormError("Please tell us how you heard about us."); return; }
     if (referralSource === "Other" && !referralOther.trim()) { setFormError("Please specify how you heard about us."); return; }
     setFormError("");
-    setBookStep(3);
+
+    // People come back to pay, or to say they have a gift card, and book the
+    // same visit twice. Catch that here, before they reach payment.
+    if (existingCheckKey() !== separateBookingKey) {
+      setCheckingExisting(true);
+      try {
+        const res = await fetch("/api/bookings/existing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: selectedDate, email: email.trim(), phone: phone || undefined }),
+        });
+        const data = res.ok ? await res.json() : { bookings: [] };
+        if ((data.bookings ?? []).length > 0) {
+          setExistingBookings(data.bookings);
+          setCheckingExisting(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+      } catch {
+        // The check is a courtesy. If it fails, the booking carries on.
+      }
+      setCheckingExisting(false);
+    }
+
+    goToReview();
+  }
+
+  function handleEditExisting(b: ExistingBooking) {
+    // Without a token the Manage tab falls back to its email lookup.
+    setManageTarget(b.token ? { id: b.id, token: b.token } : null);
+    setExistingBookings(null);
+    setTab("manage");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleSeparateBooking() {
+    setSeparateBookingKey(existingCheckKey());
+    goToReview();
   }
 
   async function handleInitiatePayment() {
@@ -307,78 +253,6 @@ export default function BookPage() {
     }
   }
 
-  // ── Manage tab handlers ─────────────────────────────────────────────────────
-
-  async function handleLookup(e: React.FormEvent) {
-    e.preventDefault();
-    if (!manageEmail.trim()) return;
-    setLookupLoading(true);
-    setLookupError("");
-    try {
-      const res = await fetch(`/api/bookings/manage?email=${encodeURIComponent(manageEmail.trim())}`);
-      const data = await res.json();
-      if (!res.ok) { setLookupError(data.error || "Something went wrong."); setLookupLoading(false); return; }
-      setBookings(data.bookings ?? []);
-      setManageScreen("list");
-    } catch {
-      setLookupError("Something went wrong. Please try again.");
-    }
-    setLookupLoading(false);
-  }
-
-  async function handleCancel(id: string) {
-    setCancelLoading(true);
-    setCancelError("");
-    try {
-      const res = await fetch(`/api/bookings/manage/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cancel", email: manageEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setCancelError(data.error || "Failed to cancel."); setCancelLoading(false); return; }
-      setBookings((prev) => prev.filter((b) => b.id !== id));
-      setConfirmCancelId(null);
-    } catch {
-      setCancelError("Something went wrong. Please try again.");
-    }
-    setCancelLoading(false);
-  }
-
-  function startEdit(booking: SimpleBooking) {
-    setEditingBooking(booking);
-    setNewDate(booking.date);
-    setNewSlot(booking.time_slot);
-    setNewPartySize(booking.party_size);
-    setEditCalMonth(calMonthForDate(booking.date));
-    setEditStep(1);
-    setSaveError("");
-    setManageScreen("editing");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  async function handleSave() {
-    if (!editingBooking || !newDate || !newSlot) return;
-    setSaveLoading(true);
-    setSaveError("");
-    try {
-      const res = await fetch(`/api/bookings/manage/${editingBooking.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update", email: manageEmail, date: newDate, time_slot: newSlot, party_size: newPartySize }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setSaveError(data.error || "Failed to update."); setSaveLoading(false); return; }
-      setBookings((prev) =>
-        prev.map((b) => b.id === editingBooking.id ? { ...b, date: newDate, time_slot: newSlot, party_size: newPartySize } : b)
-      );
-      setManageScreen("list");
-    } catch {
-      setSaveError("Something went wrong. Please try again.");
-    }
-    setSaveLoading(false);
-  }
-
   const bookIsLoading = payLoading || reserveLoading;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -394,7 +268,7 @@ export default function BookPage() {
           <p className={`${vulfMono.className} text-center text-neutral-500 mt-2 text-sm`}>
             {tab === "book"
               ? "$15 per person · 90-minute sessions"
-              : "Cancel or reschedule before your session starts"}
+              : "Change your time or party size, pay ahead, or cancel"}
           </p>
 
           {/* Tab switcher */}
@@ -466,7 +340,15 @@ export default function BookPage() {
                 onContinue={handleStep1Continue}
               />
             )}
-            {bookStep === 2 && (
+            {bookStep === 2 && existingBookings && (
+              <ExistingBookingNotice
+                bookings={existingBookings}
+                onEdit={handleEditExisting}
+                onSeparate={handleSeparateBooking}
+                onBack={() => setExistingBookings(null)}
+              />
+            )}
+            {bookStep === 2 && !existingBookings && (
               <BookStep2
                 name={name} setName={setName}
                 email={email} setEmail={setEmail}
@@ -476,6 +358,7 @@ export default function BookPage() {
                 referralOther={referralOther} setReferralOther={setReferralOther}
                 optIns={optIns} setOptIns={setOptIns}
                 error={formError}
+                checking={checkingExisting}
                 onBack={() => setBookStep(1)}
                 onContinue={handleStep2Continue}
               />
@@ -506,156 +389,15 @@ export default function BookPage() {
 
         {/* ── Manage tab ── */}
         {tab === "manage" && (
-          <>
-            {manageScreen === "lookup" && (
-              <LookupForm
-                email={manageEmail}
-                setEmail={setManageEmail}
-                loading={lookupLoading}
-                error={lookupError}
-                onSubmit={handleLookup}
-              />
-            )}
-            {manageScreen === "list" && (
-              <BookingList
-                email={manageEmail}
-                bookings={bookings}
-                confirmCancelId={confirmCancelId}
-                setConfirmCancelId={setConfirmCancelId}
-                cancelLoading={cancelLoading}
-                cancelError={cancelError}
-                onCancel={handleCancel}
-                onEdit={startEdit}
-                onBack={() => { setManageScreen("lookup"); setCancelError(""); }}
-                onBookNew={() => setTab("book")}
-              />
-            )}
-            {manageScreen === "editing" && editingBooking && (
-              <EditFlow
-                booking={editingBooking}
-                step={editStep}
-                setStep={setEditStep}
-                calMonth={editCalMonth}
-                setCalMonth={setEditCalMonth}
-                fullDates={editFullDates}
-                closedDates={editClosedDates}
-                newDate={newDate}
-                setNewDate={(d) => { setNewDate(d); setNewSlot(""); }}
-                slots={editSlots}
-                slotsLoading={editSlotsLoading}
-                newSlot={newSlot}
-                setNewSlot={setNewSlot}
-                newPartySize={newPartySize}
-                setNewPartySize={setNewPartySize}
-                saveLoading={saveLoading}
-                saveError={saveError}
-                onBack={() => setManageScreen("list")}
-                onSave={handleSave}
-              />
-            )}
-          </>
+          <ManageBookings
+            key={manageTarget?.id ?? "lookup"}
+            initialBookingId={manageTarget?.id}
+            initialToken={manageTarget?.token}
+            onBookNew={() => setTab("book")}
+          />
         )}
       </Container>
     </main>
-  );
-}
-
-// ── Calendar (shared) ─────────────────────────────────────────────────────────
-
-function Calendar({
-  calMonth, setCalMonth, fullDates, closedDates, selectedDate, onDateClick,
-}: {
-  calMonth: Date;
-  setCalMonth: (d: Date) => void;
-  fullDates: Set<string>;
-  closedDates: Set<string>;
-  selectedDate: string;
-  onDateClick: (d: string) => void;
-}) {
-  const today = toDateStr(new Date());
-  const year = calMonth.getFullYear();
-  const month = calMonth.getMonth();
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthLabel = calMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const canGoPrev = calMonth > new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-  const cells: Array<string | null> = [
-    ...Array(firstDayOfWeek).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => {
-      const d = i + 1;
-      return `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    }),
-  ];
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <button onClick={() => setCalMonth(new Date(year, month - 1, 1))} disabled={!canGoPrev}
-          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-neutral-100 disabled:opacity-20 disabled:cursor-not-allowed text-xl">‹</button>
-        <span className={`${vulfMono.className} text-base font-medium`}>{monthLabel}</span>
-        <button onClick={() => setCalMonth(new Date(year, month + 1, 1))}
-          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-neutral-100 text-xl">›</button>
-      </div>
-      <div className="grid grid-cols-7 mb-2">
-        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} className={`${vulfMono.className} text-center text-xs text-neutral-400 py-1`}>{d}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((dateStr, i) => {
-          if (!dateStr) return <div key={`e-${i}`} />;
-          const disabled = closedDates.has(dateStr) || isPast(dateStr) || fullDates.has(dateStr);
-          const isSelected = dateStr === selectedDate;
-          const isToday = dateStr === today;
-          return (
-            <button key={dateStr} onClick={() => !disabled && onDateClick(dateStr)} disabled={disabled}
-              title={closedDates.has(dateStr) ? "Closed" : fullDates.has(dateStr) ? "Fully booked" : undefined}
-              className={[
-                "aspect-square w-full rounded-xl text-sm font-medium transition-colors flex items-center justify-center",
-                isSelected ? "bg-[#884A20] text-white" : "",
-                isToday && !isSelected ? "ring-2 ring-[#884A20] ring-offset-1 text-[#884A20]" : "",
-                !disabled && !isSelected ? "hover:bg-[#884A20]/10 cursor-pointer text-neutral-800" : "",
-                disabled ? "text-neutral-300 cursor-not-allowed line-through" : "",
-              ].filter(Boolean).join(" ")}>
-              {parseInt(dateStr.split("-")[2], 10)}
-            </button>
-          );
-        })}
-      </div>
-      <p className={`${vulfMono.className} text-[10px] text-neutral-300 mt-3`}>
-        Strikethrough = closed or fully booked
-      </p>
-    </div>
-  );
-}
-
-// ── Slot grid (shared) ────────────────────────────────────────────────────────
-
-function SlotGrid({ slots, selectedSlot, onSelect }: {
-  slots: SlotInfo[];
-  selectedSlot: string;
-  onSelect: (s: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-      {slots.map((slot) => {
-        const isSelected = selectedSlot === slot.time;
-        const spotsLabel = slot.isFull ? "Full" : slot.available <= 5 ? `${slot.available} left` : "Open";
-        const spotsColor = slot.isFull ? "text-red-400" : slot.available <= 5 ? "text-amber-500" : "text-[#519A70]";
-        return (
-          <button key={slot.time} disabled={slot.isFull} onClick={() => onSelect(slot.time)}
-            className={`flex flex-col items-center justify-center rounded-xl border px-3 py-3 transition-all ${
-              isSelected ? "border-[#884A20] bg-[#884A20]/5"
-              : slot.isFull ? "border-black/5 bg-neutral-50 cursor-not-allowed opacity-40"
-              : "border-black/10 hover:border-[#884A20]/40 cursor-pointer"
-            }`}>
-            <span className={`${vulfMono.className} text-sm font-medium`}>{slot.time}</span>
-            <span className={`${vulfMono.className} text-[11px] mt-0.5 ${spotsColor}`}>{spotsLabel}</span>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -728,7 +470,7 @@ const REFERRAL_OPTIONS = [
   "Other",
 ];
 
-function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, referralSource, setReferralSource, referralOther, setReferralOther, optIns, setOptIns, error, onBack, onContinue }: {
+function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize, setPartySize, referralSource, setReferralSource, referralOther, setReferralOther, optIns, setOptIns, error, checking, onBack, onContinue }: {
   name: string; setName: (v: string) => void;
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
@@ -736,7 +478,7 @@ function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize,
   referralSource: string; setReferralSource: (v: string) => void;
   referralOther: string; setReferralOther: (v: string) => void;
   optIns: OptInState; setOptIns: (v: OptInState) => void;
-  error: string; onBack: () => void; onContinue: () => void;
+  error: string; checking: boolean; onBack: () => void; onContinue: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-5">
@@ -797,7 +539,62 @@ function BookStep2({ name, setName, email, setEmail, phone, setPhone, partySize,
       {error && <p className={`${vulfMono.className} text-xs text-red-500`}>{error}</p>}
       <div className="flex gap-3 pt-1">
         <button onClick={onBack} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50`}>Back</button>
-        <button onClick={onContinue} className={`${vulfMono.className} flex-[2] rounded-xl bg-[#884A20] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90`}>CONTINUE</button>
+        <button onClick={onContinue} disabled={checking} className={`${vulfMono.className} flex-[2] rounded-xl bg-[#884A20] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90 disabled:opacity-60`}>{checking ? "CHECKING…" : "CONTINUE"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Already booked that day ───────────────────────────────────────────────────
+
+function ExistingBookingNotice({ bookings, onEdit, onSeparate, onBack }: {
+  bookings: ExistingBooking[];
+  onEdit: (b: ExistingBooking) => void;
+  onSeparate: () => void;
+  onBack: () => void;
+}) {
+  const one = bookings.length === 1;
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-white p-6 shadow-sm space-y-5">
+      <div>
+        <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-amber-600`}>Heads up</p>
+        <h2 className="h3 font-bold mt-1 leading-snug">
+          You already have {one ? "a booking" : "bookings"} on {formatDateLong(bookings[0].date)}
+        </h2>
+        <p className={`${vulfMono.className} text-sm text-neutral-500 mt-2`}>
+          Want to pay ahead, use a gift card, or change your time or party size? You can do all of that on the
+          booking you already have. There is no need to make a second one.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {bookings.map((b) => (
+          <div key={b.id} className="rounded-xl border border-black/10 bg-neutral-50 p-4">
+            <p className={`${vulfMono.className} text-sm font-bold`}>{b.time_slot} · {partyLabel(b.party_size)}</p>
+            <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
+              {b.amount_paid > 0
+                ? `Paid $${(b.amount_paid / 100).toFixed(2)}`
+                : b.payment_method === "gift_card"
+                ? "Paying with a gift card in studio"
+                : b.payment_method
+                ? "Reserved"
+                : "Reserved, not paid yet"}
+            </p>
+            <button
+              onClick={() => onEdit(b)}
+              className={`${vulfMono.className} mt-3 w-full rounded-xl bg-[#519A70] py-2.5 text-xs tracking-[0.1em] font-semibold text-white hover:opacity-90`}
+            >
+              {b.amount_paid === 0 && (!b.payment_method || b.payment_method === "gift_card") ? "EDIT OR PAY FOR THIS BOOKING" : "EDIT THIS BOOKING"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-3 pt-1">
+        <button onClick={onBack} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50`}>Back</button>
+        <button onClick={onSeparate} className={`${vulfMono.className} flex-[2] rounded-xl border border-black/20 py-3 text-sm text-neutral-600 hover:bg-neutral-50`}>
+          No, this is a separate booking
+        </button>
       </div>
     </div>
   );
@@ -902,286 +699,11 @@ function BookStep3({
   );
 }
 
-// ── Payment form (must be inside <Elements>) ──────────────────────────────────
-
-function PaymentForm({
-  total, email, onSuccess,
-}: {
-  total: number;
-  email: string;
-  onSuccess: (bookingId: string) => void;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [submitting, setSubmitting] = useState(false);
-  const [cardError, setCardError] = useState("");
-
-  async function confirmPayment() {
-    if (!stripe || !elements) return;
-    setSubmitting(true);
-    setCardError("");
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-      confirmParams: {
-        return_url: `${window.location.origin}/book/confirmation`,
-        receipt_email: email,
-      },
-    });
-
-    if (error) {
-      setCardError(error.message ?? "Payment failed. Please try again.");
-      setSubmitting(false);
-      return;
-    }
-
-    // Payment succeeded — create the booking record
-    const res = await fetch("/api/bookings/confirm-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setCardError(data.error ?? "Payment succeeded but booking creation failed. Please contact us.");
-      setSubmitting(false);
-      return;
-    }
-
-    onSuccess(data.booking_id);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    await confirmPayment();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <ExpressCheckoutElement
-        options={{ paymentMethods: { link: "auto", applePay: "auto", googlePay: "auto" } }}
-        onConfirm={confirmPayment}
-      />
-      <PaymentElement options={{ paymentMethodOrder: ["card", "link"], wallets: { link: "auto" } }} />
-      {cardError && <p className={`${vulfMono.className} text-xs text-red-500`}>{cardError}</p>}
-      <button
-        type="submit"
-        disabled={!stripe || !elements || submitting}
-        className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-opacity`}
-      >
-        {submitting ? "Processing…" : `Complete Payment — $${total}`}
-      </button>
-    </form>
-  );
-}
-
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3">
       <span className="text-neutral-400 w-12 shrink-0">{label}</span>
       <span className="text-neutral-800">{value}</span>
-    </div>
-  );
-}
-
-// ── Manage: Lookup Form ───────────────────────────────────────────────────────
-
-function LookupForm({ email, setEmail, loading, error, onSubmit }: {
-  email: string; setEmail: (v: string) => void;
-  loading: boolean; error: string; onSubmit: (e: React.FormEvent) => void;
-}) {
-  return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-4">
-      <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400`}>Find your booking</p>
-      <div>
-        <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1.5`}>Email address used when booking</label>
-        <input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" autoFocus required />
-      </div>
-      {error && <p className={`${vulfMono.className} text-xs text-red-500`}>{error}</p>}
-      <button type="submit" disabled={loading} className={`${vulfMono.className} w-full rounded-xl bg-[#884A20] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90 disabled:opacity-60`}>
-        {loading ? "Looking up…" : "FIND MY BOOKINGS"}
-      </button>
-    </form>
-  );
-}
-
-// ── Manage: Booking List ──────────────────────────────────────────────────────
-
-function BookingList({ email, bookings, confirmCancelId, setConfirmCancelId, cancelLoading, cancelError, onCancel, onEdit, onBack, onBookNew }: {
-  email: string; bookings: SimpleBooking[];
-  confirmCancelId: string | null; setConfirmCancelId: (id: string | null) => void;
-  cancelLoading: boolean; cancelError: string;
-  onCancel: (id: string) => void; onEdit: (b: SimpleBooking) => void;
-  onBack: () => void; onBookNew: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className={`${vulfMono.className} text-sm text-neutral-500 break-words min-w-0`}>
-          Upcoming bookings for <span className="text-neutral-800 font-medium">{email}</span>
-        </p>
-        <button onClick={onBack} className={`${vulfMono.className} shrink-0 text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
-          Different email
-        </button>
-      </div>
-
-      {bookings.length === 0 && (
-        <div className="rounded-2xl border border-black/10 bg-white p-8 text-center shadow-sm">
-          <p className={`${vulfMono.className} text-sm text-neutral-400`}>No upcoming bookings found for this email.</p>
-          <button onClick={onBookNew} className={`${vulfMono.className} inline-block mt-4 text-sm underline text-[#884A20] underline-offset-2`}>
-            Book a session →
-          </button>
-        </div>
-      )}
-
-      {bookings.map((b) => {
-        const editable = isBookingEditable(b.date, b.time_slot);
-        const isConfirmingCancel = confirmCancelId === b.id;
-        return (
-          <div key={b.id} className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
-            <div className={`${vulfMono.className} text-sm`}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold text-base">{formatDateLong(b.date)}</p>
-                  <p className="text-neutral-500 mt-0.5">{b.time_slot} · {b.party_size} {b.party_size === 1 ? "person" : "people"}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <PaymentBadge method={b.payment_method} />
-                  {!editable && <span className="text-[11px] text-neutral-300">Past</span>}
-                </div>
-              </div>
-            </div>
-
-            {editable && !isConfirmingCancel && (
-              <div className="flex gap-2 pt-1 border-t border-black/5">
-                <button onClick={() => onEdit(b)} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50`}>Edit booking</button>
-                <button onClick={() => setConfirmCancelId(b.id)} className={`${vulfMono.className} flex-1 rounded-xl border border-red-200 py-2.5 text-xs font-medium text-red-500 hover:bg-red-50`}>Cancel</button>
-              </div>
-            )}
-
-            {editable && isConfirmingCancel && (
-              <div className="pt-1 border-t border-black/5 space-y-3">
-                <p className={`${vulfMono.className} text-xs text-neutral-600`}>
-                  Cancel your reservation for <strong>{formatDateShort(b.date)}</strong> at <strong>{b.time_slot}</strong>? This cannot be undone.
-                </p>
-                {cancelError && <p className={`${vulfMono.className} text-xs text-red-500`}>{cancelError}</p>}
-                <div className="flex gap-2">
-                  <button onClick={() => setConfirmCancelId(null)} disabled={cancelLoading} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-2.5 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-50`}>Keep it</button>
-                  <button onClick={() => onCancel(b.id)} disabled={cancelLoading} className={`${vulfMono.className} flex-1 rounded-xl bg-red-500 py-2.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60`}>
-                    {cancelLoading ? "Cancelling…" : "Yes, cancel"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Manage: Edit Flow ─────────────────────────────────────────────────────────
-
-function EditFlow({ booking, step, setStep, calMonth, setCalMonth, fullDates, closedDates, newDate, setNewDate, slots, slotsLoading, newSlot, setNewSlot, newPartySize, setNewPartySize, saveLoading, saveError, onBack, onSave }: {
-  booking: SimpleBooking; step: EditStep; setStep: (s: EditStep) => void;
-  calMonth: Date; setCalMonth: (d: Date) => void; fullDates: Set<string>; closedDates: Set<string>;
-  newDate: string; setNewDate: (d: string) => void;
-  slots: SlotInfo[]; slotsLoading: boolean;
-  newSlot: string; setNewSlot: (s: string) => void;
-  newPartySize: number; setNewPartySize: (n: number) => void;
-  saveLoading: boolean; saveError: string; onBack: () => void; onSave: () => void;
-}) {
-  const unchanged = newDate === booking.date && newSlot === booking.time_slot && newPartySize === booking.party_size;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400`}>Editing booking</p>
-          <p className={`${vulfMono.className} text-sm text-neutral-600 mt-0.5`}>
-            Currently: {formatDateShort(booking.date)} at {booking.time_slot} · {booking.party_size} {booking.party_size === 1 ? "person" : "people"}
-          </p>
-        </div>
-        <button onClick={onBack} className={`${vulfMono.className} text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>Back</button>
-      </div>
-
-      {step === 1 && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
-            <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-5`}>New date</p>
-            <Calendar calMonth={calMonth} setCalMonth={setCalMonth} fullDates={fullDates} closedDates={closedDates} selectedDate={newDate} onDateClick={setNewDate} />
-          </div>
-          {newDate && (
-            <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
-              <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-1`}>New time</p>
-              <p className={`${vulfMono.className} text-xs text-neutral-400 mb-4`}>{formatDateLong(newDate)}</p>
-              {slotsLoading && <p className={`${vulfMono.className} text-sm text-neutral-400 py-4 text-center`}>Loading…</p>}
-              {!slotsLoading && slots.length === 0 && <p className={`${vulfMono.className} text-sm text-neutral-400 py-4 text-center`}>No available times for this date.</p>}
-              {!slotsLoading && slots.length > 0 && <SlotGrid slots={slots} selectedSlot={newSlot} onSelect={setNewSlot} />}
-            </div>
-          )}
-          <button onClick={() => setStep(2)} disabled={!newDate || !newSlot}
-            className={`${vulfMono.className} w-full rounded-xl py-3 text-sm tracking-[0.15em] font-semibold text-white transition-opacity ${newDate && newSlot ? "bg-[#884A20] hover:opacity-90" : "bg-neutral-300 cursor-not-allowed"}`}>
-            CONTINUE
-          </button>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-6">
-          <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400`}>Party size</p>
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={() => setNewPartySize(Math.max(1, newPartySize - 1))} className="w-12 h-12 rounded-xl border border-black/20 flex items-center justify-center text-xl hover:bg-neutral-50">−</button>
-            <span className={`${vulfMono.className} text-3xl font-bold w-10 text-center`}>{newPartySize}</span>
-            <button type="button" onClick={() => setNewPartySize(Math.min(MAX_PARTY_SIZE, newPartySize + 1))} className="w-12 h-12 rounded-xl border border-black/20 flex items-center justify-center text-xl hover:bg-neutral-50">+</button>
-            <span className={`${vulfMono.className} text-sm text-neutral-400`}>{newPartySize === 1 ? "person" : "people"}</span>
-          </div>
-          <p className={`${vulfMono.className} text-xs text-neutral-300`}>Max {MAX_PARTY_SIZE} per booking</p>
-          <div className="flex gap-3">
-            <button onClick={() => setStep(1)} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50`}>Back</button>
-            <button onClick={() => setStep(3)} className={`${vulfMono.className} flex-[2] rounded-xl bg-[#884A20] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90`}>CONTINUE</button>
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm space-y-4">
-            <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400`}>Review changes</p>
-            <div className={`${vulfMono.className} text-sm space-y-3`}>
-              <ChangeRow label="Date" before={formatDateShort(booking.date)} after={formatDateShort(newDate)} changed={newDate !== booking.date} />
-              <ChangeRow label="Time" before={booking.time_slot} after={newSlot} changed={newSlot !== booking.time_slot} />
-              <ChangeRow label="Party" before={`${booking.party_size} ${booking.party_size === 1 ? "person" : "people"}`} after={`${newPartySize} ${newPartySize === 1 ? "person" : "people"}`} changed={newPartySize !== booking.party_size} />
-            </div>
-            {unchanged && <p className={`${vulfMono.className} text-xs text-neutral-400 pt-2 border-t border-black/5`}>No changes made.</p>}
-          </div>
-          {saveError && <p className={`${vulfMono.className} text-xs text-red-500 text-center`}>{saveError}</p>}
-          <div className="flex gap-3">
-            <button onClick={() => setStep(2)} disabled={saveLoading} className={`${vulfMono.className} flex-1 rounded-xl border border-black/20 py-3 text-sm text-neutral-500 hover:bg-neutral-50 disabled:opacity-50`}>Back</button>
-            <button onClick={onSave} disabled={saveLoading || unchanged}
-              className={`${vulfMono.className} flex-[2] rounded-xl py-3 text-sm tracking-[0.15em] font-semibold text-white transition-opacity ${unchanged ? "bg-neutral-300 cursor-not-allowed" : "bg-[#519A70] hover:opacity-90 disabled:opacity-60"}`}>
-              {saveLoading ? "Saving…" : "SAVE CHANGES"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChangeRow({ label, before, after, changed }: { label: string; before: string; after: string; changed: boolean }) {
-  return (
-    <div className="flex gap-3 items-start">
-      <span className="text-neutral-400 w-12 shrink-0">{label}</span>
-      <div className="flex items-center gap-2 flex-wrap">
-        {changed ? (
-          <><span className="text-neutral-400 line-through">{before}</span><span className="text-[10px] text-neutral-300">→</span><span className="text-neutral-800 font-medium">{after}</span></>
-        ) : (
-          <span className="text-neutral-600">{before}</span>
-        )}
-      </div>
     </div>
   );
 }

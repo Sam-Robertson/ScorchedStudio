@@ -15,7 +15,9 @@ export async function GET(req: NextRequest) {
   const { data, error } = await getSupabase()
     .from("bookings")
     .select("id, name, date, time_slot, party_size, payment_method, status, amount_paid, location")
-    .eq("email", email)
+    // Case-insensitive: older reservations stored the email exactly as typed.
+    // The escape keeps "_" and "%" in an address from acting as wildcards.
+    .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
     .eq("status", "confirmed")
     .gte("date", today)
     .order("date", { ascending: true })

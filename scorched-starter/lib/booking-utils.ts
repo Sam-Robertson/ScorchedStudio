@@ -4,9 +4,9 @@ import { getSupabase } from "@/lib/supabase";
 export type LocationKey = "orem" | "slc";
 
 export const MAX_CAPACITY = 20;
-export const MAX_PARTY_SIZE = 15;
-export const PRICE_PER_PERSON = 15;
-export const PRICE_PER_PERSON_CENTS = 1500;
+// Defined in booking-rules so client components and tests can read them
+// without pulling in this file's Supabase import.
+export { MAX_PARTY_SIZE, PRICE_PER_PERSON, PRICE_PER_PERSON_CENTS } from "@/lib/booking-rules";
 
 // Fixed, not admin-configurable.
 export const SESSION_LENGTH_MINUTES = 90;
