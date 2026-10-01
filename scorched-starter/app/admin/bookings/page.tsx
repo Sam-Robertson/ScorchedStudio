@@ -8,6 +8,7 @@ import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
 import type { BookingRecord } from "@/lib/supabase";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
+import { duplicateBookingIds, sameCustomer } from "@/lib/booking-rules";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,14 @@ function BookingsDashboard({ token }: { token: string }) {
       return true;
     });
   }, [bookings, search, filter, today, locationFilter]);
+
+  // Same person booked twice on one day, usually someone who came back to pay
+  // or to mention a gift card. Both rows count against capacity until one is
+  // cancelled, so they are flagged wherever a booking is listed.
+  const duplicateIds = useMemo(
+    () => duplicateBookingIds(bookings.filter((b) => b.status !== "cancelled")),
+    [bookings]
+  );
 
   const grouped = useMemo(() => {
     const map: Record<string, BookingRecord[]> = {};
@@ -245,6 +254,7 @@ function BookingsDashboard({ token }: { token: string }) {
       {!loading && !error && view === "calendar" && (
         <AdminCalendar
           bookings={filtered}
+          duplicateIds={duplicateIds}
           calMonth={calMonth}
           setCalMonth={setCalMonth}
           calDate={calDate}
@@ -267,62 +277,7 @@ function BookingsDashboard({ token }: { token: string }) {
               <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-400 mb-2`}>
                 {fmtDate(date)}
               </p>
-              <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
-                {/* Mobile card list */}
-                <div className="sm:hidden divide-y divide-black/5">
-                  {grouped[date].map((b) => (
-                    <div
-                      key={b.id}
-                      className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 active:bg-neutral-100"
-                      onClick={() => setSelected(b)}
-                    >
-                      <div className="min-w-0">
-                        <p className={`${vulfMono.className} text-sm font-medium truncate`}>{b.time_slot} · {b.name}</p>
-                        <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
-                          {b.party_size} {b.party_size === 1 ? "person" : "people"}
-                          {b.payment_method && b.payment_method !== "stripe" && (
-                            <span className="ml-2"><PaymentBadge method={b.payment_method} /></span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Desktop table */}
-                <table className={`${vulfMono.className} hidden sm:table w-full text-sm`}>
-                  <thead>
-                    <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
-                      <th className="px-4 py-3">Time</th>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3 hidden md:table-cell">Phone</th>
-                      <th className="px-4 py-3">Party</th>
-                      <th className="px-4 py-3">Payment</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grouped[date].map((b) => (
-                      <tr
-                        key={b.id}
-                        className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
-                        onClick={() => setSelected(b)}
-                      >
-                        <td className="px-4 py-3 font-medium">{b.time_slot}</td>
-                        <td className="px-4 py-3">{b.name}</td>
-                        <td className="px-4 py-3 text-neutral-500">{b.email}</td>
-                        <td className="px-4 py-3 text-neutral-500 hidden md:table-cell">{b.phone ?? "—"}</td>
-                        <td className="px-4 py-3">{b.party_size}</td>
-                        <td className="px-4 py-3"><PaymentBadge method={b.payment_method} /></td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="text-xs text-brand underline underline-offset-2">View</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DayBookings bookings={grouped[date]} duplicateIds={duplicateIds} onSelect={setSelected} />
             </div>
           ))}
         </div>
@@ -353,7 +308,12 @@ function BookingsDashboard({ token }: { token: string }) {
 
       {selected && (
         <BookingModal
+          key={selected.id}
           booking={selected}
+          duplicates={bookings.filter(
+            (o) => o.id !== selected.id && o.status !== "cancelled" && o.date === selected.date && sameCustomer(o, selected)
+          )}
+          onView={setSelected}
           token={token}
           onClose={() => setSelected(null)}
           onCancel={(id) => {
@@ -378,12 +338,17 @@ function BookingsDashboard({ token }: { token: string }) {
 
 function BookingModal({
   booking: b,
+  duplicates,
+  onView,
   token,
   onClose,
   onCancel,
   onUpdate,
 }: {
   booking: BookingRecord;
+  // This customer's other confirmed bookings on the same day.
+  duplicates: BookingRecord[];
+  onView: (b: BookingRecord) => void;
   token: string;
   onClose: () => void;
   onCancel: (id: string) => void;
@@ -392,6 +357,7 @@ function BookingModal({
   const backdropRef = useRef<HTMLDivElement>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -423,6 +389,12 @@ function BookingModal({
   async function handleCancel() {
     if (!confirm(`Cancel booking for ${b.name} on ${fmtDateShort(b.date)} at ${b.time_slot}? This cannot be undone.`))
       return;
+    await cancelBooking();
+  }
+
+  // The admin cancel never emails the customer and never refunds, which is
+  // what makes it the right tool for quietly removing a duplicate.
+  async function cancelBooking() {
     setCancelling(true);
     setCancelError(null);
     const res = await fetch(`/api/admin/bookings/${b.id}`, {
@@ -490,6 +462,69 @@ function BookingModal({
         </div>
 
         <div className={`${vulfMono.className} px-6 py-5 space-y-3 text-sm`}>
+          {duplicates.length > 0 && b.status === "confirmed" && (
+            <div className="rounded-lg bg-orange-50 border border-orange-200 px-3 py-3 text-xs text-orange-900 space-y-2">
+              <p className="font-bold">Possible duplicate</p>
+              <p>This customer (same email or phone) has another booking on this day:</p>
+              <ul className="space-y-1">
+                {duplicates.map((o) => (
+                  <li key={o.id} className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 break-words">
+                      {o.time_slot} · {o.party_size} {o.party_size === 1 ? "person" : "people"} ·{" "}
+                      {o.amount_paid > 0
+                        ? `card, $${(o.amount_paid / 100).toFixed(2)} paid`
+                        : o.payment_method === "gift_card"
+                        ? "gift card"
+                        : o.payment_method
+                        ? o.payment_method.replace(/_/g, " ")
+                        : "not paid"}
+                    </span>
+                    <button onClick={() => onView(o)} className="shrink-0 underline underline-offset-2 hover:opacity-70">
+                      View
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p>
+                If it is the same visit, remove the extra copy so the party is not counted twice. A group
+                larger than {MAX_PARTY_SIZE} has to book in two parts, so two real bookings can look like this too.
+              </p>
+              {b.amount_paid > 0 ? (
+                <p>
+                  This copy has a card payment on it, so it is the one to keep. Open the other one to remove it.
+                </p>
+              ) : confirmingRemove ? (
+                <div className="space-y-2">
+                  <p className="font-bold">
+                    Remove this booking? The customer is not emailed and nothing is charged or refunded.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={cancelBooking}
+                      disabled={cancelling}
+                      className="rounded-lg bg-orange-700 text-white px-3 py-1.5 hover:opacity-90 disabled:opacity-50"
+                    >
+                      {cancelling ? "Removing…" : "Yes, remove it"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingRemove(false)}
+                      disabled={cancelling}
+                      className="rounded-lg border border-orange-300 px-3 py-1.5 hover:bg-orange-100 disabled:opacity-50"
+                    >
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingRemove(true)}
+                  className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 font-medium hover:bg-orange-100"
+                >
+                  Remove this one as a duplicate
+                </button>
+              )}
+            </div>
+          )}
           {/* Details */}
           <DetailRow label="Date" value={fmtDate(b.date)} />
           <DetailRow label="Time" value={b.time_slot} />
@@ -600,6 +635,9 @@ function BookingModal({
               >
                 {cancelling ? "Cancelling…" : "Cancel booking"}
               </button>
+              <p className="w-full text-[11px] text-neutral-400">
+                Cancelling here does not email the customer or refund a card payment.
+              </p>
             </div>
           )}
         </div>
@@ -827,6 +865,7 @@ function NewBookingModal({
 
 function AdminCalendar({
   bookings,
+  duplicateIds,
   calMonth,
   setCalMonth,
   calDate,
@@ -834,6 +873,7 @@ function AdminCalendar({
   onSelect,
 }: {
   bookings: BookingRecord[];
+  duplicateIds: Set<string>;
   calMonth: Date;
   setCalMonth: (d: Date) => void;
   calDate: string | null;
@@ -937,63 +977,102 @@ function AdminCalendar({
               No bookings on this day.
             </p>
           ) : (
-            <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
-              <div className="sm:hidden divide-y divide-black/5">
-                {dayBookings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50"
-                    onClick={() => onSelect(b)}
-                  >
-                    <div className="min-w-0">
-                      <p className={`${vulfMono.className} text-sm font-medium truncate`}>{b.time_slot} · {b.name}</p>
-                      <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
-                        {b.party_size} {b.party_size === 1 ? "person" : "people"}
-                        {b.payment_method && b.payment_method !== "stripe" && (
-                          <span className="ml-2"><PaymentBadge method={b.payment_method} /></span>
-                        )}
-                      </p>
-                    </div>
-                    <span className="text-xs text-brand underline underline-offset-2 shrink-0">View</span>
-                  </div>
-                ))}
-              </div>
-              <table className={`${vulfMono.className} hidden sm:table w-full text-sm`}>
-                <thead>
-                  <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3 hidden md:table-cell">Phone</th>
-                    <th className="px-4 py-3">Party</th>
-                    <th className="px-4 py-3">Payment</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {dayBookings.map((b) => (
-                    <tr
-                      key={b.id}
-                      className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
-                      onClick={() => onSelect(b)}
-                    >
-                      <td className="px-4 py-3 font-medium">{b.time_slot}</td>
-                      <td className="px-4 py-3">{b.name}</td>
-                      <td className="px-4 py-3 text-neutral-500">{b.email}</td>
-                      <td className="px-4 py-3 text-neutral-500 hidden md:table-cell">{b.phone ?? "—"}</td>
-                      <td className="px-4 py-3">{b.party_size}</td>
-                      <td className="px-4 py-3"><PaymentBadge method={b.payment_method} /></td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-xs text-brand underline underline-offset-2">View</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DayBookings bookings={dayBookings} duplicateIds={duplicateIds} onSelect={onSelect} />
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// One day's bookings: a card list on phones, a table from sm up. Used by both
+// the list view and the calendar's selected day.
+//
+// The table is fixed-layout with set column widths so it always fits its
+// container. Left to size itself, one long email pushed the table wider than
+// the card and the View column was clipped off the right edge.
+function DayBookings({
+  bookings,
+  duplicateIds,
+  onSelect,
+}: {
+  bookings: BookingRecord[];
+  duplicateIds: Set<string>;
+  onSelect: (b: BookingRecord) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
+      {/* Mobile card list */}
+      <div className="sm:hidden divide-y divide-black/5">
+        {bookings.map((b) => (
+          <div
+            key={b.id}
+            className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 active:bg-neutral-100"
+            onClick={() => onSelect(b)}
+          >
+            <div className="min-w-0">
+              <p className={`${vulfMono.className} text-sm font-medium truncate`}>{b.time_slot} · {b.name}</p>
+              <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
+                {b.party_size} {b.party_size === 1 ? "person" : "people"}
+                {b.payment_method && b.payment_method !== "stripe" && (
+                  <span className="ml-2"><PaymentBadge method={b.payment_method} /></span>
+                )}
+                {duplicateIds.has(b.id) && <span className="ml-2"><DuplicateBadge /></span>}
+              </p>
+            </div>
+            <span className="text-xs text-brand underline underline-offset-2 shrink-0">View</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <table className={`${vulfMono.className} hidden sm:table w-full table-fixed text-sm`}>
+        <colgroup>
+          <col className="w-[116px]" />
+          <col className="w-[20%]" />
+          <col />
+          <col className="hidden lg:table-column w-[116px]" />
+          <col className="w-[64px]" />
+          <col className="w-[124px]" />
+          <col className="w-[60px]" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-black/10 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
+            <th className="px-3 py-3 pl-4">Time</th>
+            <th className="px-3 py-3">Name</th>
+            <th className="px-3 py-3">Email</th>
+            <th className="px-3 py-3 hidden lg:table-cell">Phone</th>
+            <th className="px-3 py-3">Party</th>
+            <th className="px-3 py-3">Payment</th>
+            <th className="px-3 py-3" />
+          </tr>
+        </thead>
+        <tbody>
+          {bookings.map((b) => (
+            <tr
+              key={b.id}
+              className="border-b border-black/5 last:border-0 hover:bg-neutral-50 transition-colors cursor-pointer"
+              onClick={() => onSelect(b)}
+            >
+              <td className="px-3 py-3 pl-4 font-medium whitespace-nowrap">{b.time_slot}</td>
+              <td className="px-3 py-3 break-words">
+                {b.name}
+                {duplicateIds.has(b.id) && <span className="block mt-1"><DuplicateBadge /></span>}
+              </td>
+              {/* A long address wraps at the @ rather than mid-word. */}
+              <td className="px-3 py-3 text-xs text-neutral-500 [overflow-wrap:anywhere]">
+                {b.email.split("@")[0]}<wbr />{b.email.includes("@") ? `@${b.email.split("@").slice(1).join("@")}` : ""}
+              </td>
+              <td className="px-3 py-3 text-xs text-neutral-500 hidden lg:table-cell">{b.phone ?? "—"}</td>
+              <td className="px-3 py-3">{b.party_size}</td>
+              <td className="px-3 py-3"><PaymentBadge method={b.payment_method} /></td>
+              <td className="px-3 py-3 pr-4 text-right">
+                <span className="text-xs text-brand underline underline-offset-2">View</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1012,6 +1091,17 @@ function PaymentBadge({ method }: { method: BookingRecord["payment_method"] }) {
     return <span className="inline-block whitespace-nowrap rounded-full bg-yellow-100 text-yellow-700 text-[11px] font-medium px-2 py-0.5">Gift card</span>;
   }
   return <span className="inline-block whitespace-nowrap rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium px-2 py-0.5">Get Out Pass</span>;
+}
+
+function DuplicateBadge() {
+  return (
+    <span
+      title="This customer has another booking on this day"
+      className="inline-block whitespace-nowrap rounded-full bg-orange-100 text-orange-700 text-[11px] font-medium px-2 py-0.5 align-middle"
+    >
+      Possible duplicate
+    </span>
+  );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
