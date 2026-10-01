@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { vulfMono } from "@/app/fonts";
 
@@ -83,6 +83,23 @@ export const OTHER_COLOR = GRAY; // reserved for the "Other" fold
 
 export const AXIS_TICK = { fontSize: 11, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" };
 export const GRID_STROKE = "#f0f0f0";
+
+// ── Phone-width detection ─────────────────────────────────────────────────────
+// For chart props (axis widths, margins, labels) that Tailwind classes can't
+// reach. Matches everything below the `sm` breakpoint; reports false on the
+// server and first paint, so desktop renders exactly as before.
+
+const PHONE_QUERY = "(max-width: 639px)";
+
+function subscribePhone(onChange: () => void) {
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+export function useIsPhone() {
+  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false);
+}
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -358,7 +375,7 @@ export function KpiCard({ label, value, sub, valueColor, subColor, onClick, sele
   onClick?: () => void;
   selected?: boolean;
 }) {
-  const base = "rounded-2xl border bg-white shadow-sm px-5 py-4 text-left w-full transition-all";
+  const base = "rounded-2xl border bg-white shadow-sm px-4 sm:px-5 py-4 text-left w-full transition-all";
   const border = selected
     ? "border-[#884A20] ring-1 ring-[#884A20]/40 bg-[#884A20]/[0.04]"
     : "border-black/10" + (onClick ? " hover:border-black/25" : "");
@@ -486,30 +503,30 @@ export function JournalDrillDown({ token, from, to, accountCodes }: {
     return <p className={`${vulfMono.className} text-xs text-neutral-400 py-4 text-center`}>No transactions found for this window.</p>;
   }
   return (
-    <div>
+    <div className="overflow-x-auto">
       <table className={`${vulfMono.className} w-full text-xs`}>
         <thead>
           <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-            <th className="px-3 py-2 font-medium">Date</th>
-            {showAccount && <th className="px-3 py-2 font-medium">Account</th>}
-            <th className="px-3 py-2 font-medium">Memo</th>
-            <th className="px-3 py-2 font-medium text-right">Amount</th>
+            <th className="px-2 sm:px-3 py-2 font-medium">Date</th>
+            {showAccount && <th className="px-2 sm:px-3 py-2 font-medium">Account</th>}
+            <th className="px-2 sm:px-3 py-2 font-medium">Memo</th>
+            <th className="px-2 sm:px-3 py-2 font-medium text-right">Amount</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-black/5">
           {rows.map((r) => (
             <tr key={r.id}>
-              <td className="px-3 py-2 whitespace-nowrap text-neutral-700">{dateLong(r.date)}</td>
-              {showAccount && <td className="px-3 py-2 text-neutral-500">{r.accountNames.join(", ")}</td>}
-              <td className="px-3 py-2 text-neutral-500">{r.memo ?? "—"}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmtMoney0(r.amount)}</td>
+              <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-neutral-700">{dateLong(r.date)}</td>
+              {showAccount && <td className="px-2 sm:px-3 py-2 text-neutral-500">{r.accountNames.join(", ")}</td>}
+              <td className="px-2 sm:px-3 py-2 text-neutral-500 [overflow-wrap:anywhere]">{r.memo ?? "—"}</td>
+              <td className="px-2 sm:px-3 py-2 text-right tabular-nums text-neutral-700">{fmtMoney0(r.amount)}</td>
             </tr>
           ))}
           <tr className="border-t border-black/15 bg-neutral-50/60">
-            <td colSpan={showAccount ? 3 : 2} className="px-3 py-2 font-bold text-neutral-800 uppercase tracking-wide">
+            <td colSpan={showAccount ? 3 : 2} className="px-2 sm:px-3 py-2 font-bold text-neutral-800 uppercase tracking-wide">
               Total ({rows.length} entries)
             </td>
-            <td className="px-3 py-2 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(total)}</td>
+            <td className="px-2 sm:px-3 py-2 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(total)}</td>
           </tr>
         </tbody>
       </table>

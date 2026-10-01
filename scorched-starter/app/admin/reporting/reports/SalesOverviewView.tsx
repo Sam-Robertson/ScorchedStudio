@@ -9,7 +9,7 @@ import {
 import {
   SalesResponse, useRangedReport, LoadingOrError, Section, KpiCard, MoneyTooltip,
   DATA_STARTS_AT, fmtMoney0, fmtMoney2, fmtAxisMoney, dateShort,
-  dowIndex, DOW_NAMES, AXIS_TICK, GRID_STROKE, BROWN, GREEN,
+  dowIndex, DOW_NAMES, AXIS_TICK, GRID_STROKE, BROWN, GREEN, useIsPhone,
 } from "./shared";
 import { ChartTooltip } from "./bookingShared";
 import SpDetailsView from "./SpDetailsView";
@@ -36,10 +36,39 @@ function fmtCount(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+// Phone-only tick for the Top Items chart. The name column is narrower there,
+// so a long item name wraps onto a second line (and is cut with an ellipsis
+// past that) instead of running off the left edge of the card. The tooltip
+// still shows the full name.
+const PHONE_ITEM_CHARS = 17; // characters per line at the phone tick size
+
+function wrapItemName(name: string): string[] {
+  const lines: string[] = [];
+  for (const word of name.split(" ")) {
+    const last = lines[lines.length - 1];
+    if (last != null && `${last} ${word}`.length <= PHONE_ITEM_CHARS) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word);
+  }
+  const out = lines.length > 2 ? [lines[0], lines.slice(1).join(" ")] : lines;
+  return out.map((l) => (l.length > PHONE_ITEM_CHARS ? `${l.slice(0, PHONE_ITEM_CHARS - 1).trimEnd()}…` : l));
+}
+
+function PhoneItemTick({ x, y, payload }: { x?: number; y?: number; payload?: { value?: string } }) {
+  const lines = wrapItemName(String(payload?.value ?? ""));
+  return (
+    <text x={x} y={y} textAnchor="end" fontSize={10} fontFamily="var(--font-display,monospace)" fill="#6b7280">
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i > 0 ? "1.15em" : lines.length > 1 ? "-0.2em" : "0.355em"}>{line}</tspan>
+      ))}
+    </text>
+  );
+}
+
 export default function SalesOverviewView({ token, query }: { token: string; query: string }) {
   const { data, loading, error } = useRangedReport<SalesResponse>("/api/admin/accounting/reports/sales", token, query);
   const [metric, setMetric] = useState<Metric>("sales");
   const isCount = metric === "count";
+  const isPhone = useIsPhone();
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
   // Daily-detail disclosure: mounted lazily on first open, then kept mounted
   // (just hidden) so re-opening doesn't refetch.
@@ -151,11 +180,12 @@ export default function SalesOverviewView({ token, query }: { token: string; que
               ) : (
                 <div className="px-2 pt-6 pb-4">
                   <ResponsiveContainer width="100%" height={Math.max(220, topItems.length * 32)}>
-                    <BarChart data={topItems} layout="vertical" margin={{ top: 4, right: 48, left: 8, bottom: 4 }}>
+                    <BarChart data={topItems} layout="vertical" margin={{ top: 4, right: isPhone ? 28 : 48, left: isPhone ? 0 : 8, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
-                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}
+                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false} tickCount={isPhone ? 4 : 5}
                         tickFormatter={isCount ? fmtCount : fmtAxisMoney} />
-                      <YAxis type="category" dataKey="name" tick={{ ...AXIS_TICK, fill: "#6b7280" }} axisLine={false} tickLine={false} width={140} />
+                      <YAxis type="category" dataKey="name" tick={isPhone ? <PhoneItemTick /> : { ...AXIS_TICK, fill: "#6b7280" }}
+                        axisLine={false} tickLine={false} width={140} interval={isPhone ? 0 : "preserveEnd"} />
                       <Tooltip content={isCount ? <ChartTooltip /> : <MoneyTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                       <Bar dataKey={seriesKey} fill={BROWN} radius={[0, 3, 3, 0]} maxBarSize={18} />
                     </BarChart>
@@ -225,31 +255,44 @@ export default function SalesOverviewView({ token, query }: { token: string; que
               <div className="px-2 pt-6 pb-4">
                 <ResponsiveContainer width="100%" height={280}>
                   {selectedDow == null ? (
-                    <AreaChart data={dailyData} margin={{ top: 8, right: 72, left: 4, bottom: 4 }}>
+                    <AreaChart data={dailyData} margin={{ top: 8, right: isPhone ? 24 : 72, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
                       <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} minTickGap={40} />
                       <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52}
                         tickFormatter={isCount ? fmtCount : fmtAxisMoney} />
                       <Tooltip content={isCount ? <ChartTooltip /> : <MoneyTooltip />} />
                       <ReferenceLine y={dailyAvg} stroke={BROWN} strokeDasharray="4 4" strokeWidth={1.5}
-                        label={{ value: `Avg ${isCount ? fmtCount(dailyAvg) : fmtMoney0(dailyAvg)}`, position: "right", fontSize: 10, fill: BROWN, fontFamily: "var(--font-display,monospace)" }} />
+                        label={isPhone ? undefined : { value: `Avg ${isCount ? fmtCount(dailyAvg) : fmtMoney0(dailyAvg)}`, position: "right", fontSize: 10, fill: BROWN, fontFamily: "var(--font-display,monospace)" }} />
                       <ReferenceLine y={dailyMax} stroke="#9ca3af" strokeDasharray="2 4" strokeWidth={1}
-                        label={{ value: `Max ${isCount ? fmtCount(dailyMax) : fmtMoney0(dailyMax)}`, position: "right", fontSize: 10, fill: "#9ca3af", fontFamily: "var(--font-display,monospace)" }} />
+                        label={isPhone ? undefined : { value: `Max ${isCount ? fmtCount(dailyMax) : fmtMoney0(dailyMax)}`, position: "right", fontSize: 10, fill: "#9ca3af", fontFamily: "var(--font-display,monospace)" }} />
                       <Area type="monotone" dataKey={seriesKey} stroke={GREEN} strokeWidth={2} fill={GREEN} fillOpacity={0.12} dot={false} activeDot={{ r: 4 }} />
                     </AreaChart>
                   ) : (
-                    <LineChart data={dailyData} margin={{ top: 8, right: 72, left: 4, bottom: 4 }}>
+                    <LineChart data={dailyData} margin={{ top: 8, right: isPhone ? 24 : 72, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
                       <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} minTickGap={40} />
                       <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={52}
                         tickFormatter={isCount ? fmtCount : fmtAxisMoney} />
                       <Tooltip content={isCount ? <ChartTooltip /> : <MoneyTooltip />} />
                       <ReferenceLine y={dailyAvg} stroke={BROWN} strokeDasharray="4 4" strokeWidth={1.5}
-                        label={{ value: `Avg ${isCount ? fmtCount(dailyAvg) : fmtMoney0(dailyAvg)}`, position: "right", fontSize: 10, fill: BROWN, fontFamily: "var(--font-display,monospace)" }} />
+                        label={isPhone ? undefined : { value: `Avg ${isCount ? fmtCount(dailyAvg) : fmtMoney0(dailyAvg)}`, position: "right", fontSize: 10, fill: BROWN, fontFamily: "var(--font-display,monospace)" }} />
                       <Line type="monotone" dataKey={seriesKey} stroke={GREEN} strokeWidth={2} dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} />
                     </LineChart>
                   )}
                 </ResponsiveContainer>
+                {/* Phones: the reference-line labels don't fit beside the plot, so they sit here instead. */}
+                <div className="sm:hidden flex flex-wrap items-center gap-x-4 gap-y-1 px-4 mt-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 border-t-2 border-dashed border-[#884A20] shrink-0" />
+                    <span className={`${vulfMono.className} text-[10px] text-[#884A20]`}>Avg {isCount ? fmtCount(dailyAvg) : fmtMoney0(dailyAvg)}</span>
+                  </div>
+                  {selectedDow == null && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-4 border-t-2 border-dotted border-neutral-400 shrink-0" />
+                      <span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Max {isCount ? fmtCount(dailyMax) : fmtMoney0(dailyMax)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Section>

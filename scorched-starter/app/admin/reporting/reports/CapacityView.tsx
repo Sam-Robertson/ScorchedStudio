@@ -11,7 +11,7 @@ import {
   BarChart, Bar, Cell, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { EstimatedBookingsResponse, LoadingOrError, Section, KpiCard, GREEN, monthShort, monthTick, monthsBetween, AXIS_TICK } from "./shared";
+import { EstimatedBookingsResponse, LoadingOrError, Section, KpiCard, GREEN, monthShort, monthTick, monthsBetween, AXIS_TICK, useIsPhone } from "./shared";
 import {
   TimeFrame, TfToggle, ChartTooltip, fmtPct,
   buildCapacityData, buildHeatmap, buildRepeatData, buildRepeatChart,
@@ -28,6 +28,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
 }) {
   const [capDays, setCapDays] = useState<30 | 60 | 90>(30);
   const [repeatTf, setRepeatTf] = useState<TimeFrame>("week");
+  const isPhone = useIsPhone();
 
   const confirmed = useMemo(() => bookings.filter((b) => b.status === "confirmed"), [bookings]);
   const cancelled = useMemo(() => bookings.filter((b) => b.status === "cancelled"), [bookings]);
@@ -93,7 +94,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
       <Section
         title="Booked seats per day"
         action={
-          <div className="flex rounded-lg border border-black/15 overflow-hidden">
+          <div className="flex rounded-lg border border-black/15 overflow-hidden self-start sm:self-auto">
             {([30, 60, 90] as const).map((d) => (
               <button key={d} onClick={() => setCapDays(d)}
                 className={`${vulfMono.className} px-3 py-1.5 text-xs transition-colors ${capDays === d ? "bg-[#884A20] text-white" : "text-neutral-500 hover:bg-neutral-50"}`}>
@@ -107,7 +108,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
           <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={capacityData} margin={{ top: 4, right: 32, left: 0, bottom: 4 }} barCategoryGap="15%">
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} interval={Math.floor(capDays / 8)} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} interval={Math.floor(capDays / (isPhone ? 4 : 8))} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "var(--font-display,monospace)", fill: "#9ca3af" }} axisLine={false} tickLine={false} width={32} />
               <Tooltip
                 content={({ active, payload, label }) => {
@@ -132,7 +133,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#519A70]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Seats booked</span></div>
             <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>7-day rolling avg</span></div>
           </div>
-          <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-3`}>
+          <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-left sm:text-center px-4 sm:px-0 mt-2 sm:mt-1 pb-3`}>
             Booked seats by session date. The line is the average of that day and the previous six -- read it for trend and week-over-week direction, not against a capacity ceiling.
           </p>
         </div>
@@ -176,7 +177,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: GREEN }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Booked (real)</span></div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: ESTIMATE_FILL }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated (pre-launch)</span></div>
             </div>
-            <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-3`}>
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-left sm:text-center px-4 sm:px-0 mt-2 sm:mt-1 pb-3`}>
               Online booking launched {monthShort(ONLINE_BOOKING_LAUNCH)}. Before that, the online widget has no
               records at all — the lighter bars estimate seats from Square orders with a General Admission item
               (booked via Acuity Scheduling), so treat them as directional, not exact.
@@ -190,19 +191,23 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
         {heatSlots.length === 0 ? (
           <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>No booking data yet.</p>
         ) : (
-          <div className="px-6 py-5 overflow-x-auto">
-            <div className="inline-block min-w-full">
+          <div className="sm:px-6 py-5 overflow-x-auto">
+            {/* Phones: the day labels stay pinned while the slots scroll (the
+                side padding moves inside the scroller so nothing shows to the
+                left of them), and slot labels always break onto two lines so
+                neighbours don't run together. */}
+            <div className="inline-block min-w-full px-4 sm:px-0">
               <div className="flex mb-1">
-                <div className="w-10 shrink-0" />
+                <div className="w-10 shrink-0 sticky left-0 z-10 bg-white sm:static sm:bg-transparent" />
                 {heatSlots.map((slot) => (
-                  <div key={slot} className={`${vulfMono.className} text-[9px] text-neutral-400 text-center flex-1 min-w-[44px] pb-1.5 leading-tight`}>
+                  <div key={slot} className={`${vulfMono.className} text-[9px] text-neutral-400 text-center flex-1 min-w-[44px] px-1.5 sm:px-0 pb-1.5 leading-tight`}>
                     {slot}
                   </div>
                 ))}
               </div>
               {DOW_ORDER.map((dow, rowIdx) => (
                 <div key={dow} className="flex items-center mb-1">
-                  <div className={`${vulfMono.className} text-[10px] text-neutral-500 w-10 shrink-0 pr-2 text-right`}>
+                  <div className={`${vulfMono.className} text-[10px] text-neutral-500 w-10 shrink-0 pr-2 text-right sticky left-0 z-10 bg-white self-stretch flex items-center justify-end sm:static sm:bg-transparent sm:self-auto sm:block`}>
                     {DOW_LABELS[rowIdx]}
                   </div>
                   {heatSlots.map((slot) => {
@@ -224,7 +229,7 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
                 </div>
               ))}
             </div>
-            <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-4`}>
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400 mt-4 px-4 sticky left-0 sm:px-0 sm:static`}>
               All confirmed bookings by day of week and session time. Darker = more bookings.
             </p>
           </div>
@@ -271,11 +276,11 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
           ) : (
             <table className={`${vulfMono.className} w-full text-sm`}>
               <thead>
-                <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
-                  <th className="pb-3 font-medium">First booking month</th>
-                  <th className="pb-3 font-medium text-right">New customers</th>
-                  <th className="pb-3 font-medium text-right">Booked again</th>
-                  <th className="pb-3 font-medium text-right">Retention</th>
+                <tr className="border-b border-black/10 text-left text-[10px] sm:text-xs uppercase tracking-wide text-neutral-400">
+                  <th className="pb-3 font-medium align-bottom sm:align-middle">First booking month</th>
+                  <th className="pb-3 pl-3 sm:pl-0 font-medium text-right align-bottom sm:align-middle">New customers</th>
+                  <th className="pb-3 pl-3 sm:pl-0 font-medium text-right align-bottom sm:align-middle">Booked again</th>
+                  <th className="pb-3 pl-3 sm:pl-0 font-medium text-right align-bottom sm:align-middle">Retention</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,12 +289,12 @@ export default function CapacityView({ bookings, query, estimated, estimatedLoad
                   const label = new Date(row.month + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" });
                   return (
                     <tr key={row.month} className="border-b border-black/5 last:border-0">
-                      <td className="py-2.5 text-neutral-700">{label}</td>
-                      <td className="py-2.5 text-right tabular-nums text-neutral-600">{row.total}</td>
-                      <td className="py-2.5 text-right tabular-nums text-neutral-600">{row.returned}</td>
-                      <td className="py-2.5 text-right">
+                      <td className="py-2.5 text-neutral-700 whitespace-nowrap">{label}</td>
+                      <td className="py-2.5 pl-3 sm:pl-0 text-right tabular-nums text-neutral-600">{row.total}</td>
+                      <td className="py-2.5 pl-3 sm:pl-0 text-right tabular-nums text-neutral-600">{row.returned}</td>
+                      <td className="py-2.5 pl-3 sm:pl-0 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-black/5 overflow-hidden">
+                          <div className="hidden sm:block w-16 h-1.5 rounded-full bg-black/5 overflow-hidden">
                             <div className="h-full rounded-full bg-[#884A20]" style={{ width: `${pct}%` }} />
                           </div>
                           <span className="tabular-nums text-neutral-500 w-7 text-right">{pct}%</span>

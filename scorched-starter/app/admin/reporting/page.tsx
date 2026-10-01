@@ -136,18 +136,30 @@ function ReportingDashboard({ token }: { token: string }) {
 
   return (
     <section className="container-px py-10 max-w-6xl mx-auto">
-      <div className="mb-8 print:hidden">
-        <p className="eyebrow text-brand">Admin</p>
-        <h1 className="h2 font-bold">Reporting</h1>
+      <div className="flex items-start justify-between gap-4 mb-5 sm:mb-8 print:hidden">
+        <div>
+          <p className="eyebrow text-brand">Admin</p>
+          <h1 className="h2 font-bold">Reporting</h1>
+        </div>
+        {/* Phones only: the print button sits up here as an icon so the tab
+            row below keeps the full width. */}
+        <button
+          onClick={() => window.print()}
+          aria-label="Print / Save PDF"
+          className="sm:hidden rounded-lg border border-black/15 bg-white p-2.5 text-neutral-600 hover:bg-neutral-50 shrink-0"
+        >
+          <Printer className="w-4 h-4" />
+        </button>
       </div>
       <div className="flex items-start justify-between gap-4 mb-4 print:hidden">
-        {/* Never wraps — scrolls horizontally when the tabs don't fit. */}
-        <div className={`${vulfMono.className} flex gap-1 flex-nowrap overflow-x-auto min-w-0 pb-1`}>
+        {/* Phones wrap so every tab is visible. From sm up it never wraps and
+            scrolls horizontally when the tabs don't fit. */}
+        <div className={`${vulfMono.className} flex gap-1.5 sm:gap-1 flex-wrap sm:flex-nowrap sm:overflow-x-auto min-w-0 pb-1`}>
           {(Object.keys(VIEW_LABEL) as ReportView[]).filter((v) => v !== "normalized").map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs tracking-wide uppercase font-semibold whitespace-nowrap transition-colors ${
+              className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs tracking-wide uppercase font-semibold whitespace-nowrap transition-colors ${
                 view === v ? "bg-[#884A20] text-white" : "bg-black/5 text-neutral-600 hover:bg-black/10"
               }`}
             >
@@ -157,7 +169,7 @@ function ReportingDashboard({ token }: { token: string }) {
         </div>
         <button
           onClick={() => window.print()}
-          className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50 shrink-0`}
+          className={`${vulfMono.className} hidden sm:flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50 shrink-0`}
         >
           <Printer className="w-3.5 h-3.5" />
           Print / Save PDF
@@ -175,7 +187,7 @@ function ReportingDashboard({ token }: { token: string }) {
         >
           Normalized EBITDA
         </button>
-        <span className={`${vulfMono.className} text-xs text-neutral-400 ml-2`}>for financing / sale prep</span>
+        <span className={`${vulfMono.className} hidden sm:inline text-xs text-neutral-400 ml-2`}>for financing / sale prep</span>
       </div>
 
       {(isRanged || showsLocation) && (
@@ -298,9 +310,9 @@ function BalanceSheetView({ token }: { token: string }) {
             <div key={t} className="px-4 py-3">
               <p className={`${vulfMono.className} text-xs uppercase tracking-widest text-neutral-400 mb-2`}>{label}</p>
               {byType(t).map((r) => (
-                <div key={r.code} className="flex items-center justify-between text-sm py-1">
+                <div key={r.code} className="flex items-center justify-between gap-3 text-sm py-1">
                   <span>{r.code} — {r.name}</span>
-                  <span className={vulfMono.className}>{fmtMoney0(r.balance)}</span>
+                  <span className={`${vulfMono.className} shrink-0`}>{fmtMoney0(r.balance)}</span>
                 </div>
               ))}
               <div className={`flex items-center justify-between text-sm py-1 font-semibold border-t border-black/10 mt-1 pt-1 ${vulfMono.className}`}>
@@ -344,11 +356,11 @@ function CashFlowView({ token }: { token: string }) {
       <table className={`${vulfMono.className} w-full text-xs`}>
         <thead>
           <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-            <th className="px-4 py-3 sticky left-0 z-10 bg-white">Month</th>
-            <th className="px-4 py-3 text-right">Operating</th>
-            <th className="px-4 py-3 text-right">Investing</th>
-            <th className="px-4 py-3 text-right">Financing</th>
-            <th className="px-4 py-3 text-right">Net Change</th>
+            <th className="px-3 sm:px-4 py-3 sticky left-0 z-10 bg-white">Month</th>
+            <th className="px-3 sm:px-4 py-3 text-right">Operating</th>
+            <th className="px-3 sm:px-4 py-3 text-right">Investing</th>
+            <th className="px-3 sm:px-4 py-3 text-right">Financing</th>
+            <th className="px-3 sm:px-4 py-3 text-right whitespace-nowrap">Net Change</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-black/5">
@@ -358,19 +370,19 @@ function CashFlowView({ token }: { token: string }) {
             <>
               {monthRows.map(({ m, op, inv, fin, net }) => (
                 <tr key={m}>
-                  <td className="px-4 py-2.5 font-semibold sticky left-0 z-10 bg-white">{monthShort(m)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney0(op)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney0(inv)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney0(fin)}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney0(net)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 font-semibold whitespace-nowrap sticky left-0 z-10 bg-white">{monthShort(m)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney0(op)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney0(inv)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney0(fin)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right font-semibold">{fmtMoney0(net)}</td>
                 </tr>
               ))}
               <tr className="border-t border-black/15 bg-neutral-50/60">
-                <td className="px-4 py-2.5 font-bold text-neutral-800 uppercase tracking-wide sticky left-0 z-10 bg-neutral-50">Total</td>
-                <td className="px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.op)}</td>
-                <td className="px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.inv)}</td>
-                <td className="px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.fin)}</td>
-                <td className="px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.net)}</td>
+                <td className="px-3 sm:px-4 py-2.5 font-bold text-neutral-800 uppercase tracking-wide sticky left-0 z-10 bg-neutral-50">Total</td>
+                <td className="px-3 sm:px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.op)}</td>
+                <td className="px-3 sm:px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.inv)}</td>
+                <td className="px-3 sm:px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.fin)}</td>
+                <td className="px-3 sm:px-4 py-2.5 text-right font-bold text-neutral-800">{fmtMoney0(totals.net)}</td>
               </tr>
             </>
           )}
@@ -424,21 +436,21 @@ function NormalizedView({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <form onSubmit={addAdjustment} className="rounded-2xl border border-[#884A20]/30 bg-[#F6E4E1]/40 p-5 flex flex-wrap items-end gap-3 print:hidden">
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="block text-xs text-neutral-500 mb-1">Month</label>
-          <input type="month" className={inputCls} value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} required />
+          <input type="month" className={`${inputCls} w-full sm:w-auto`} value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} required />
         </div>
-        <div className="flex-1 min-w-[160px]">
+        <div className="w-full sm:w-auto sm:flex-1 min-w-[160px]">
           <label className="block text-xs text-neutral-500 mb-1">Label</label>
-          <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Owner health insurance add-back" required />
+          <input className={`${inputCls} w-full sm:w-auto`} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Owner health insurance add-back" required />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="block text-xs text-neutral-500 mb-1">Amount</label>
-          <input type="number" step="0.01" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="positive = add back" required />
+          <input type="number" step="0.01" className={`${inputCls} w-full sm:w-auto`} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="positive = add back" required />
         </div>
-        <div className="flex-1 min-w-[160px]">
+        <div className="w-full sm:w-auto sm:flex-1 min-w-[160px]">
           <label className="block text-xs text-neutral-500 mb-1">Note (optional)</label>
-          <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className={`${inputCls} w-full sm:w-auto`} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <button type="submit" disabled={saving} className={`${vulfMono.className} rounded-xl bg-[#884A20] px-5 py-2.5 text-xs tracking-[0.15em] text-white font-semibold hover:opacity-90 disabled:opacity-60`}>
           ADD
@@ -452,19 +464,19 @@ function NormalizedView({ token }: { token: string }) {
             <table className={`${vulfMono.className} w-full text-xs`}>
               <thead>
                 <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-                  <th className="px-4 py-3">Month</th>
-                  <th className="px-4 py-3 text-right">Base EBITDA</th>
-                  <th className="px-4 py-3 text-right">Adjustments</th>
-                  <th className="px-4 py-3 text-right">Normalized EBITDA</th>
+                  <th className="px-3 sm:px-4 py-3 sticky left-0 z-10 bg-white">Month</th>
+                  <th className="px-3 sm:px-4 py-3 text-right">Base EBITDA</th>
+                  <th className="px-3 sm:px-4 py-3 text-right">Adjustments</th>
+                  <th className="px-3 sm:px-4 py-3 text-right">Normalized EBITDA</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
                 {(data?.normalized ?? []).map((r) => (
                   <tr key={r.period_month}>
-                    <td className="px-4 py-2.5 font-semibold">{monthLabel(r.period_month)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtMoney(r.ebitda)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtMoney(r.adjustments)}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney(r.ebitda_normalized)}</td>
+                    <td className="px-3 sm:px-4 py-2.5 font-semibold whitespace-nowrap sticky left-0 z-10 bg-white">{monthLabel(r.period_month)}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.ebitda)}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.adjustments)}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right font-semibold">{fmtMoney(r.ebitda_normalized)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -477,12 +489,12 @@ function NormalizedView({ token }: { token: string }) {
               {(data?.adjustments ?? []).length === 0 ? (
                 <p className="text-sm text-neutral-400 py-6 text-center">No adjustments recorded.</p>
               ) : data!.adjustments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                   <div>
                     <p>{monthLabel(a.period_month)} — {a.label}</p>
                     {a.note && <p className="text-xs text-neutral-500">{a.note}</p>}
                   </div>
-                  <span className={vulfMono.className}>{fmtMoney(a.amount)}</span>
+                  <span className={`${vulfMono.className} shrink-0`}>{fmtMoney(a.amount)}</span>
                 </div>
               ))}
             </div>

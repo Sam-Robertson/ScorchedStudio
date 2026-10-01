@@ -175,10 +175,11 @@ export default function CostsView({ token, query }: { token: string; query: stri
     else { setSortCol(col); setSortDir(col === "name" ? "asc" : "desc"); }
   }
 
-  const Th = ({ label, col, right }: { label: string; col: SortCol; right?: boolean }) => (
+  // `wrap` lets a long header break onto several lines on phones.
+  const Th = ({ label, col, right, wrap }: { label: string; col: SortCol; right?: boolean; wrap?: boolean }) => (
     <th
       onClick={() => toggleSort(col)}
-      className={`px-4 pb-3 pt-4 font-medium whitespace-nowrap cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""}`}
+      className={`px-2 first:pl-4 last:pr-4 sm:px-4 pb-3 pt-4 font-medium align-bottom sm:align-middle ${wrap ? "sm:whitespace-nowrap" : "whitespace-nowrap"} cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""}`}
     >
       {label}{sortCol === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
     </th>
@@ -198,8 +199,8 @@ export default function CostsView({ token, query }: { token: string; query: stri
             {pieData.length === 0 ? (
               <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No costs in this range.</p>
             ) : (
-              <div className="px-6 py-6 grid md:grid-cols-[minmax(220px,300px)_1fr] gap-6 items-center">
-                <div>
+              <div className="px-4 sm:px-6 py-6 grid grid-cols-1 md:grid-cols-[minmax(220px,300px)_1fr] gap-6 items-center">
+                <div className="min-w-0">
                   {pieData.map((slice) => {
                     const active = selected == null || matchesSelection(slice.name, selected);
                     return (
@@ -262,7 +263,7 @@ export default function CostsView({ token, query }: { token: string; query: stri
           <Section
             title="Cost Categories by Month"
             action={selected != null ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {selectedCodes.length > 0 && (
                   <button onClick={() => setShowCharges((v) => !v)}
                     className={`${vulfMono.className} text-xs rounded-lg px-3 py-1.5 border transition-colors ${
@@ -370,22 +371,22 @@ export default function CostsView({ token, query }: { token: string; query: stri
               <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-12 text-center`}>No operating costs in this range.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className={`${vulfMono.className} w-full min-w-[560px] text-sm`}>
+                <table className={`${vulfMono.className} w-full sm:min-w-[560px] text-xs sm:text-sm`}>
                   <thead>
-                    <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
+                    <tr className="border-b border-black/10 text-left text-[10px] sm:text-xs uppercase tracking-wide text-neutral-400">
                       <Th label="Account" col="name" />
                       <Th label="Amount" col="amount" right />
-                      <Th label="% of Operating Costs" col="pct" right />
+                      <Th label="% of Operating Costs" col="pct" right wrap />
                     </tr>
                   </thead>
                   <tbody>
                     {accountRows.map((r) => (
                       <tr key={r.code} className="border-b border-black/5 hover:bg-neutral-50/60">
-                        <td className="px-4 py-2.5 text-neutral-800">
+                        <td className="pl-4 pr-2 sm:px-4 py-2.5 text-neutral-800">
                           <span className="text-neutral-400 mr-2">{r.code}</span>{r.name}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-neutral-700">{fmtMoney0(r.amount)}</td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="px-2 sm:px-4 py-2.5 text-right tabular-nums text-neutral-700">{fmtMoney0(r.amount)}</td>
+                        <td className="pl-2 pr-4 sm:px-4 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-3">
                             <div className="hidden sm:block w-20 h-1.5 rounded-full bg-black/5 overflow-hidden">
                               <div className="h-full rounded-full bg-[#884A20]" style={{ width: `${Math.min(100, r.pct * 100)}%` }} />
@@ -396,9 +397,9 @@ export default function CostsView({ token, query }: { token: string; query: stri
                       </tr>
                     ))}
                     <tr className="border-t border-black/15 bg-neutral-50/60">
-                      <td className="px-4 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide">Total operating costs</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totalOpex)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-500">100%</td>
+                      <td className="pl-4 pr-2 sm:px-4 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide">Total operating costs</td>
+                      <td className="px-2 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totalOpex)}</td>
+                      <td className="pl-2 pr-4 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-500">100%</td>
                     </tr>
                   </tbody>
                 </table>

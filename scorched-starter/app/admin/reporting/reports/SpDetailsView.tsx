@@ -82,10 +82,10 @@ export default function SpDetailsView({ token }: { token: string }) {
     else { setSortCol(col); setSortDir("desc"); }
   }
 
-  const Th = ({ label, col, right }: { label: string; col: SortCol; right?: boolean }) => (
+  const Th = ({ label, col, right, sticky }: { label: string; col: SortCol; right?: boolean; sticky?: boolean }) => (
     <th
       onClick={() => toggleSort(col)}
-      className={`px-4 pb-3 pt-4 font-medium whitespace-nowrap cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""}`}
+      className={`px-3 sm:px-4 pb-3 pt-4 font-medium whitespace-nowrap cursor-pointer select-none hover:text-neutral-600 ${right ? "text-right" : ""} ${sortCol === col ? "text-neutral-700" : ""} ${sticky ? "sticky left-0 z-10 bg-white sm:static sm:bg-transparent" : ""}`}
     >
       {label}{sortCol === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
     </th>
@@ -123,10 +123,11 @@ export default function SpDetailsView({ token }: { token: string }) {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className={`${vulfMono.className} w-full min-w-[720px] text-sm`}>
+              <table className={`${vulfMono.className} w-full sm:min-w-[720px] text-xs sm:text-sm`}>
                 <thead>
                   <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
-                    <Th label="Date" col="date" />
+                    {/* Phones: Date stays pinned while the other columns scroll under it. */}
+                    <Th label="Date" col="date" sticky />
                     <Th label="Day" col="dow" />
                     <Th label="Orders" col="orders" right />
                     <Th label="Items" col="items" right />
@@ -137,30 +138,30 @@ export default function SpDetailsView({ token }: { token: string }) {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.date} className="border-b border-black/5 hover:bg-neutral-50/60">
-                      <td className="px-4 py-2.5 font-semibold text-neutral-800 whitespace-nowrap">{dateShort(r.date)}</td>
-                      <td className="px-4 py-2.5 text-neutral-500">{DOW_NAMES[r.dow].slice(0, 3)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-neutral-700">{r.orders}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-neutral-600">{r.items}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-neutral-700">
+                      <td className="px-3 sm:px-4 py-2.5 font-semibold text-neutral-800 whitespace-nowrap sticky left-0 z-10 bg-white sm:static sm:bg-transparent">{dateShort(r.date)}</td>
+                      <td className="px-3 sm:px-4 py-2.5 text-neutral-500">{DOW_NAMES[r.dow].slice(0, 3)}</td>
+                      <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums text-neutral-700">{r.orders}</td>
+                      <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums text-neutral-600">{r.items}</td>
+                      <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums text-neutral-700">
                         {r.netSales == null ? "—" : fmtMoney0(r.netSales)}
                       </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-neutral-600">{fmtMoney2(r.avgOrderValue)}</td>
+                      <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums text-neutral-600">{fmtMoney2(r.avgOrderValue)}</td>
                     </tr>
                   ))}
                   <tr className="border-t border-black/15 bg-neutral-50/60">
-                    <td className="px-4 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide" colSpan={2}>
+                    <td className="px-3 sm:px-4 py-2.5 font-bold text-neutral-800 uppercase text-xs tracking-wide whitespace-nowrap" colSpan={2}>
                       Total ({rows.length} days)
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{totals.orders.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{totals.items.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totals.netSales)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">
+                    <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{totals.orders.toLocaleString()}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">{totals.items.toLocaleString()}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-800">{fmtMoney0(totals.netSales)}</td>
+                    <td className="px-3 sm:px-4 py-2.5 text-right tabular-nums font-bold text-neutral-700">
                       {totals.orders > 0 ? fmtMoney2(totals.gross / totals.orders) : "—"}
                     </td>
                   </tr>
                 </tbody>
               </table>
-              <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-4 py-3`}>
+              <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-4 py-3 sticky left-0`}>
                 {jumpDate
                   ? `Showing ${dateLong(jumpDate)} ± ${JUMP_PAD_DAYS} days.`
                   : `The last ${RECENT_DAYS} days with Square order data (independent of the page's date range).`}

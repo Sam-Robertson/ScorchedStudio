@@ -202,7 +202,7 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
                   </tr>
                 </tbody>
               </table>
-              <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-4 py-3`}>
+              <p className={`${vulfMono.className} text-[10px] text-neutral-400 px-4 py-3 sticky left-0`}>
                 Labor Costs = Payroll: Wages (6000) + Payroll: Employer Taxes (6010); labor is included in OpEx.
                 Gross Profit = Net Revenue − COGS. Click a column header to sort; oldest month first by default.
                 Click a dollar amount (except the computed Gross Profit / EBITDA / Net Income columns) to see the
@@ -243,7 +243,9 @@ export default function PlDetailsView({ token, query }: { token: string; query: 
         {expanded && drill && (
           <tr className="border-b border-black/5">
             <td colSpan={10} className="px-3 py-4 bg-neutral-50/60">
-              <div className="rounded-xl border border-black/10 bg-white p-4 max-w-2xl sticky left-3">
+              {/* Phones: sized to the screen, not the (much wider) table, so the
+                  pinned panel is readable without scrolling sideways. */}
+              <div className="rounded-xl border border-black/10 bg-white p-3 sm:p-4 w-[calc(100vw-4.75rem)] sm:w-auto max-w-2xl sticky left-3">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-neutral-500`}>
                     {DRILL_LABEL[drill.col]} — {monthShort(r.period_month)}

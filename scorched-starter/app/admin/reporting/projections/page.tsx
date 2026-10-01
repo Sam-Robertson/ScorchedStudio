@@ -11,6 +11,13 @@ function fmtMoney(n: number | null | undefined) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+// Whole dollars, for the phone layout of the DSCR table: with cents the DSCR
+// column itself gets pushed off the right edge of the screen.
+function fmtMoneyWhole(n: number | null | undefined) {
+  if (n == null) return fmtMoney(n);
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
 type ProjectionRow = {
   period_month: string;
   proj_revenue: number | null;
@@ -222,27 +229,27 @@ function ProjectionsDashboard({ token }: { token: string }) {
           <table className={`${vulfMono.className} w-full text-xs`}>
             <thead>
               <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-                <th className="px-4 py-3">Month</th>
-                <th className="px-4 py-3 text-right">Proj Revenue</th>
-                <th className="px-4 py-3 text-right">Act Revenue</th>
-                <th className="px-4 py-3 text-right">Var</th>
-                <th className="px-4 py-3 text-right">Proj EBITDA</th>
-                <th className="px-4 py-3 text-right">Act EBITDA</th>
-                <th className="px-4 py-3 text-right">Var</th>
+                <th className="px-3 sm:px-4 py-3 sticky left-0 z-10 bg-white">Month</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Proj Revenue</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Act Revenue</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Var</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Proj EBITDA</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Act EBITDA</th>
+                <th className="px-3 sm:px-4 py-3 text-right">Var</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {projections.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-neutral-400">No projection months loaded.</td></tr>
+                <tr><td colSpan={7} className="px-3 sm:px-4 py-8 text-left sm:text-center text-neutral-400">No projection months loaded.</td></tr>
               ) : projections.map((r) => (
                 <tr key={r.period_month}>
-                  <td className="px-4 py-2.5 font-semibold">{r.period_month.slice(0, 7)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.proj_revenue)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.act_revenue)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.var_revenue)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.proj_ebitda)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.act_ebitda)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtMoney(r.var_ebitda)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 font-semibold whitespace-nowrap sticky left-0 z-10 bg-white">{r.period_month.slice(0, 7)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.proj_revenue)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.act_revenue)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.var_revenue)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.proj_ebitda)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.act_ebitda)}</td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">{fmtMoney(r.var_ebitda)}</td>
                 </tr>
               ))}
             </tbody>
@@ -268,23 +275,29 @@ function ProjectionsDashboard({ token }: { token: string }) {
           <table className={`${vulfMono.className} w-full text-xs`}>
             <thead>
               <tr className="border-b border-black/10 text-left text-neutral-400 uppercase tracking-wide">
-                <th className="px-4 py-3">Month</th>
-                <th className="px-4 py-3 text-right">EBITDA (TTM)</th>
-                <th className="px-4 py-3 text-right">Debt Service (TTM)</th>
-                <th className="px-4 py-3 text-right">DSCR</th>
+                <th className="px-2.5 sm:px-4 py-3">Month</th>
+                <th className="px-2.5 sm:px-4 py-3 text-right">EBITDA (TTM)</th>
+                <th className="px-2.5 sm:px-4 py-3 text-right">Debt Service (TTM)</th>
+                <th className="px-2.5 sm:px-4 py-3 text-right">DSCR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {dscr.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-neutral-400">No data yet.</td></tr>
+                <tr><td colSpan={4} className="px-2.5 sm:px-4 py-8 text-center text-neutral-400">No data yet.</td></tr>
               ) : dscr.map((r) => {
                 const below = r.dscr_ttm != null && r.dscr_ttm < DSCR_MIN;
                 return (
                   <tr key={r.period_month}>
-                    <td className="px-4 py-2.5 font-semibold">{r.period_month.slice(0, 7)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtMoney(r.ebitda_ttm)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtMoney(r.debt_service_ttm)}</td>
-                    <td className={`px-4 py-2.5 text-right font-semibold ${below ? "text-red-600" : ""}`}>
+                    <td className="px-2.5 sm:px-4 py-2.5 font-semibold whitespace-nowrap">{r.period_month.slice(0, 7)}</td>
+                    <td className="px-2.5 sm:px-4 py-2.5 text-right">
+                      <span className="sm:hidden">{fmtMoneyWhole(r.ebitda_ttm)}</span>
+                      <span className="hidden sm:inline">{fmtMoney(r.ebitda_ttm)}</span>
+                    </td>
+                    <td className="px-2.5 sm:px-4 py-2.5 text-right">
+                      <span className="sm:hidden">{fmtMoneyWhole(r.debt_service_ttm)}</span>
+                      <span className="hidden sm:inline">{fmtMoney(r.debt_service_ttm)}</span>
+                    </td>
+                    <td className={`px-2.5 sm:px-4 py-2.5 text-right font-semibold whitespace-nowrap ${below ? "text-red-600" : ""}`}>
                       {r.dscr_ttm == null ? "—" : `${r.dscr_ttm.toFixed(2)}x`}
                     </td>
                   </tr>

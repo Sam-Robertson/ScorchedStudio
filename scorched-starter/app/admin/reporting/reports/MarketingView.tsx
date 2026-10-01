@@ -186,7 +186,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
   const Th = ({ label, col, right }: { label: string; col?: SortCol; right?: boolean }) => (
     <th
       onClick={col ? () => toggleSort(col) : undefined}
-      className={`px-4 pb-3 pt-4 font-medium whitespace-nowrap ${right ? "text-right" : ""} ${col ? "cursor-pointer select-none hover:text-neutral-600" : ""} ${sortCol === col ? "text-neutral-700" : ""}`}
+      className={`px-2 sm:px-4 pb-3 pt-4 font-medium whitespace-nowrap ${right ? "text-right" : ""} ${col ? "cursor-pointer select-none hover:text-neutral-600" : ""} ${sortCol === col ? "text-neutral-700" : ""}`}
     >
       {label}{col && sortCol === col ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
     </th>
@@ -261,14 +261,15 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
                 <Line yAxisId="bookings" type="monotone" dataKey="Estimated Bookings" stroke={GREEN} strokeOpacity={0.55} strokeDasharray="5 4" strokeWidth={2} dot={{ r: 3, fill: GREEN, fillOpacity: 0.55 }} activeDot={{ r: 5 }} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div className="flex items-center justify-center gap-4 mt-1 flex-wrap">
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#884A20]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Marketing spend ($, left) — click a bar for charges</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C]" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Confirmed bookings (count, right)</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C] opacity-55" style={{ backgroundImage: "repeating-linear-gradient(90deg, #418A5C 0 4px, transparent 4px 7px)" }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated bookings (right)</span></div>
+            {/* Phones: one legend entry per line, left-aligned with the footnote below. */}
+            <div className="flex flex-col items-start gap-1.5 px-4 mt-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-4 sm:px-0 sm:mt-1">
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#884A20] shrink-0" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Marketing spend ($, left) — click a bar for charges</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C] shrink-0" /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Confirmed bookings (count, right)</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded-full bg-[#418A5C] opacity-55 shrink-0" style={{ backgroundImage: "repeating-linear-gradient(90deg, #418A5C 0 4px, transparent 4px 7px)" }} /><span className={`${vulfMono.className} text-[10px] text-neutral-400`}>Estimated bookings (right)</span></div>
             </div>
             {drillMonth && (
-              <div className="mx-4 mt-3 rounded-lg border border-black/8 bg-neutral-50/40 px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
+              <div className="mx-2 sm:mx-4 mt-3 rounded-lg border border-black/8 bg-neutral-50/40 px-2 sm:px-4 py-3">
+                <div className="flex items-center justify-between gap-3 mb-2 px-2 sm:px-0">
                   <p className={`${vulfMono.className} text-xs font-semibold text-neutral-700`}>
                     Marketing charges — {monthShort(`${drillMonth}-01`)}
                   </p>
@@ -280,7 +281,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
                 <JournalDrillDown token={token} from={`${drillMonth}-01`} to={monthEnd(drillMonth)} accountCodes={[MARKETING_CODE]} />
               </div>
             )}
-            <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-center mt-1 pb-2`}>
+            <p className={`${vulfMono.className} text-[10px] text-neutral-400 text-left sm:text-center px-4 sm:px-0 mt-2 sm:mt-1 pb-2`}>
               Spend from the accounting ledger (account 6200); bookings counted by the date they were made. Online
               booking launched {monthShort(ONLINE_BOOKING_LAUNCH)} — before that, &quot;estimated&quot; counts
               Square orders with a General Admission item (booked via Acuity Scheduling). A month where refunds
@@ -331,12 +332,13 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
           <p className={`${vulfMono.className} text-sm text-neutral-400 px-6 py-8 text-center`}>No bookings in this range.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className={`${vulfMono.className} w-full min-w-[700px] text-sm`}>
+            <table className={`${vulfMono.className} w-full sm:min-w-[700px] text-xs sm:text-sm`}>
               <thead>
                 <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-400">
-                  <th className="px-6 pb-3 pt-4 font-medium">Source</th>
+                  {/* Phones: Source stays pinned while the other columns scroll under it. */}
+                  <th className="pl-3 pr-2 sm:px-6 pb-3 pt-4 font-medium sticky left-0 z-10 bg-white sm:static sm:bg-transparent">Source</th>
                   <Th label="Bookings" col="count" right />
-                  <th className="px-4 pb-3 pt-4 font-medium text-right">Share</th>
+                  <th className="px-2 sm:px-4 pb-3 pt-4 font-medium text-right">Share</th>
                   <Th label="Avg party" col="party" right />
                   <Th label="Avg revenue" col="revenue" right />
                   <Th label="Cancel rate" col="cancel" right />
@@ -352,14 +354,14 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
                   const color = SOURCE_COLORS[row.label] ?? "#888";
                   return (
                     <tr key={row.label} className="border-b border-black/5 last:border-0 hover:bg-neutral-50/60">
-                      <td className="px-6 py-3">
+                      <td className="pl-3 pr-2 sm:px-6 py-3 sticky left-0 z-10 bg-white sm:static sm:bg-transparent">
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <span className="text-neutral-800">{row.label}</span>
+                          <span className="text-neutral-800 min-w-[8.5rem] sm:min-w-0">{row.label}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-neutral-700">{row.conf}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 sm:px-4 py-3 text-right tabular-nums font-medium text-neutral-700">{row.conf}</td>
+                      <td className="px-2 sm:px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
                           <div className="hidden sm:block w-16 h-1.5 rounded-full bg-black/5 overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
@@ -367,9 +369,9 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
                           <span className="text-neutral-400 tabular-nums w-7 text-right">{pct}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-neutral-600">{avgPty}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-neutral-600">{avgRev}</td>
-                      <td className="px-6 py-3 text-right">
+                      <td className="px-2 sm:px-4 py-3 text-right tabular-nums text-neutral-600">{avgPty}</td>
+                      <td className="px-2 sm:px-4 py-3 text-right tabular-nums text-neutral-600">{avgRev}</td>
+                      <td className="pl-2 pr-4 sm:px-6 py-3 text-right whitespace-nowrap">
                         <span className={`tabular-nums ${cancelPct > 20 ? "text-red-600 font-medium" : "text-neutral-400"}`}>{cancelPct}%</span>
                         {row.canc > 0 && <span className="text-neutral-300 ml-1">({row.canc})</span>}
                       </td>
@@ -379,7 +381,7 @@ export default function MarketingView({ token, bookings, costs, costsLoading, qu
               </tbody>
             </table>
             {otherDetails.length > 0 && (
-              <div className="px-6 py-4 border-t border-black/5">
+              <div className="px-4 sm:px-6 py-4 border-t border-black/5 sticky left-0">
                 <details>
                   <summary className={`${vulfMono.className} text-xs text-neutral-400 cursor-pointer hover:text-neutral-600`}>
                     &quot;Other&quot; responses ({otherDetails.length})
