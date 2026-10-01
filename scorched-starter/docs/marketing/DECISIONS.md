@@ -826,3 +826,80 @@ legacy path has a test covering it.
 
 This was not introduced by the builder. It was found because the new renderer
 hit the same wall, and the fix is the same in both files.
+
+---
+
+## Scorched VIP sign-up replaces the QR code and the BURN keyword (October 1, 2026)
+
+The site told people to join Scorched VIP two ways, and both were dead. "Text
+BURN to (844) 952-0456" pointed at the previous SMS vendor's number, and BURN is
+not a keyword the Telnyx system knows. The QR code (`public/loyalty-qr.png`)
+pointed at a deactivated third-party code. They appeared in four places: the
+`/scorched-vip` page, the booking confirmation page, the waiver success screen,
+and the waiver confirmation email. Sam's call was to remove all of it and have
+an ordinary sign-up form like the ones elsewhere on the site.
+
+**This is a fourth SMS opt-in point, and the 10DLC registration does not name it
+yet.** The campaign's opt-in description registered with the carriers through
+Telnyx currently reads "three places: the digital waiver, the booking checkout,
+and the marketing preferences on their signed-in account page". It has to name
+four, adding the Scorched VIP sign-up page at scorchedstudio.com/scorched-vip.
+Sam has to approve and make that change. It was deliberately not made from here:
+editing a live carrier registration is not something to do as a side effect of a
+page change. Until it is updated, a reviewer comparing the registration against
+the live site finds an SMS checkbox the registration does not mention, so the
+edit and the deploy should happen together. The checkbox wording is untouched,
+so the sentence the registration quotes still matches.
+
+- **What replaced it.** `/scorched-vip` has a form: first name (optional),
+  email, mobile number (only needed for texts), and the two shared
+  `MarketingOptIns` checkboxes, both unticked. At least one has to be ticked to
+  join, and the text one is never the required one, so nobody has to agree to
+  texts to become a member or get the ring. The other three places carry a short
+  invitation that links to the page rather than a second form, because people
+  there have just been shown the same two checkboxes.
+- **New source `vip_signup`, which needs a migration.**
+  `supabase-marketing-vip-source.sql` adds it to the `consent_events.source`
+  CHECK, for the same reason `account_settings` got its own: the log records
+  where consent actually came from. Subscribers from this form are tagged `vip`.
+- **Run the migration before deploying, not after.** `recordConsent` writes the
+  subscriber row first and the consent rows second, as separate statements. If
+  the CHECK rejects `vip_signup`, the visitor is shown an error (the route calls
+  `recordConsent`, not `recordConsentSafe`, so there is no fake success), but the
+  subscriber row has already been created or updated: marked subscribed, tagged
+  `vip`, with no consent event behind it. Audiences select on status alone, so
+  that person would be sent campaigns nobody can evidence consent for. The route
+  logs `VIP_SIGNUP_ERROR` with the address so any such row can be found. This
+  ordering is not specific to this form: every caller of `recordConsent` has the
+  same exposure whenever the consent insert fails. Making the two writes one
+  transaction is the real fix and was left alone here, because it changes the
+  single writer every capture point depends on.
+- **A number we cannot text is rejected, not dropped.** `recordConsent` quietly
+  discards a phone it cannot normalize. On this form that would have meant a
+  ticked text box, a success message, and no text opt-in recorded, so the route
+  checks first and tells the visitor.
+- **The success message does not promise a confirmation text**, because nothing
+  sends one. It says to pick up the wooden ring on the next visit, which is what
+  the Perks copy already promised.
+- **No double opt-in and no rate limit**, the same as the waiver and the
+  checkout. A honeypot is the only guard against bots, copied from the footer
+  form.
+- **The QR images are deleted.** Waiver emails already sent load the PNG from
+  scorchedstudio.com, so those will show a broken image once this deploys. The
+  code in it was already dead.
+- **Legal pages.** `/terms` now says four places and `/privacy` names the VIP
+  sign-up page everywhere it lists the opt-in points, both dated today. The
+  legal-pages tests pin the new list, that the form renders the shared
+  checkboxes rather than its own wording, and that the route records
+  `vip_signup` without the error-swallowing wrapper.
+
+Not resolved, for Sam to decide: the invitation on the waiver success screen is
+a link, and following it on a studio kiosk leaves the waiver page, dropping the
+`?location=` the kiosk was opened with. The old cards had nothing to tap. If
+that turns out to matter in studio, the link on that one screen can become plain
+text pointing people at the page on their own phone.
+
+Left alone on purpose: the old number in `scripts/import-legacy-sms.ts` and in
+SETUP.md's import section, which describe where the legacy list came from. Also
+noticed and not changed: the "Opt-in flow description" block in SETUP.md is the
+original submission that still lists the footer, not what the campaign says now.

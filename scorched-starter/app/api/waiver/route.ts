@@ -159,28 +159,7 @@ export async function POST(req: Request) {
             and pick up a <strong>free wooden ring</strong> on your next visit.
           </p>
 
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="width: 46%; vertical-align: top;">
-                <table style="width: 100%; border-collapse: collapse; background: #f5f5f5; border-radius: 12px;">
-                  <tr><td style="padding: 16px 16px 4px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #884A20;">Scan In Studio</td></tr>
-                  <tr><td style="padding: 8px 16px; text-align: center;">
-                    <img src="https://scorchedstudio.com/loyalty-qr.png" alt="Scorched VIP QR code" width="100" height="100" style="border-radius: 8px; display: block; margin: 0 auto;" />
-                  </td></tr>
-                  <tr><td style="padding: 4px 16px 16px; text-align: center; font-size: 12px; color: #666;">Scan at the front desk</td></tr>
-                </table>
-              </td>
-              <td style="width: 8%; text-align: center; vertical-align: middle; color: #aaa; font-size: 13px; font-style: italic; padding: 0 4px;">or</td>
-              <td style="width: 46%; vertical-align: top;">
-                <table style="width: 100%; border-collapse: collapse; background: #F6E4E1; border-radius: 12px;">
-                  <tr><td style="padding: 16px 16px 4px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #884A20;">Text to Join</td></tr>
-                  <tr><td style="padding: 8px 16px; text-align: center; font-size: 28px; font-weight: bold; color: #884A20;">BURN</td></tr>
-                  <tr><td style="padding: 0 16px; text-align: center; font-size: 13px; color: #555;">to <strong>(844) 952-0456</strong></td></tr>
-                  <tr><td style="padding: 4px 16px 16px; text-align: center; font-size: 12px; color: #666;">From anywhere, anytime</td></tr>
-                </table>
-              </td>
-            </tr>
-          </table>
+          <a href="https://scorchedstudio.com/scorched-vip" style="display: inline-block; background: #884A20; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: bold; padding: 10px 18px; border-radius: 8px;">Sign up for Scorched VIP</a>
         </div>
       `,
     });

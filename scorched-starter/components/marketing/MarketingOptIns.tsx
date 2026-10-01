@@ -1,7 +1,8 @@
 'use client';
 
 // The two marketing opt-in checkboxes, shared by the waiver, the booking
-// checkout, and the footer signup so all three show byte-identical wording.
+// checkout, the account page, and the Scorched VIP sign-up so every opt-in
+// point shows byte-identical wording.
 // The strings come from lib/marketing/consent-copy, which is also what the
 // server writes into the consent log, so the record always matches what was
 // on screen.

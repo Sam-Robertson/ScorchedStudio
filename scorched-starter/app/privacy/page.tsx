@@ -16,7 +16,7 @@ export default function PrivacyPage() {
     <section className="container-px py-20 max-w-2xl mx-auto">
       <p className="eyebrow text-brand mb-2">Legal</p>
       <h1 className="h2 font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-neutral-400 mb-12">Last updated: September 17, 2026</p>
+      <p className="text-sm text-neutral-400 mb-12">Last updated: October 1, 2026</p>
 
       <div className="space-y-10 text-neutral-700 leading-relaxed">
 
@@ -49,9 +49,10 @@ export default function PrivacyPage() {
             <li>
               <strong>Join our email or text list</strong> — your email address, and your mobile
               number if you asked for texts, plus a record of the consent you gave. Email signup is
-              on the waiver, at booking checkout, in our footer form, and in your account
-              preferences. Text message signup is on the waiver, at booking checkout, and in your
-              account preferences.
+              on the waiver, at booking checkout, on our Scorched VIP sign-up page, in our footer
+              form, and in your account preferences. Text message signup is on the waiver, at
+              booking checkout, on our Scorched VIP sign-up page, and in your account preferences.
+              The Scorched VIP sign-up page also asks for a first name, which is optional.
             </li>
           </ul>
           <p className="mt-4">
@@ -109,17 +110,17 @@ export default function PrivacyPage() {
           <p className="mb-4">
             We send marketing text messages about classes, courses, events, and offers, and only to
             people who have asked for them. The text message box on our waiver, our booking
-            checkout, and the preferences page of a customer account is separate from the email
-            box, is never ticked for you, and agreeing is never a condition of booking or buying
-            anything. The signup form in our site footer collects email addresses only and never
-            asks for a mobile number.
+            checkout, our Scorched VIP sign-up page, and the preferences page of a customer account
+            is separate from the email box, is never ticked for you, and agreeing is never a
+            condition of booking or buying anything. The signup form in our site footer collects
+            email addresses only and never asks for a mobile number.
           </p>
 
           <h3 className="font-semibold mt-6 mb-2">What we collect for text messaging</h3>
           <ul className="list-disc list-outside ml-5 space-y-2">
             <li>Your mobile number</li>
             <li>The date and time you opted in</li>
-            <li>Which form you opted in on: the waiver, the booking checkout, or your account preferences</li>
+            <li>Which form you opted in on: the waiver, the booking checkout, the Scorched VIP sign-up page, or your account preferences</li>
             <li>The IP address and browser the request came from</li>
             <li>The exact wording of the consent you were shown and agreed to</li>
           </ul>

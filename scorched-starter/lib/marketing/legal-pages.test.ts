@@ -93,7 +93,13 @@ test("the privacy policy states the required SMS mechanics", () => {
 test("the privacy policy says what is collected for SMS consent", () => {
   // What the consent log actually stores, and what proves an opt-in if anyone
   // ever challenges it.
-  for (const phrase of ["mobile number", "IP address", "waiver", "booking checkout"]) {
+  for (const phrase of [
+    "mobile number",
+    "IP address",
+    "waiver",
+    "booking checkout",
+    "Scorched VIP sign-up page",
+  ]) {
     assert.ok(privacy.toLowerCase().includes(phrase.toLowerCase()), `missing: ${phrase}`);
   }
 });
@@ -124,10 +130,17 @@ test("the terms page repeats the no-sharing promise", () => {
 });
 
 test("the terms page names every SMS opt-in point, matching the registration", () => {
-  // Three: the waiver, the booking checkout, and the account preferences page.
-  // The footer is email only. The 10DLC campaign's opt-in description has to
-  // say the same thing, or a reviewer comparing the two finds a mismatch.
-  for (const phrase of ["waiver", "booking checkout", "account page"]) {
+  // Four: the waiver, the booking checkout, the Scorched VIP sign-up page, and
+  // the account preferences page. The footer is email only. The 10DLC
+  // campaign's opt-in description has to say the same thing, or a reviewer
+  // comparing the two finds a mismatch.
+  for (const phrase of [
+    "one of four places",
+    "waiver",
+    "booking checkout",
+    "Scorched VIP sign-up page",
+    "account page",
+  ]) {
     assert.ok(terms.toLowerCase().includes(phrase.toLowerCase()), `missing: ${phrase}`);
   }
 });
@@ -137,6 +150,13 @@ test("the privacy policy names the account page as an opt-in point too", () => {
     /account preferences|preferences page of a customer account/i.test(privacy),
     "the privacy policy does not mention the account preferences opt-in"
   );
+});
+
+test("the privacy policy names the Scorched VIP sign-up page as an opt-in point too", () => {
+  // Named three times: where signup happens, the SMS section, and the list of
+  // what the consent record stores.
+  const mentions = privacy.split("Scorched VIP sign-up page").length - 1;
+  assert.ok(mentions >= 3, `expected the VIP sign-up page in three places, found ${mentions}`);
 });
 
 test("the footer form does not collect a phone number", () => {
@@ -280,4 +300,32 @@ test("the account preferences UI quotes the shared consent wording", () => {
     !component.includes("Msg and data rates may apply"),
     "the consent wording is hardcoded here instead of imported"
   );
+});
+
+test("the Scorched VIP sign-up form uses the shared opt-in checkboxes", () => {
+  // Same reason as the account page: one sentence is registered, so the fourth
+  // opt-in point must render the shared component rather than its own wording,
+  // and must start with both boxes unticked.
+  const form = readFileSync(
+    join(appDir, "..", "components", "marketing", "VipSignupForm.tsx"),
+    "utf8"
+  );
+
+  assert.match(form, /<MarketingOptIns\b/);
+  assert.match(form, /useState<OptInState>\(EMPTY_OPT_INS\)/);
+  assert.ok(
+    !form.includes("Msg and data rates may apply"),
+    "the consent wording is hardcoded here instead of imported"
+  );
+});
+
+test("the Scorched VIP sign-up records its own consent source", () => {
+  // The log records where consent actually came from. Borrowing another form's
+  // source would make every VIP row in it untrue.
+  const route = readFileSync(join(appDir, "api", "vip-signup", "route.ts"), "utf8");
+
+  assert.match(route, /source: "vip_signup"/);
+  assert.match(route, /SMS_CONSENT_TEXT/);
+  // The swallowing wrapper would turn a rejected consent row into a success.
+  assert.ok(!/recordConsentSafe\(/.test(route), "a failed VIP sign-up must not look like a success");
 });

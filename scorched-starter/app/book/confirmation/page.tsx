@@ -1,12 +1,12 @@
 // app/book/confirmation/page.tsx
 import Link from "next/link";
-import Image from "next/image";
 import { redirect } from "next/navigation";
-import { MessageSquare } from "lucide-react";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
 import { createBookingFromIntent } from "@/lib/create-booking-from-intent";
+import { manageBookingPath } from "@/lib/booking-link";
+import { isUnpaidReservation } from "@/lib/booking-rules";
 
 export const metadata = {
   title: "Booking Confirmed | Scorched Studio",
@@ -52,13 +52,14 @@ export default async function ConfirmationPage({
 
     return (
       <ConfirmationLayout
-        bookingId={booking.id}
+        manageHref={manageBookingPath(booking.id)}
+        canPayOnline={isUnpaidReservation(booking)}
         name={booking.name}
         email={booking.email}
         formattedDate={formattedDate}
         timeSlot={booking.time_slot}
         partySize={booking.party_size}
-        total={null}
+        total={booking.amount_paid > 0 ? `$${(booking.amount_paid / 100).toFixed(2)}` : null}
         paymentNote={paymentNote}
       />
     );
@@ -70,9 +71,10 @@ export default async function ConfirmationPage({
 // ── Shared layout ─────────────────────────────────────────────────────────────
 
 function ConfirmationLayout({
-  bookingId, name, email, formattedDate, timeSlot, partySize, total, paymentNote,
+  manageHref, canPayOnline, name, email, formattedDate, timeSlot, partySize, total, paymentNote,
 }: {
-  bookingId: string;
+  manageHref: string;
+  canPayOnline: boolean;
   name: string;
   email: string;
   formattedDate: string;
@@ -115,6 +117,24 @@ function ConfirmationLayout({
             </div>
           )}
 
+          {/* Says outright that changes happen on this booking, because people
+              who wanted to pay or mention a gift card used to book again. */}
+          <div className="mt-4 rounded-2xl border border-black/10 bg-white shadow-sm p-5">
+            <p className={`${vulfMono.className} text-sm font-bold mb-1`}>Need to change something?</p>
+            <p className={`${vulfMono.className} text-sm text-neutral-600`}>
+              {canPayOnline
+                ? "Pay ahead, switch to a gift card, change your time or party size, or cancel."
+                : "Change your time or party size, or cancel."}{" "}
+              It all happens on this booking, so there is no need to make a new one.
+            </p>
+            <a
+              href={manageHref}
+              className={`${vulfMono.className} inline-block mt-3 rounded-xl bg-[#884A20] px-5 py-2.5 text-xs tracking-[0.1em] font-semibold text-white hover:opacity-90`}
+            >
+              EDIT BOOKING
+            </a>
+          </div>
+
           <div className="mt-4 rounded-2xl border border-black/10 bg-[#F7F6F3] p-5">
             <p className={`${vulfMono.className} text-sm font-bold mb-1`}>Studio Location</p>
             <p className={`${vulfMono.className} text-sm text-neutral-600`}>
@@ -127,50 +147,16 @@ function ConfirmationLayout({
           </div>
 
           {/* Scorched VIP */}
-          <div className="mt-4">
-            <p className={`${vulfMono.className} text-xs uppercase tracking-wider text-neutral-400 mb-3 text-center`}>
-              Join Scorched VIP — it&apos;s free
+          <div className="mt-4 rounded-2xl border border-[#519A70] bg-white shadow-sm p-5">
+            <p className={`${vulfMono.className} text-sm font-bold mb-1`}>Join Scorched VIP</p>
+            <p className={`${vulfMono.className} text-sm text-neutral-600`}>
+              Free to join. Get exclusive deals, hear about new products first, and pick up a free
+              wooden ring on your next visit.{" "}
+              <Link href="/scorched-vip" className="underline text-[#884A20]">Sign up →</Link>
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              {/* QR Code */}
-              <div className="rounded-2xl border border-[#519A70] bg-white p-4 shadow-sm flex flex-col items-center text-center">
-                <p className="eyebrow text-brand text-[10px] mb-2">In Studio</p>
-                <Image
-                  src="/loyalty-qr.png"
-                  alt="Scorched VIP sign-up QR code"
-                  width={96}
-                  height={96}
-                  className="rounded-xl"
-                />
-                <p className={`${vulfMono.className} text-[11px] font-bold mt-2`}>Scan the QR Code</p>
-                <p className={`${vulfMono.className} text-[11px] text-neutral-500 mt-1 leading-snug`}>
-                  Find our VIP QR code at the front desk and scan to join instantly.
-                </p>
-              </div>
-
-              {/* Text to Sign Up */}
-              <div className="rounded-2xl border border-[#519A70] bg-white p-4 shadow-sm flex flex-col items-center text-center">
-                <p className="eyebrow text-brand text-[10px] mb-2">From Anywhere</p>
-                <div className="w-24 h-24 rounded-xl bg-[#F6E4E1] flex flex-col items-center justify-center gap-1">
-                  <MessageSquare className="w-6 h-6 text-[#884A20]" />
-                  <p className={`${vulfMono.className} text-base font-bold text-[#884A20]`}>Text Us</p>
-                </div>
-                <p className={`${vulfMono.className} text-[11px] font-bold mt-2`}>Text to Sign Up</p>
-                <p className={`${vulfMono.className} text-[11px] text-neutral-500 mt-1 leading-snug`}>
-                  Text <span className="font-bold text-[#884A20]">BURN</span> to{" "}
-                  <span className="font-bold text-[#884A20]">(844) 952-0456</span>
-                </p>
-              </div>
-            </div>
           </div>
 
           <div className="flex flex-col items-center gap-3 mt-8">
-            <a
-              href={`/book/manage?booking_id=${bookingId}`}
-              className={`${vulfMono.className} text-sm text-[#884A20] underline underline-offset-2 hover:opacity-70`}
-            >
-              Need to reschedule or cancel? →
-            </a>
             <Link href="/" className={`${vulfMono.className} text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
               Back to home
             </Link>

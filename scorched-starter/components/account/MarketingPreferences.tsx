@@ -5,7 +5,7 @@
 // The checkbox wording is the shared constant every other opt-in point uses, so
 // what someone agrees to here is byte-identical to the waiver and the booking
 // checkout. That matters beyond tidiness: the 10DLC registration quotes that
-// exact sentence, and a carrier reviewer can open any of the three and compare.
+// exact sentence, and a carrier reviewer can open any opt-in point and compare.
 //
 // Unlike the other two, this page knows who you are, so it shows your current
 // setting rather than an empty box. Turning something off here is as much a

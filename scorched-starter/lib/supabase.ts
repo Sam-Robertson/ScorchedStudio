@@ -244,6 +244,7 @@ export type ConsentSource =
   | "footer_form"
   | "popup"
   | "account_settings"
+  | "vip_signup"
   | "import_legacy_sms"
   | "import_legacy_newsletter"
   | "inbound_keyword"

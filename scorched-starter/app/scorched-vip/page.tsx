@@ -2,7 +2,7 @@
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { MessageSquare, Tag, Star } from "lucide-react";
-import Image from "next/image";
+import VipSignupForm from "@/components/marketing/VipSignupForm";
 
 export const metadata = {
   title: "Scorched VIP | Scorched Studio",
@@ -14,7 +14,7 @@ export default function ScorchedVIPPage() {
   return (
     <main className="pb-8">
       <Intro />
-      <HowToJoin />
+      <SignUp />
       <Perks />
     </main>
   );
@@ -80,50 +80,13 @@ function Perk({
   );
 }
 
-/* ------------------ How to Join ------------------ */
-function HowToJoin() {
+/* ------------------ Sign Up ------------------ */
+function SignUp() {
   return (
     <section className="py-6 md:py-8">
       <Container>
-        <div className="mt-2 mx-auto max-w-3xl grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* QR Code Card */}
-          <div className="rounded-3xl border border-green bg-white p-5 shadow-sm flex flex-col items-center text-center">
-            <p className="eyebrow text-brand mb-3">In Studio</p>
-            <Image
-              src="/loyalty-qr.png"
-              alt="Scorched VIP sign-up QR code"
-              width={128}
-              height={128}
-              className="rounded-2xl"
-            />
-            <h3 className="h3 font-bold mt-3">Scan the QR Code</h3>
-            <p
-              className={`${vulfMono.className} mt-2 text-[14px] leading-[1.6] text-neutral-600`}
-            >
-              Find our VIP sign-up QR code at the front desk and scan it to join instantly.
-            </p>
-          </div>
-
-          {/* Text Marketing Card */}
-          <div className="rounded-3xl border border-green bg-white p-5 shadow-sm flex flex-col items-center text-center">
-            <p className="eyebrow text-brand mb-3">From Anywhere</p>
-            <div className="w-32 h-32 rounded-2xl bg-blush flex flex-col items-center justify-center gap-1">
-              <MessageSquare className="w-8 h-8 text-brand" />
-              <p className={`${vulfMono.className} text-xl font-bold text-brand`}>
-                Text Us
-              </p>
-            </div>
-            <h3 className="h3 font-bold mt-3">Text to Sign Up</h3>
-            <p
-              className={`${vulfMono.className} mt-2 text-[14px] leading-[1.6] text-neutral-600`}
-            >
-              Text{" "}
-              <span className="font-bold text-brand">BURN</span>{" "}
-              to{" "}
-              <span className="font-bold text-brand">(844) 952-0456</span>{" "}
-              and you&apos;re in. We&apos;ll send you a confirmation right away.
-            </p>
-          </div>
+        <div className="mt-2 mx-auto max-w-xl">
+          <VipSignupForm />
         </div>
       </Container>
     </section>

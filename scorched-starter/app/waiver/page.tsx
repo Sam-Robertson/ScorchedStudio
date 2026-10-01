@@ -8,8 +8,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { vulfMono } from "@/app/fonts";
 import SignatureCanvas, { SignatureCanvasRef } from "@/components/ui/SignatureCanvas";
-import Image from "next/image";
-import { MessageSquare, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 const schema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -258,35 +257,12 @@ export default function WaiverPage() {
             Free to join. Get exclusive deals, hear about new products first, and pick up a free wooden ring on your next visit.
           </p>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* QR */}
-            <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
-              <p className="eyebrow text-brand mb-3">In Studio</p>
-              <Image
-                src="/loyalty-qr.png"
-                alt="Scorched VIP sign-up QR code"
-                width={110}
-                height={110}
-                className="rounded-xl"
-              />
-              <p className={`${vulfMono.className} mt-3 text-[13px] text-neutral-600`}>
-                Scan the QR code at the front desk
-              </p>
-            </div>
-
-            {/* Text */}
-            <div className="rounded-xl border border-black/10 bg-neutral-50 p-5 flex flex-col items-center text-center">
-              <p className="eyebrow text-brand mb-3">From Anywhere</p>
-              <div className="w-[110px] h-[110px] rounded-xl bg-blush flex flex-col items-center justify-center gap-1">
-                <MessageSquare className="w-7 h-7 text-brand" />
-                <p className={`${vulfMono.className} text-lg font-bold text-brand`}>Text Us</p>
-              </div>
-              <p className={`${vulfMono.className} mt-3 text-[13px] text-neutral-600`}>
-                Text <span className="font-bold text-brand">BURN</span> to{" "}
-                <span className="font-bold text-brand">(844) 952-0456</span>
-              </p>
-            </div>
-          </div>
+          <a
+            href="/scorched-vip"
+            className={`${vulfMono.className} inline-block rounded-xl bg-[#884A20] px-6 py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90`}
+          >
+            SIGN UP
+          </a>
         </div>
       </section>
     );
