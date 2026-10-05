@@ -205,24 +205,21 @@ export default function CourseCohortPicker({
         {[...openCohorts, ...startedCohorts].map((cohort) => {
           const closed = isClosed(cohort);
           const full = fullOverride[cohort.id] ?? (cohort.availability?.is_full ?? true);
-          const seatsRemaining = cohort.availability?.seats_remaining ?? 0;
           const active = selectedId === cohort.id;
           const sharedTime = uniformSessionTime(cohort.sessions);
           const body = (
             <>
               <div className="flex items-center justify-between mb-2">
                 <h3 className={`font-semibold ${closed ? "text-neutral-500" : "text-neutral-900"}`}>{cohort.label}</h3>
-                <span
-                  className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                    closed || full ? "bg-neutral-100 text-neutral-500" : "bg-green-100 text-green-700"
-                  }`}
-                >
-                  {closed
-                    ? "Sign-ups closed"
-                    : full
-                      ? "Full"
-                      : `${seatsRemaining} seat${seatsRemaining === 1 ? "" : "s"} left`}
-                </span>
+                {/* Only a state that changes what the visitor can do gets a
+                    badge. An open cohort with room shows no seat count. */}
+                {(closed || full) && (
+                  <span
+                    className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold bg-neutral-100 text-neutral-500`}
+                  >
+                    {closed ? "Sign-ups closed" : "Full"}
+                  </span>
+                )}
               </div>
               {sharedTime && (
                 <p className={`${vulfMono.className} text-xs text-neutral-500 mb-1`}>{sharedTime}</p>
