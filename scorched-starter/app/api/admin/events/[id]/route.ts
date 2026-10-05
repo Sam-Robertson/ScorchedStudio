@@ -14,6 +14,7 @@ const patchSchema = z.object({
   contact_email: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   status: z.enum(["confirmed", "tentative", "cancelled"]).optional(),
+  location: z.enum(["orem", "slc"]).optional(),
 });
 
 export async function PATCH(

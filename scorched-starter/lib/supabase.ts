@@ -130,6 +130,7 @@ export type EventRecord = {
   contact_email: string | null;
   notes: string | null;
   status: "confirmed" | "tentative" | "cancelled";
+  location: "orem" | "slc";
   created_at: string;
   updated_at: string;
 };

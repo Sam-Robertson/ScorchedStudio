@@ -6,6 +6,7 @@ import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil } from "lucide-react";
 import type { EventRecord } from "@/lib/supabase";
+import LocationFilter, { type LocationFilterValue } from "@/components/admin/LocationFilter";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ const STATUS_STYLE: Record<Status, { bg: string; text: string; dot: string; labe
 };
 
 const inputCls = "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
+
+const LOCATION_LABEL: Record<EventRecord["location"], string> = { orem: "Orem", slc: "SLC" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +45,7 @@ const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 // ── Event Modal ───────────────────────────────────────────────────────────────
 
-type ModalMode = { mode: "create"; date: string } | { mode: "edit"; event: EventRecord };
+type ModalMode = { mode: "create"; date: string; location: EventRecord["location"] } | { mode: "edit"; event: EventRecord };
 
 function EventModal({
   modal,
@@ -70,6 +73,7 @@ function EventModal({
     contact_email: e?.contact_email ?? "",
     notes:         e?.notes         ?? "",
     status:        (e?.status       ?? "confirmed") as Status,
+    location:      (e?.location     ?? (modal.mode === "create" ? modal.location : "orem")) as EventRecord["location"],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -93,6 +97,7 @@ function EventModal({
       contact_email: form.contact_email || null,
       notes:         form.notes       || null,
       status:        form.status,
+      location:      form.location,
     };
 
     const url = isEdit ? `/api/admin/events/${e!.id}` : "/api/admin/events";
@@ -172,13 +177,22 @@ function EventModal({
               </div>
             </div>
 
-            <div>
-              <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>STATUS</label>
-              <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
-                <option value="confirmed">Confirmed</option>
-                <option value="tentative">Tentative</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>STATUS</label>
+                <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="tentative">Tentative</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label className={`${vulfMono.className} block text-xs text-neutral-500 mb-1`}>LOCATION</label>
+                <select className={inputCls} value={form.location} onChange={(e) => set("location", e.target.value)}>
+                  <option value="orem">Orem</option>
+                  <option value="slc">Salt Lake City</option>
+                </select>
+              </div>
             </div>
 
             <div>
@@ -240,6 +254,7 @@ export default function AdminEventsPage() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal]     = useState<ModalMode | null>(null);
   const [token, setToken]     = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<LocationFilterValue>("");
 
   useEffect(() => {
     setToken(getAdminToken());
@@ -248,13 +263,16 @@ export default function AdminEventsPage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetch(`/api/admin/events`, {
+    fetch(`/api/admin/events${locationFilter ? `?location=${locationFilter}` : ""}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => { setEvents(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [token]);
+  }, [token, locationFilter]);
+
+  // A new event lands at the location being viewed, or Orem when viewing all.
+  const newEventLocation: EventRecord["location"] = locationFilter || "orem";
 
   function prevMonth() {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -266,9 +284,11 @@ export default function AdminEventsPage() {
   }
 
   function handleSaved(event: EventRecord, isEdit: boolean) {
-    setEvents((prev) =>
-      isEdit ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event]
-    );
+    setEvents((prev) => {
+      const next = isEdit ? prev.map((e) => (e.id === event.id ? event : e)) : [...prev, event];
+      // An event moved to the other location drops out of a filtered view.
+      return locationFilter ? next.filter((e) => e.location === locationFilter) : next;
+    });
     setModal(null);
   }
 
@@ -317,16 +337,23 @@ export default function AdminEventsPage() {
           <p className="eyebrow text-brand">Admin</p>
           <h1 className="h2 font-bold">Events</h1>
         </div>
-        <button
-          onClick={() => {
-            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-            setModal({ mode: "create", date: dateStr });
-          }}
-          className={`${vulfMono.className} flex items-center gap-2 rounded-xl bg-[#519A70] px-4 py-2 text-xs tracking-wide text-white hover:opacity-90`}
-        >
-          <Plus className="w-4 h-4" />
-          NEW EVENT
-        </button>
+        <div className="flex items-center gap-3">
+          <LocationFilter
+            className={`${vulfMono.className} rounded-lg border border-black/20 pl-4 py-2 text-xs text-neutral-500 bg-transparent hover:bg-neutral-50 transition-colors`}
+            value={locationFilter}
+            onChange={setLocationFilter}
+          />
+          <button
+            onClick={() => {
+              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+              setModal({ mode: "create", date: dateStr, location: newEventLocation });
+            }}
+            className={`${vulfMono.className} flex items-center gap-2 rounded-xl bg-[#519A70] px-4 py-2 text-xs tracking-wide text-white hover:opacity-90`}
+          >
+            <Plus className="w-4 h-4" />
+            NEW EVENT
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6">
@@ -372,7 +399,7 @@ export default function AdminEventsPage() {
                 return (
                   <div
                     key={day}
-                    onClick={() => setModal({ mode: "create", date: dateStr })}
+                    onClick={() => setModal({ mode: "create", date: dateStr, location: newEventLocation })}
                     className={`min-h-[90px] p-1.5 cursor-pointer hover:bg-neutral-50 transition-colors ${
                       isLastRow ? "" : "border-b border-black/5"
                     } ${isLastCol ? "" : "border-r border-black/5"}`}
@@ -480,6 +507,11 @@ export default function AdminEventsPage() {
                     )}
                     {event.group_size != null && (
                       <span className={`${vulfMono.className} text-xs text-neutral-400 shrink-0`}>{event.group_size} ppl</span>
+                    )}
+                    {!locationFilter && (
+                      <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full shrink-0 bg-neutral-100 text-neutral-500`}>
+                        {LOCATION_LABEL[event.location] ?? "Orem"}
+                      </span>
                     )}
                     <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full shrink-0 ${s.bg} ${s.text}`}>
                       {s.label}

@@ -11,11 +11,15 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month"); // YYYY-MM
+  const location = searchParams.get("location"); // orem | slc, omitted for all
 
   let query = getSupabase().from("events").select("*").order("date").order("start_time");
 
   if (month) {
     query = query.gte("date", `${month}-01`).lte("date", `${month}-31`);
+  }
+  if (location === "orem" || location === "slc") {
+    query = query.eq("location", location);
   }
 
   const { data, error } = await query;
@@ -37,6 +41,7 @@ const createSchema = z.object({
   contact_email: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   status: z.enum(["confirmed", "tentative", "cancelled"]).default("confirmed"),
+  location: z.enum(["orem", "slc"]).default("orem"),
 });
 
 export async function POST(req: NextRequest) {
