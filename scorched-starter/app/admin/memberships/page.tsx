@@ -244,6 +244,9 @@ function MembershipDetailModal({
   }
 
   const discountPct = plan?.wood_discount_pct ?? 0;
+  // A credit form only makes sense if the plan grants credit, or if an older
+  // membership still has some left to spend.
+  const hasWoodCredit = (plan?.wood_credit_cents ?? 0) > 0 || (membership?.wood_credit_remaining_cents ?? 0) > 0;
 
   const inactive = membership?.status !== "active";
 
@@ -319,37 +322,49 @@ function MembershipDetailModal({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-black/10 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className={`${vulfMono.className} text-[10px] text-neutral-400`}>WOOD CREDIT</p>
-                  <p className="text-sm font-semibold text-neutral-900">{fmtCents(membership.wood_credit_remaining_cents)} remaining</p>
+              {/* Plans without a wood credit (Ember) have nothing to track here,
+                  so they get the discount reminder on its own instead of a
+                  credit form that always reads $0.00. */}
+              {hasWoodCredit ? (
+                <div className="rounded-xl border border-black/10 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className={`${vulfMono.className} text-[10px] text-neutral-400`}>WOOD CREDIT</p>
+                    <p className="text-sm font-semibold text-neutral-900">{fmtCents(membership.wood_credit_remaining_cents)} remaining</p>
+                  </div>
+                  {discountPct > 0 && (
+                    <p className="text-xs text-neutral-500 mb-3">
+                      {plan.name} members get {discountPct}% off wood & projects once their credit runs out.
+                    </p>
+                  )}
+                  <div className="mb-2">
+                    <label className="block text-[11px] text-neutral-500 mb-1">Credit to apply ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className={inputCls}
+                      placeholder="0.00"
+                      value={creditAmount}
+                      onChange={(e) => setCreditAmount(e.target.value)}
+                      disabled={inactive}
+                    />
+                  </div>
+                  <button
+                    onClick={handleApplyCredit}
+                    disabled={inactive || creditSaving}
+                    className={`${vulfMono.className} rounded-lg bg-[#519A70] px-4 py-2 text-xs tracking-[0.1em] text-white font-semibold hover:opacity-90 disabled:opacity-40`}
+                  >
+                    {creditSaving ? "Applying…" : "Apply credit"}
+                  </button>
                 </div>
-                {discountPct > 0 && (
-                  <p className="text-xs text-neutral-500 mb-3">
-                    {plan.name} members get {discountPct}% off wood & projects once their credit runs out.
+              ) : discountPct > 0 ? (
+                <div className="rounded-xl border border-black/10 p-4">
+                  <p className={`${vulfMono.className} text-[10px] text-neutral-400 mb-1`}>MEMBER DISCOUNT</p>
+                  <p className="text-xs text-neutral-500">
+                    {plan.name} members get {discountPct}% off wood & projects. No wood credit on this plan.
                   </p>
-                )}
-                <div className="mb-2">
-                  <label className="block text-[11px] text-neutral-500 mb-1">Credit to apply ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    className={inputCls}
-                    placeholder="0.00"
-                    value={creditAmount}
-                    onChange={(e) => setCreditAmount(e.target.value)}
-                    disabled={inactive}
-                  />
                 </div>
-                <button
-                  onClick={handleApplyCredit}
-                  disabled={inactive || creditSaving}
-                  className={`${vulfMono.className} rounded-lg bg-[#519A70] px-4 py-2 text-xs tracking-[0.1em] text-white font-semibold hover:opacity-90 disabled:opacity-40`}
-                >
-                  {creditSaving ? "Applying…" : "Apply credit"}
-                </button>
-              </div>
+              ) : null}
 
               <div>
                 <label className="block text-[11px] text-neutral-500 mb-1">Notes (optional)</label>
