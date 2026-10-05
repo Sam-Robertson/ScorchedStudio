@@ -903,3 +903,30 @@ Left alone on purpose: the old number in `scripts/import-legacy-sms.ts` and in
 SETUP.md's import section, which describe where the legacy list came from. Also
 noticed and not changed: the "Opt-in flow description" block in SETUP.md is the
 original submission that still lists the footer, not what the campaign says now.
+
+## 10DLC description updated for the VIP page (October 5, 2026)
+
+Sam approved the change and it is live in the Telnyx campaign: the message
+flow now reads "in four places: the digital waiver, the booking checkout, the
+Scorched VIP sign-up page at https://www.scorchedstudio.com/scorched-vip, and
+the marketing preferences on their signed-in account page". Nothing else in the
+registration changed. Campaign status was MNO_PROVISIONED before and after the
+edit; watch for a carrier re-review.
+
+## Webhooks and the apex redirect (October 5, 2026)
+
+scorchedstudio.com now answers every request, POSTs included, with a 307 to
+www.scorchedstudio.com. Stripe and Square do not follow redirects, so both of
+their webhook endpoints, which were registered against the apex, failed until
+each provider disabled them. Telnyx had already been pointed at www. Found
+while checking why schedule_shifts stopped syncing on September 16.
+
+Consequences seen: two paid course enrollments and one membership checkout
+from late September never reached the database, and Square's shift webhook has
+been off since August 12. Production also lacks SQUARE_WEBHOOK_SIGNATURE_KEY
+and SQUARE_WEBHOOK_NOTIFICATION_URL, so Square events would have failed
+signature verification anyway.
+
+Repairing the endpoints and replaying the missed events are provider and
+production changes that need Sam, so they are listed in the handoff rather
+than done here. Any webhook registered in future must use the www host.

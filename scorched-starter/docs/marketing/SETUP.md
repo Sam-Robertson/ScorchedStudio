@@ -104,13 +104,16 @@ month at most.
 
 **Opt-in flow description**
 ```
-Consent is collected on scorchedstudio.com in three places, each an unchecked
+Consent is collected on scorchedstudio.com in four places, each an unchecked
 checkbox the customer must tick themselves:
 
 1. The digital liability waiver at scorchedstudio.com/waiver, signed in studio
    or before a visit.
 2. The booking checkout at scorchedstudio.com/book.
-3. The newsletter signup form in the site footer on every page.
+3. The Scorched VIP sign-up page at scorchedstudio.com/scorched-vip.
+4. The marketing preferences on a signed-in customer's account page.
+
+(The footer form is email only and is not an SMS opt-in point.)
 
 The checkbox is never pre-ticked and is never required to complete a booking,
 a waiver, or a purchase. The exact wording shown next to the checkbox is:
