@@ -6,6 +6,7 @@ import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
+import LocationFilter from "@/components/admin/LocationFilter";
 import { CheckCheck, Download, Inbox, Printer, RotateCcw, Settings2 } from "lucide-react";
 import type { PrintJobRecord } from "@/lib/supabase";
 
@@ -221,15 +222,11 @@ function PrintQueueDashboard({ token }: { token: string }) {
         </div>
         <div className="flex items-center gap-3">
           {role === "admin" && (
-            <select
+            <LocationFilter
               className={`${vulfMono.className} rounded-lg border border-black/15 px-3 py-1.5 text-xs bg-white`}
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
-            >
-              <option value="">All locations</option>
-              <option value="orem">Orem</option>
-              <option value="slc">Salt Lake City</option>
-            </select>
+              onChange={setLocationFilter}
+            />
           )}
           <Link
             href="/admin/products"

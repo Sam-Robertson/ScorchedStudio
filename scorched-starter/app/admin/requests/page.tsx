@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
+import LocationFilter from "@/components/admin/LocationFilter";
 import { Check, Inbox, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import type { EquipmentReportRecord } from "@/lib/supabase";
 
@@ -153,15 +154,11 @@ function RequestsDashboard({ token }: { token: string }) {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {role === "admin" && (
-            <select
+            <LocationFilter
               className={`${vulfMono.className} rounded-lg border border-black/15 px-3 py-2.5 text-xs bg-white`}
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
-            >
-              <option value="">All locations</option>
-              <option value="orem">Orem</option>
-              <option value="slc">Salt Lake City</option>
-            </select>
+              onChange={setLocationFilter}
+            />
           )}
           <button
             onClick={() => setFormOpen((v) => !v)}

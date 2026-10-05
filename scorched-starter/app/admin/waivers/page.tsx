@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
+import LocationFilter from "@/components/admin/LocationFilter";
 import type { WaiverRecord, WaiverMinor } from "@/lib/supabase";
 
 /* ------------------------------------------------------------------ */
@@ -227,15 +228,11 @@ function WaiversDashboard({ token }: { token: string }) {
           <input type="date" className={inputCls} value={query.dateTo} onChange={(e) => update({ dateTo: e.target.value })} />
         </div>
         {role === "admin" && (
-          <select
-            className={`${inputCls} sm:w-auto`}
+          <LocationFilter
+            className={inputCls}
             value={query.location}
-            onChange={(e) => update({ location: e.target.value as "" | "orem" | "slc" })}
-          >
-            <option value="">All locations</option>
-            <option value="orem">Orem</option>
-            <option value="slc">Salt Lake City</option>
-          </select>
+            onChange={(location) => update({ location })}
+          />
         )}
         {(searchInput || query.dateFrom || query.dateTo || query.location) && (
           <button

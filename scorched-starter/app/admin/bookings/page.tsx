@@ -9,6 +9,7 @@ import { useAdminSession } from "@/lib/adminSession";
 import type { BookingRecord } from "@/lib/supabase";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
 import { duplicateBookingIds, sameCustomer } from "@/lib/booking-rules";
+import LocationFilter from "@/components/admin/LocationFilter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -205,15 +206,11 @@ function BookingsDashboard({ token }: { token: string }) {
             </button>
           ))}
           {role === "admin" && (
-            <select
-              className={`${vulfMono.className} rounded-lg border border-black/20 px-3 py-2 text-xs bg-white`}
+            <LocationFilter
+              className={`${vulfMono.className} rounded-lg border border-black/20 pl-4 py-2 text-xs text-neutral-500 bg-transparent hover:bg-neutral-50 transition-colors`}
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value as "" | "orem" | "slc")}
-            >
-              <option value="">All locations</option>
-              <option value="orem">Orem</option>
-              <option value="slc">Salt Lake City</option>
-            </select>
+              onChange={setLocationFilter}
+            />
           )}
           <div className="flex rounded-lg border border-black/20 overflow-hidden">
             {(["list", "calendar"] as ViewMode[]).map((v) => (
