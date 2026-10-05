@@ -152,9 +152,9 @@ function ReportingDashboard({ token }: { token: string }) {
         </button>
       </div>
       <div className="flex items-start justify-between gap-4 mb-4 print:hidden">
-        {/* Phones wrap so every tab is visible. From sm up it never wraps and
-            scrolls horizontally when the tabs don't fit. */}
-        <div className={`${vulfMono.className} flex gap-1.5 sm:gap-1 flex-wrap sm:flex-nowrap sm:overflow-x-auto min-w-0 pb-1`}>
+        {/* Wraps at every width. Nine tabs do not fit one row until about
+            1400px, and a scrolling strip hid the last two with no scrollbar. */}
+        <div className={`${vulfMono.className} flex gap-1.5 sm:gap-1 flex-wrap min-w-0 pb-1`}>
           {(Object.keys(VIEW_LABEL) as ReportView[]).filter((v) => v !== "normalized").map((v) => (
             <button
               key={v}
