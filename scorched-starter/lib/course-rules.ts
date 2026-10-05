@@ -30,6 +30,23 @@ export type CohortEnrollmentWindow = "open" | "started" | "ended";
 // which is already "tomorrow" during the studio's evening. A cohort with no
 // sessions has no first date to pass, so it stays open.
 export function cohortEnrollmentWindow(sessions: DatedSession[], now: Date = new Date()): CohortEnrollmentWindow {
+  return windowFromDates(sessions, now);
+}
+
+// The same question with the admin's status folded in. A cohort marked
+// completed or cancelled is over whatever its dates say, so the public page
+// and the waitlist treat it as ended. "full" is not handled here: it still
+// takes waitlist joins, so the picker reads it as full rather than closed.
+export function cohortEnrollmentState(
+  cohort: { status: string },
+  sessions: DatedSession[],
+  now: Date = new Date()
+): CohortEnrollmentWindow {
+  if (cohort.status === "cancelled" || cohort.status === "completed") return "ended";
+  return windowFromDates(sessions, now);
+}
+
+function windowFromDates(sessions: DatedSession[], now: Date): CohortEnrollmentWindow {
   const first = cohortFirstSessionDate(sessions);
   const last = cohortLastSessionDate(sessions);
   if (!first || !last) return "open";

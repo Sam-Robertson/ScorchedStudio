@@ -9,7 +9,7 @@ import {
   getCourseBySlug,
   getSessionsForCohort,
 } from "@/lib/courses";
-import { cohortEnrollmentWindow, cohortFirstSessionDate } from "@/lib/course-rules";
+import { cohortEnrollmentState, cohortFirstSessionDate } from "@/lib/course-rules";
 import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
 import CourseCohortPicker from "@/components/courses/CourseCohortPicker";
 
@@ -52,7 +52,7 @@ export default async function CourseDetailPage({
       ...cohort,
       sessions: sessionsByCohort[i],
       availability: availability.find((a) => a.cohort_id === cohort.id) ?? null,
-      enrollment: cohortEnrollmentWindow(sessionsByCohort[i], now),
+      enrollment: cohortEnrollmentState(cohort, sessionsByCohort[i], now),
     }))
     .filter((cohort) => cohort.enrollment !== "ended")
     .sort((a, b) => startKey(a.sessions).localeCompare(startKey(b.sessions)));

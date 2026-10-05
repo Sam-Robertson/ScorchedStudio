@@ -2,7 +2,8 @@
 import Link from "next/link";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
-import { getActiveCourses } from "@/lib/courses";
+import { formatSessionDate, getActiveCourses, getCohortsForCourse, getSessionsForCohort } from "@/lib/courses";
+import { cohortEnrollmentState, cohortFirstSessionDate } from "@/lib/course-rules";
 
 export const metadata = {
   title: "Courses | Scorched Studio",
@@ -18,8 +19,22 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// The soonest first-session date among cohorts that can still be joined, so
+// the card can say when the next run starts without opening the course page.
+async function nextStartDate(courseId: string): Promise<string | null> {
+  const cohorts = (await getCohortsForCourse(courseId)).filter((c) => c.status === "open" || c.status === "full");
+  const sessions = await Promise.all(cohorts.map((c) => getSessionsForCohort(c.id)));
+  const now = new Date();
+  const starts = cohorts
+    .map((c, i) => (cohortEnrollmentState(c, sessions[i], now) === "open" ? cohortFirstSessionDate(sessions[i]) : null))
+    .filter((d): d is string => d !== null)
+    .sort();
+  return starts[0] ?? null;
+}
+
 export default async function CoursesPage() {
   const courses = await getActiveCourses();
+  const nextStarts = await Promise.all(courses.map((c) => nextStartDate(c.id)));
 
   return (
     <main className="pb-16">
@@ -41,7 +56,7 @@ export default async function CoursesPage() {
             </p>
           ) : (
             <div className="mx-auto max-w-4xl grid grid-cols-1 gap-6 md:grid-cols-2">
-              {courses.map((course) => (
+              {courses.map((course, i) => (
                 <Link
                   key={course.id}
                   href={`/courses/${course.slug}`}
@@ -50,6 +65,9 @@ export default async function CoursesPage() {
                   <h2 className="h3 font-bold">{course.name}</h2>
                   <p className={`${vulfMono.className} mt-2 text-[14px] leading-[1.5] text-neutral-700 flex-1`}>
                     {course.description}
+                  </p>
+                  <p className={`${vulfMono.className} mt-3 text-xs text-neutral-500`}>
+                    {nextStarts[i] ? `Next cohort starts ${formatSessionDate(nextStarts[i])}` : "New dates coming soon"}
                   </p>
                   <div className="mt-5 flex items-center justify-between">
                     <span className="text-2xl font-bold">{formatCents(course.default_price_cents)}</span>

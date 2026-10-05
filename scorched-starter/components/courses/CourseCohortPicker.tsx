@@ -86,7 +86,7 @@ export default function CourseCohortPicker({
   const startedCohorts = cohorts.filter(isClosed);
 
   const selected = openCohorts.find((c) => c.id === selectedId) ?? null;
-  const isFull = selected ? fullOverride[selected.id] ?? (selected.availability?.is_full ?? true) : false;
+  const isFull = selected ? fullOverride[selected.id] ?? (selected.status === "full" || (selected.availability?.is_full ?? true)) : false;
 
   // The page was loaded before the cohort's first session date passed and
   // submitted after it: close the cohort here too and move on to the next one.
@@ -204,7 +204,8 @@ export default function CourseCohortPicker({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         {[...openCohorts, ...startedCohorts].map((cohort) => {
           const closed = isClosed(cohort);
-          const full = fullOverride[cohort.id] ?? (cohort.availability?.is_full ?? true);
+          // An admin can mark a cohort full by hand, which the seat count does not know about.
+          const full = fullOverride[cohort.id] ?? (cohort.status === "full" || (cohort.availability?.is_full ?? true));
           const active = selectedId === cohort.id;
           const sharedTime = uniformSessionTime(cohort.sessions);
           const body = (

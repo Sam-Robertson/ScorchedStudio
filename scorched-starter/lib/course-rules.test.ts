@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cohortEnrollmentWindow, cohortFirstSessionDate, cohortLastSessionDate } from "./course-rules.ts";
+import { cohortEnrollmentState, cohortEnrollmentWindow, cohortFirstSessionDate, cohortLastSessionDate } from "./course-rules.ts";
 
 // The Tuesday cohort that prompted this: still offering "Enroll" the day after
 // its first session.
@@ -55,4 +55,13 @@ test("a cohort with no sessions has no first date to pass", () => {
   assert.equal(cohortFirstSessionDate([]), null);
   assert.equal(cohortLastSessionDate([]), null);
   assert.equal(cohortEnrollmentWindow([], new Date("2026-10-01T18:00:00Z")), "open");
+});
+
+test("a cohort an admin marked completed or cancelled is over whatever its dates say", () => {
+  const future = [{ session_date: "2099-01-05" }, { session_date: "2099-01-12" }];
+  assert.equal(cohortEnrollmentState({ status: "completed" }, future), "ended");
+  assert.equal(cohortEnrollmentState({ status: "cancelled" }, future), "ended");
+  // "full" and "open" defer to the dates: full still takes waitlist joins.
+  assert.equal(cohortEnrollmentState({ status: "full" }, future), "open");
+  assert.equal(cohortEnrollmentState({ status: "open" }, future), "open");
 });
