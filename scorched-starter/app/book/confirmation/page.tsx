@@ -45,7 +45,7 @@ export default async function ConfirmationPage({
 
     const paymentNote =
       booking.payment_method === "gift_card"
-        ? "Remember to bring your gift card — the $15/person studio fee is due in-studio."
+        ? "Remember to bring your gift card. The $15/person studio fee is due in-studio."
         : booking.payment_method === "get_out_pass"
         ? "Remember to bring your Get Out Pass when you arrive."
         : null;

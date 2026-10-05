@@ -1,7 +1,7 @@
 ---
 title: "I burn, I pine, I punish"
 date: "2022-01-11"
-excerpt: "Five reasons Scorched Studio brings the heat for date night—walk-ins, traceable designs, drinks, and more."
+excerpt: "Five reasons Scorched Studio brings the heat for date night: walk-ins, traceable designs, drinks, and more."
 coverImage: "/blog/covers/burn-pine-punish.jpg"
 tags: ["date-night", "studio", "guide"]
 ---
@@ -22,6 +22,6 @@ We can’t confirm that spending time at Scorched will improve your romantic poe
 
 4. **Add a drink.** If you’re feeling particularly chivalrous, buy your date a drink! Our fridge is full and waiting. An original activity and a good drink to sip on? Say hello to your second date.
 
-5. **We set you up, you take the lead.** We’re intentional with getting you ready to create—then we give you space. (Talk about the perfect wingman.)
+5. **We set you up, you take the lead.** We’re intentional with getting you ready to create, then we give you space. (Talk about the perfect wingman.)
 
 So if you’re looking for “a fire sparkling in lovers' eyes,” put down *Romeo and Juliet*, and pick up a heat pen. We’ll see you on date night!

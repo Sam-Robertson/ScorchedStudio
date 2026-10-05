@@ -30,7 +30,7 @@ export default function CancelMembershipButton({ membershipId }: { membershipId:
   if (state === "done") {
     return (
       <p className="text-xs text-neutral-500">
-        Cancellation scheduled{periodEnd ? ` — you'll keep access through ${formatDenverDate(periodEnd)}` : ""}, and you won&apos;t be charged again.
+        Cancellation scheduled.{periodEnd ? ` You'll keep access through ${formatDenverDate(periodEnd)}, and` : " You"} won&apos;t be charged again.
       </p>
     );
   }

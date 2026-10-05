@@ -133,7 +133,7 @@ export default function PrintDesignPage() {
         </div>
         <h1 className="h2 font-bold mb-3">Design Sent!</h1>
         <p className="lead text-neutral-600 mb-8">
-          Your design has been sent to the studio. We&apos;ll take it from here — keep an eye out
+          Your design has been sent to the studio. We&apos;ll take it from here. Keep an eye out
           for updates.
         </p>
         <button
@@ -175,7 +175,7 @@ export default function PrintDesignPage() {
             >
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — {p.width_in}&Prime; × {p.height_in}&Prime;
+                  {p.name}: {p.width_in}&Prime; × {p.height_in}&Prime;
                 </option>
               ))}
             </select>
@@ -244,7 +244,7 @@ export default function PrintDesignPage() {
                     />
                   </div>
                   <p className={`${vulfMono.className} text-xs text-neutral-400`}>
-                    {selectedProduct?.name} — {selectedProduct?.width_in}&Prime;W ×{" "}
+                    {selectedProduct?.name}: {selectedProduct?.width_in}&Prime;W ×{" "}
                     {selectedProduct?.height_in}&Prime;H
                   </p>
                 </>

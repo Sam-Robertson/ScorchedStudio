@@ -105,7 +105,7 @@ export default async function AccountPage() {
                     <div key={e.id} className="rounded-2xl border border-black/10 bg-white p-5">
                       <div className="flex items-center justify-between mb-1">
                         <p className="font-semibold text-neutral-900">
-                          {found ? `${found.course.name} — ${found.cohort.label}` : "Course"}
+                          {found ? `${found.course.name}: ${found.cohort.label}` : "Course"}
                         </p>
                         <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${
                           e.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-neutral-100 text-neutral-500"

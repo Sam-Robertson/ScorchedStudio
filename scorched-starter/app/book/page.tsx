@@ -646,7 +646,7 @@ function BookStep3({
             <input type="checkbox" className="mt-0.5 w-4 h-4 rounded accent-[#884A20] cursor-pointer" checked={paymentMethod === "gift_card"} onChange={() => toggleMethod("gift_card")} disabled={isLoading} />
             <div>
               <span className={`${vulfMono.className} text-sm text-neutral-800 group-hover:text-[#884A20] transition-colors`}>I&apos;m paying with a gift card</span>
-              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free — pay the $15/person studio fee in-studio</p>
+              <p className={`${vulfMono.className} text-xs text-neutral-400 mt-0.5`}>Reserve free, then pay the $15/person studio fee in-studio</p>
             </div>
           </label>
           {paymentMethod === "gift_card" && (

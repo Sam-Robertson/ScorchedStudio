@@ -66,8 +66,8 @@ export async function sendAccountCreatedEmail(email: string) {
           If that was you, no action is needed.
         </p>
         <p style="color: #555; margin-bottom: 20px;">
-          If you didn't do this, someone else may have signed up with your email —
-          reply to <a href="mailto:contact@scorchedstudio.com" style="color: #884A20;">contact@scorchedstudio.com</a> and we'll help sort it out.
+          If you didn't do this, someone else may have signed up with your email.
+          Reply to <a href="mailto:contact@scorchedstudio.com" style="color: #884A20;">contact@scorchedstudio.com</a> and we'll help sort it out.
         </p>
       </div>
     `,

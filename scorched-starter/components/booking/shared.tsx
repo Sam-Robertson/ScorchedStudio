@@ -259,7 +259,7 @@ export function PaymentForm({
         disabled={!stripe || !elements || submitting}
         className={`${vulfMono.className} w-full rounded-xl bg-[#519A70] py-3 text-sm tracking-[0.15em] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-opacity`}
       >
-        {submitting ? "Processing…" : `Complete Payment — $${total}`}
+        {submitting ? "Processing…" : `Complete Payment: $${total}`}
       </button>
     </form>
   );

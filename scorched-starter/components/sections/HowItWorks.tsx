@@ -13,7 +13,7 @@ const steps = [
   {
     n: 2,
     title: 'Pick a project',
-    text: 'Boards, boxes, bracelets—stencils and help provided so you’ll love the result.',
+    text: 'Boards, boxes, bracelets. Stencils and help provided so you’ll love the result.',
     svg: '/illustrations/StepTwo.svg',
     alt: 'Hand choosing a project',
   },

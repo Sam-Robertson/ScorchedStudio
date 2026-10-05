@@ -132,7 +132,7 @@ const SignatureCanvas = forwardRef<
       ref={canvasRef}
       className={className}
       style={{ touchAction: "none" }}
-      aria-label="Signature pad — draw your signature here"
+      aria-label="Signature pad. Draw your signature here"
     />
   );
 });

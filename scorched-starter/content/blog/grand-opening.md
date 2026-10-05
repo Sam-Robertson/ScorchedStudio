@@ -1,7 +1,7 @@
 ---
 title: "700 Degree Date Night"
 date: "2025-07-28"
-excerpt: "Looking for something new? Something hot? Welcome to Scorched Wood Burning Studio — another date night spot in Utah County, but with drinks, good music, and a venue your date isn't sick of yet."
+excerpt: "Looking for something new? Something hot? Welcome to Scorched Wood Burning Studio, another date night spot in Utah County, but with drinks, good music, and a venue your date isn't sick of yet."
 coverImage: "/blog/covers/grand-opening.jpg"
 tags: ["grand-opening", "date-night"]
 ---
@@ -25,6 +25,6 @@ See you there?
 ---
 
 **Scorched Wood Burning Studio Grand Opening**
-August 1, 2025 — 6:30–9:00pm
+August 1, 2025, 6:30–9:00pm
 218 E University Pkwy, Orem
 Free Everything

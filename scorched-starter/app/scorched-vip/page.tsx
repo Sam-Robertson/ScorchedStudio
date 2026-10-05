@@ -7,7 +7,7 @@ import VipSignupForm from "@/components/marketing/VipSignupForm";
 export const metadata = {
   title: "Scorched VIP | Scorched Studio",
   description:
-    "Join Scorched VIP — our free loyalty program. Get early access to new products, exclusive deals, and a free wooden ring when you sign up.",
+    "Join Scorched VIP, our free loyalty program. Get early access to new products, exclusive deals, and a free wooden ring when you sign up.",
 };
 
 export default function ScorchedVIPPage() {
@@ -48,7 +48,7 @@ function Perks() {
           </Perk>
           <Perk icon={<MessageSquare className="w-6 h-6" />} title="First to Know">
             Hear about new products, seasonal specials, and studio news before anyone
-            else. No spam — just the good stuff.
+            else. No spam, just the good stuff.
           </Perk>
         </div>
       </Container>

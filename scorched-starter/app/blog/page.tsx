@@ -32,7 +32,7 @@ export default async function BlogPage() {
       <Container className="max-w-4xl">
         {posts.length === 0 ? (
           <p className={`${vulfMono.className} text-neutral-400 text-center py-16`}>
-            No posts yet — check back soon.
+            No posts yet. Check back soon.
           </p>
         ) : (
           <div className="grid gap-8 sm:grid-cols-2">

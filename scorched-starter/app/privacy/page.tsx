@@ -35,19 +35,19 @@ export default function PrivacyPage() {
           <p className="mb-4">We collect information you provide directly when you:</p>
           <ul className="list-disc list-outside ml-5 space-y-2">
             <li>
-              <strong>Make a booking</strong> — name, email address, phone number, party size, and
+              <strong>Make a booking:</strong> name, email address, phone number, party size, and
               payment information. Payment processing is handled by Stripe and we do not store your
               full card details.
             </li>
             <li>
-              <strong>Sign a waiver</strong> — name, email, date of birth, phone number, and
+              <strong>Sign a waiver:</strong> name, email, date of birth, phone number, and
               digital signature.
             </li>
             <li>
-              <strong>Contact us</strong> — name, email, and the contents of your message.
+              <strong>Contact us:</strong> name, email, and the contents of your message.
             </li>
             <li>
-              <strong>Join our email or text list</strong> — your email address, and your mobile
+              <strong>Join our email or text list:</strong> your email address, and your mobile
               number if you asked for texts, plus a record of the consent you gave. Email signup is
               on the waiver, at booking checkout, on our Scorched VIP sign-up page, in our footer
               form, and in your account preferences. Text message signup is on the waiver, at

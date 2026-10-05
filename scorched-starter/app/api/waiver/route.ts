@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: "Scorched Studio <bookings@scorchedstudio.com>",
       to: data.email,
-      subject: "Your Scorched Studio Waiver — You're all set!",
+      subject: "Your Scorched Studio Waiver: You're all set!",
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; color: #3A3A3A;">
           <h1 style="font-size: 22px; margin-bottom: 8px;">You're all set, ${data.firstName}!</h1>
@@ -143,17 +143,17 @@ export async function POST(req: Request) {
             <a href="tel:+18013619066" style="color: #884A20;">(801) 361-9066</a>.
           </p>
           <p style="color: #aaa; font-size: 12px; margin-top: 12px;">
-            Please do not reply directly to this email — it is not monitored.
+            Please do not reply directly to this email. It is not monitored.
           </p>
           <p style="color: #555; font-size: 14px; margin-top: 24px;">
             See you soon!<br/>
-            <strong>— The Scorched Studio Team</strong>
+            <strong>The Scorched Studio Team</strong>
           </p>
 
           <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0;" />
 
           <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; margin-bottom: 8px;">While you&apos;re here</p>
-          <h2 style="font-size: 18px; margin: 0 0 8px;">Join Scorched VIP — It&apos;s Free</h2>
+          <h2 style="font-size: 18px; margin: 0 0 8px;">Join Scorched VIP (It&apos;s Free)</h2>
           <p style="color: #555; font-size: 14px; margin-bottom: 20px;">
             Sign up for our loyalty program and get exclusive deals, hear about new products first,
             and pick up a <strong>free wooden ring</strong> on your next visit.

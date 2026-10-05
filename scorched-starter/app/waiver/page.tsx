@@ -226,7 +226,7 @@ export default function WaiverPage() {
           <h1 className="h2 font-bold mb-4">Waiver Signed</h1>
           <p className={`${vulfMono.className} text-[15px] leading-[1.6] text-neutral-700`}>
             Thanks, {submittedName}! Your waiver is on file. You&apos;re ready
-            to burn — we&apos;ll see you soon.
+            to burn. We&apos;ll see you soon.
           </p>
           <p className={`${vulfMono.className} mt-3 text-sm text-neutral-500`}>
             A confirmation has been sent to {submittedEmail}.
@@ -317,7 +317,7 @@ export default function WaiverPage() {
             <div>
               <h2 className="h3 font-bold">Minor Participants</h2>
               <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
-                Optional — your signature below covers any minors listed here.
+                Optional. Your signature below covers any minors listed here.
               </p>
             </div>
             <button
@@ -392,7 +392,7 @@ export default function WaiverPage() {
             className={`${vulfMono.className} h-64 overflow-y-auto rounded-xl border border-black/15 bg-white p-5 text-[13px] leading-[1.7] text-neutral-700 space-y-4`}
           >
             <p className="font-bold text-sm uppercase tracking-wide">
-              Scorched Studio — Participant Waiver &amp; Release of Liability
+              Scorched Studio: Participant Waiver &amp; Release of Liability
             </p>
 
             <p>
@@ -422,8 +422,8 @@ export default function WaiverPage() {
 
             <p>
               <strong>4. Medical Conditions</strong><br />
-              I confirm that I have no medical conditions—including but not limited to
-              respiratory conditions, burns, or open wounds—that would be aggravated by
+              I confirm that I have no medical conditions, including but not limited to
+              respiratory conditions, burns, or open wounds, that would be aggravated by
               participation in woodburning activities. I agree to disclose any relevant
               health conditions to staff prior to beginning.
             </p>

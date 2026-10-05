@@ -106,7 +106,7 @@ export async function PATCH(
 
   if (!isBookingEditable(booking.date, booking.time_slot)) {
     return Response.json(
-      { error: "This booking can no longer be modified — the session has already started or passed." },
+      { error: "This booking can no longer be modified. The session has already started or passed." },
       { status: 400 }
     );
   }
@@ -157,8 +157,8 @@ export async function PATCH(
             <p style="color: #555; font-size: 14px; margin-top: 24px;">
               Want to book again? Visit <a href="https://scorchedstudio.com/book" style="color: #884A20;">scorchedstudio.com/book</a>.
             </p>
-            <p style="color: #aaa; font-size: 12px; margin-top: 12px;">Please do not reply to this email — it is not monitored.</p>
-            <p style="color: #555; font-size: 14px; margin-top: 24px;">— The Scorched Studio Team</p>
+            <p style="color: #aaa; font-size: 12px; margin-top: 12px;">Please do not reply to this email. It is not monitored.</p>
+            <p style="color: #555; font-size: 14px; margin-top: 24px;">The Scorched Studio Team</p>
           </div>
         `,
       }).catch((e) => console.error("CANCEL_EMAIL_ERROR", e));
