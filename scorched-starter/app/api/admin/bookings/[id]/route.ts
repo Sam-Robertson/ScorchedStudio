@@ -13,6 +13,12 @@ const schema = z.discriminatedUnion("action", [
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     time_slot: z.string().min(1),
     party_size: z.number().int().min(1).max(MAX_PARTY_SIZE),
+    // Contact details, for fixing a typo the customer made. Left out means
+    // unchanged; the email also decides where booking emails and the
+    // manage-by-email lookup go, which is why a typo matters.
+    name: z.string().trim().min(1).optional(),
+    email: z.string().trim().email().optional(),
+    phone: z.string().trim().nullable().optional(),
   }),
 ]);
 
@@ -52,7 +58,7 @@ export async function PATCH(
   }
 
   // ── Update ───────────────────────────────────────────────────────────────────
-  const { date, time_slot, party_size } = parsed.data;
+  const { date, time_slot, party_size, name, email, phone } = parsed.data;
 
   const today = todayInDenverYmd();
   if (date < today) {
@@ -108,7 +114,14 @@ export async function PATCH(
 
   const { error } = await getSupabase()
     .from("bookings")
-    .update({ date, time_slot, party_size })
+    .update({
+      date,
+      time_slot,
+      party_size,
+      ...(name !== undefined ? { name } : {}),
+      ...(email !== undefined ? { email: email.toLowerCase() } : {}),
+      ...(phone !== undefined ? { phone: phone || null } : {}),
+    })
     .eq("id", id);
 
   if (error) {

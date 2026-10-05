@@ -349,7 +349,10 @@ function BookingModal({
   token: string;
   onClose: () => void;
   onCancel: (id: string) => void;
-  onUpdate: (id: string, updates: { date: string; time_slot: string; party_size: number }) => void;
+  onUpdate: (
+    id: string,
+    updates: { date: string; time_slot: string; party_size: number; name: string; email: string; phone: string | null }
+  ) => void;
 }) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -361,6 +364,9 @@ function BookingModal({
   const [editDate, setEditDate] = useState(b.date);
   const [editSlot, setEditSlot] = useState(b.time_slot);
   const [editParty, setEditParty] = useState(b.party_size);
+  const [editName, setEditName] = useState(b.name);
+  const [editEmail, setEditEmail] = useState(b.email);
+  const [editPhone, setEditPhone] = useState(b.phone ?? "");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -424,6 +430,9 @@ function BookingModal({
         date: editDate,
         time_slot: editSlot,
         party_size: editParty,
+        name: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim() || null,
       }),
     });
     const json = await res.json();
@@ -432,7 +441,14 @@ function BookingModal({
       setEditSaving(false);
       return;
     }
-    onUpdate(b.id, { date: editDate, time_slot: editSlot, party_size: editParty });
+    onUpdate(b.id, {
+      date: editDate,
+      time_slot: editSlot,
+      party_size: editParty,
+      name: editName.trim(),
+      email: editEmail.trim().toLowerCase(),
+      phone: editPhone.trim() || null,
+    });
     setEditing(false);
     setEditSaving(false);
   }
@@ -587,12 +603,28 @@ function BookingModal({
                 />
               </div>
 
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Name</label>
+                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputCls} w-full`} />
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Email</label>
+                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className={`${inputCls} w-full`} />
+                <p className="text-[11px] text-neutral-400 mt-1">Booking emails and the customer&apos;s edit link go here.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Phone</label>
+                <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className={`${inputCls} w-full`} />
+              </div>
+
               {editError && <p className="text-xs text-red-600">{editError}</p>}
 
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={handleSaveEdit}
-                  disabled={editSaving || slots.length === 0}
+                  disabled={editSaving || slots.length === 0 || !editName.trim() || !editEmail.trim()}
                   className="rounded-lg bg-[#884A20] text-white text-xs px-4 py-2 hover:opacity-90 disabled:opacity-50"
                 >
                   {editSaving ? "Saving…" : "Save changes"}
@@ -603,6 +635,9 @@ function BookingModal({
                     setEditDate(b.date);
                     setEditSlot(b.time_slot);
                     setEditParty(b.party_size);
+                    setEditName(b.name);
+                    setEditEmail(b.email);
+                    setEditPhone(b.phone ?? "");
                     setEditError(null);
                   }}
                   className="text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-700"
