@@ -89,6 +89,15 @@ export default async function MembershipSuccessPage({
           </div>
 
           <div className="flex flex-col items-center gap-3 mt-8">
+            <Link
+              href="/account"
+              className={`${vulfMono.className} rounded-xl bg-[#884A20] px-5 py-2.5 text-xs tracking-[0.1em] font-semibold text-white hover:opacity-90`}
+            >
+              SEE MY MEMBERSHIP
+            </Link>
+            <p className={`${vulfMono.className} text-xs text-neutral-400 text-center`}>
+              Your account shows your remaining entrances and renewal date.
+            </p>
             <Link href="/" className={`${vulfMono.className} text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-700`}>
               Back to home
             </Link>

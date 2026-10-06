@@ -71,7 +71,7 @@ export async function resolveCustomerForCourseAction(
       ok: false,
       status: 409,
       body: {
-        error: "You already have an account with that email. Log in to enroll.",
+        error: "You already have an account with that email. Log in to continue.",
         requiresLogin: true,
       },
     };

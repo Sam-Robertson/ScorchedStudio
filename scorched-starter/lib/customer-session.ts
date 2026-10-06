@@ -17,7 +17,12 @@ const RESET_TOKEN_TTL_MS = 1000 * 60 * 15;
 // customer shouldn't have to re-log-in every few days.
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
-type Purpose = "reset" | "session";
+// An invite is emailed unprompted (a member who bought through Stripe before
+// accounts were required), so it has to survive sitting in an inbox for a
+// while. It can only set a password, never act as a session.
+const INVITE_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+
+type Purpose = "reset" | "session" | "invite";
 type Payload = { purpose: Purpose; email: string; exp: number };
 
 function secret(): string {
@@ -32,7 +37,7 @@ function sign(payload: Payload): string {
   return `${body}.${sig}`;
 }
 
-function verify(token: string, expectedPurpose: Purpose): string | null {
+function verify(token: string, expectedPurpose: Purpose | Purpose[]): string | null {
   const parts = token.split(".");
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
@@ -48,7 +53,8 @@ function verify(token: string, expectedPurpose: Purpose): string | null {
   } catch {
     return null;
   }
-  if (payload.purpose !== expectedPurpose) return null;
+  const allowed = Array.isArray(expectedPurpose) ? expectedPurpose : [expectedPurpose];
+  if (!payload.purpose || !allowed.includes(payload.purpose)) return null;
   if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
   if (typeof payload.email !== "string" || !payload.email) return null;
 
@@ -63,7 +69,11 @@ export function signResetToken(email: string): string {
 // password, never as a session directly (a leaked email-scanner pre-click
 // can't turn into a 30-day session that way).
 export function verifyResetToken(token: string): string | null {
-  return verify(token, "reset");
+  return verify(token, ["reset", "invite"]);
+}
+
+export function signInviteToken(email: string): string {
+  return sign({ purpose: "invite", email, exp: Date.now() + INVITE_TOKEN_TTL_MS });
 }
 
 export function signCustomerSessionToken(email: string): string {

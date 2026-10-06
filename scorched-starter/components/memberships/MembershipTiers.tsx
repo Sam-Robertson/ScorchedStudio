@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import Container from "@/components/ui/Container";
 import { Flame, Percent, Wallet } from "lucide-react";
@@ -19,8 +20,21 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
   const [pendingPlan, setPendingPlan] = useState<MembershipPlan | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requiresLogin, setRequiresLogin] = useState(false);
+  // undefined until the session probe answers. A member must have an account,
+  // so a visitor who is not signed in creates one as part of this form.
+  const [signedInAs, setSignedInAs] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    fetch("/api/account/me")
+      .then((r) => (r.ok ? r.json() : { authenticated: false }))
+      .then((data) => setSignedInAs(data.authenticated ? data.email : null))
+      .catch(() => setSignedInAs(null));
+  }, []);
 
   function selectPlan(plan: MembershipPlan) {
     setError(null);
@@ -34,8 +48,13 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
       setError("First and last name are required.");
       return;
     }
+    if (!signedInAs) {
+      if (!email.trim()) { setError("Enter your email address."); return; }
+      if (password.length < 8) { setError("Choose a password of at least 8 characters."); return; }
+    }
 
     setError(null);
+    setRequiresLogin(false);
     setSubmitting(true);
 
     const valueCents =
@@ -51,10 +70,12 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
           interval,
           firstName: firstName.trim(),
           lastName: lastName.trim(),
+          ...(signedInAs ? {} : { email: email.trim(), password }),
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
+        setRequiresLogin(!!data.requiresLogin);
         setError(data.error || "Something went wrong starting checkout. Please try again.");
         setSubmitting(false);
         return;
@@ -104,7 +125,17 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
           >
             <h3 className="font-semibold text-neutral-900">Join {pendingPlan.name}</h3>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-600">
+                {error}
+                {requiresLogin && (
+                  <>
+                    {" "}
+                    <Link href="/account/login?redirect=/memberships" className="underline">Log in</Link>
+                  </>
+                )}
+              </p>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -127,9 +158,48 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
               </div>
             </div>
 
+            {signedInAs ? (
+              <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+                Your membership will be on your account, <span className="text-neutral-800">{signedInAs}</span>.
+              </p>
+            ) : (
+              <div className="rounded-xl border border-black/10 bg-neutral-50 p-4 space-y-3">
+                <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+                  Your membership comes with an account, where you can see your remaining entrances and manage your plan.{" "}
+                  Already have one?{" "}
+                  <Link href="/account/login?redirect=/memberships" className="text-brand underline">Log in</Link>
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Email</label>
+                    <input
+                      type="email"
+                      className={inputCls}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Choose a password</label>
+                    <input
+                      type="password"
+                      className={inputCls}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || signedInAs === undefined}
               className="w-full rounded-xl bg-brand text-white py-3 font-semibold disabled:opacity-50"
             >
               {submitting ? "Starting checkout…" : "Continue to payment"}

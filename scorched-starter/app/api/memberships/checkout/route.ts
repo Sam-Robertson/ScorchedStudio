@@ -1,8 +1,9 @@
 // app/api/memberships/checkout/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { getPlanByKey } from "@/lib/memberships";
+import { attachCustomerSession, resolveCustomerForCourseAction } from "@/lib/course-guest-account";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -12,6 +13,11 @@ const schema = z.object({
   addOn: z.boolean().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
+  // A member must have an account, since it is the only place they can see
+  // their entrances. Signed-in visitors are known from their cookie; everyone
+  // else creates the account here, the same way course checkout does.
+  email: z.string().email().optional(),
+  password: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -21,6 +27,15 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input", issues: parsed.error.flatten() }, { status: 400 });
   }
   const { planKey, interval, addOn, firstName, lastName } = parsed.data;
+
+  const resolved = await resolveCustomerForCourseAction(req, {
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
+  if (!resolved.ok) {
+    return Response.json(resolved.body, { status: resolved.status });
+  }
+  const email = resolved.email;
 
   const plan = await getPlanByKey(planKey);
   if (!plan || !plan.active) {
@@ -63,6 +78,9 @@ export async function POST(req: NextRequest) {
   // Checkout page collects the email itself.
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    // Locked to the account email so the membership row, the account, and the
+    // Stripe customer all agree on who this is.
+    customer_email: email,
     // No payment_method_types override — Stripe mirrors whatever's enabled
     // in the Dashboard (Settings > Payment methods). Link was previously
     // excluded here via a hardcoded ["card"], but that also silently
@@ -94,5 +112,6 @@ export async function POST(req: NextRequest) {
     cancel_url: `${baseUrl}/memberships`,
   });
 
-  return Response.json({ url: session.url });
+  const response = NextResponse.json({ url: session.url });
+  return resolved.issueSession ? attachCustomerSession(response, email) : response;
 }

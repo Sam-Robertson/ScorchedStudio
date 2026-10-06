@@ -12,6 +12,7 @@
 // change can't silently send nulls into the database.
 import Stripe from "stripe";
 import type { BillingInterval, MembershipRecord, MembershipStatus, PlanKey } from "@/lib/memberships";
+import { ensureMemberAccount } from "@/lib/member-account";
 import {
   getMembershipBySubscriptionId,
   getPlanByKey,
@@ -123,6 +124,9 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
     reason: `checkout:${session.id}`,
     woodCreditCents: plan.wood_credit_cents * multiplier,
   });
+
+  // Checkout creates the account before Stripe, so this is normally a no-op.
+  await ensureMemberAccount(membership.email, plan.name);
 
   // TODO: session.metadata.add_on === "true" means the customer paid the
   // add_on_price_cents line item at checkout. The benefit it should grant isn't

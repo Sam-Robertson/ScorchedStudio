@@ -5,7 +5,7 @@
 // always responds the same way regardless of whether this actually sent
 // anything, so a bad actor can't use it to enumerate customer emails.
 import { Resend } from "resend";
-import { signResetToken } from "@/lib/customer-session";
+import { signInviteToken, signResetToken } from "@/lib/customer-session";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -73,4 +73,43 @@ export async function sendAccountCreatedEmail(email: string) {
     `,
   });
   if (error) console.error("CUSTOMER_WELCOME_EMAIL_SEND_ERROR", email, error);
+}
+
+// Sent to a member who has no account yet: they bought through Stripe before
+// checkout required one, or staff set the membership up. The link sets their
+// password and signs them in, and it lasts a week because nobody asked for it.
+export async function sendMemberAccountInviteEmail(email: string, planName: string) {
+  if (!process.env.CONTACT_FROM) {
+    console.error("MEMBER_INVITE_EMAIL_MISSING_CONTACT_FROM");
+    return;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
+  const link = `${baseUrl}/account/reset-password?token=${encodeURIComponent(signInviteToken(email))}&redirect=${encodeURIComponent("/account")}`;
+
+  const { error } = await resend.emails.send({
+    from: "Scorched Studio <accounts@scorchedstudio.com>",
+    to: email,
+    subject: "Set up your Scorched Studio member account",
+    html: `
+      <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; color: #3A3A3A;">
+        <h1 style="font-size: 22px; margin-bottom: 8px;">Your ${planName} membership is active</h1>
+        <p style="color: #555; margin-bottom: 20px;">
+          Your member account lets you see your remaining entrances, your renewal date,
+          and manage your plan. Choose a password to finish setting it up.
+        </p>
+        <p style="text-align: center; margin-bottom: 20px;">
+          <a href="${link}" style="display: inline-block; background: #884A20; color: white; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 600;">
+            Set my password
+          </a>
+        </p>
+        <p style="color: #555; font-size: 14px; margin-bottom: 20px;">
+          You'll sign in with this email address. After that, your account lives at
+          <a href="${baseUrl}/account" style="color: #884A20;">scorchedstudio.com/account</a>.
+        </p>
+        <p style="color: #aaa; font-size: 12px;">This link works for 7 days. If it has expired, use "Forgot password" on the login page with this email.</p>
+      </div>
+    `,
+  });
+  if (error) console.error("MEMBER_INVITE_EMAIL_SEND_ERROR", email, error);
 }
