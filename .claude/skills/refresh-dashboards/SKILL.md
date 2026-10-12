@@ -36,7 +36,8 @@ artifact's `url`, listing every manifest entry for that artifact as
 Documents that already exist need `if_version`. Get current versions with
 `ArtifactData` `action: "list"` on each collection (`snap`, `journal` for
 Financials; `snap`, `bookings` for Operations) and pass each document's
-`version` as `if_version` on its entry. A new month (a new `journal/<YYYY-MM>`
+`version` as `if_version` on its entry. If a list result elides some documents, fetch
+each missing one with `get` to read its version; never guess a version. A new month (a new `journal/<YYYY-MM>`
 or `bookings/<YYYY-MM>` document) has no version yet and is created without one.
 
 A batch holds at most 50 writes and 1 MiB; Financials is about 25 documents
