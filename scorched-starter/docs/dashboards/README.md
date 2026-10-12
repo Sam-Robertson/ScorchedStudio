@@ -15,7 +15,7 @@ The artifact viewer blocks network requests, so the pages cannot call this app's
 Instead each artifact has its own database (the `db` capability) holding a snapshot of
 the report data, and the page answers its usual report requests from that snapshot
 (`snap.resolve` in `shared.js` reproduces the P&L, costs, sales, bookings and journal
-routes client-side). `scripts/dashboard-snapshot.ts` builds the snapshot from the API;
+routes client-side). `scripts/dashboard-snapshot.mjs` builds the snapshot from the API;
 Claude writes it into the artifacts with the ArtifactData tool. The procedure is the
 `refresh-dashboards` skill in the repo root's `.claude/skills/`. The top right of each
 dashboard shows when its data was taken.

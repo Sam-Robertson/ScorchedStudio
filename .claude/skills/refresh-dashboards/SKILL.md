@@ -20,7 +20,7 @@ From `scorched-starter/` (needs `ADMIN_PASSWORD` in `.env`; pulls from productio
 by default, set `DASHBOARD_API_BASE=http://localhost:3000` to use a dev server):
 
 ```
-npx tsx scripts/dashboard-snapshot.ts
+node scripts/dashboard-snapshot.mjs
 ```
 
 It writes `.dashboard-snapshot/manifest.json` plus one JSON file per document
@@ -51,9 +51,11 @@ Open either dashboard: the top right shows "Data as of <time>" from the new
 
 A cloud routine named "Refresh Scorched dashboards" (id trig_019ahGHduhcsrqiWNZz2x7Bv,
 https://claude.ai/code/routines/trig_019ahGHduhcsrqiWNZz2x7Bv) runs these same steps
-daily at 12:00 UTC (6:00 AM Denver in summer, 5:00 AM in winter). It downloads the
-script from the public repo and signs in with the ADMIN_PASSWORD variable set on the
-Default cloud environment at claude.ai/code. To check on it, use RemoteTrigger
+daily at 12:00 UTC (6:00 AM Denver in summer, 5:00 AM in winter). Its prompt carries a
+verbatim copy of `scripts/dashboard-snapshot.mjs` (the sandbox cannot reach GitHub), so
+when the script changes, update the routine prompt too (RemoteTrigger `update`). It signs
+in with the ADMIN_PASSWORD variable set on the Default cloud environment at claude.ai/code,
+whose network access must allow www.scorchedstudio.com. To check on it, use RemoteTrigger
 `list_runs` then `get_run_log`. Running this skill by hand is still fine between runs.
 
 ## Notes
