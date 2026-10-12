@@ -47,6 +47,15 @@ and 400 KiB, Operations about 15 documents and 250 KiB, so one batch each.
 Open either dashboard: the top right shows "Data as of <time>" from the new
 `snap/meta` document. Nothing else needs republishing.
 
+## Automatic refresh
+
+A cloud routine named "Refresh Scorched dashboards" (id trig_019ahGHduhcsrqiWNZz2x7Bv,
+https://claude.ai/code/routines/trig_019ahGHduhcsrqiWNZz2x7Bv) runs these same steps
+daily at 12:00 UTC (6:00 AM Denver in summer, 5:00 AM in winter). It downloads the
+script from the public repo and signs in with the ADMIN_PASSWORD variable set on the
+Default cloud environment at claude.ai/code. To check on it, use RemoteTrigger
+`list_runs` then `get_run_log`. Running this skill by hand is still fine between runs.
+
 ## Notes
 
 - Projection model months and normalized EBITDA adjustments are entered in the
