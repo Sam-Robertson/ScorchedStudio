@@ -45,6 +45,9 @@
   const { api, fmt, dates, ui, viz, journal } = S;
   const h = ui.h;
 
+  // Where the two entry forms live when the page runs from a snapshot (it cannot write to the API).
+  const INPUTS_URL = "https://www.scorchedstudio.com/admin/reporting/inputs";
+  const inputsNote = (what) => ui.card({ title: what, body: h("p", { class: "subtle-line" }, "Enter these in the app: ", h("a", { href: INPUTS_URL, target: "_blank", rel: "noopener", text: "Admin, Reporting, Report inputs" }), ". The dashboard shows them after its next data refresh.") });
   const LABOR_CODES = ["6000", "6010"];
   const MAX_SERIES = 9;
   const OTHER = "Other";
@@ -420,9 +423,14 @@
   // ── Balance Sheet ──────────────────────────────────────────────────────
   renderers.balance = ({ bs }, nodes) => {
     const rows = bs.rows || [];
-    const input = h("input", { class: "field", type: "date", id: "bs-asof", value: state.balance.asOf, "aria-label": "As of date" });
-    input.addEventListener("change", () => { if (input.value) { state.balance.asOf = input.value; show("balance"); } });
-    const action = h("div", { class: "filters-right" }, h("label", { class: "lbl", for: "bs-asof", text: "As of" }), input);
+    let action;
+    if (S.snap.enabled) {
+      action = h("span", { class: "lbl", text: "As of " + fmt.dateLong(bs.asOf || state.balance.asOf) });
+    } else {
+      const input = h("input", { class: "field", type: "date", id: "bs-asof", value: state.balance.asOf, "aria-label": "As of date" });
+      input.addEventListener("change", () => { if (input.value) { state.balance.asOf = input.value; show("balance"); } });
+      action = h("div", { class: "filters-right" }, h("label", { class: "lbl", for: "bs-asof", text: "As of" }), input);
+    }
     const groups = h("div", {});
     for (const [t, label] of [["asset", "Assets"], ["liability", "Liabilities"], ["equity", "Equity"]]) {
       const g = rows.filter((r) => r.type === t);
@@ -496,7 +504,8 @@
         st.msg = e.message; st.msgTone = "bad"; btn.disabled = false; render("projections");
       }
     });
-    nodes.push(ui.card({ title: "Add or update a month", body: form, note: "Saves one month of the model. Leave a field blank to keep whatever is already stored for it." }));
+    if (S.snap.enabled) nodes.push(inputsNote("Add or update a month"));
+    else nodes.push(ui.card({ title: "Add or update a month", body: form, note: "Saves one month of the model. Leave a field blank to keep whatever is already stored for it." }));
 
     const pvaBody = projections.length === 0 ? ui.empty("No projection months loaded.") : ui.table({
       columns: [
@@ -558,7 +567,8 @@
         st.msg = e.message; st.msgTone = "bad"; btn.disabled = false; render("normalized");
       }
     });
-    nodes.push(ui.card({ title: "Add an adjustment", body: form, note: "For financing or sale prep. Add-backs are entered to the cent and are never hidden from the list below." }));
+    if (S.snap.enabled) nodes.push(inputsNote("Add an adjustment"));
+    else nodes.push(ui.card({ title: "Add an adjustment", body: form, note: "For financing or sale prep. Add-backs are entered to the cent and are never hidden from the list below." }));
 
     const rows = nm.normalized || [];
     const tbl = rows.length === 0 ? ui.empty("No months yet.") : ui.table({

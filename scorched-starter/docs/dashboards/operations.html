@@ -613,7 +613,7 @@
       else {
         const hgt = Math.max(220, topRows.length * 30 + 40);
         const host = chartHost(hgt);
-        topCard = ui.card({ title: isCount ? "Top Items by Units Sold" : "Top Items by Revenue", body: host, bodyClass: "tight", note: "Top 10 Square line items. Square items carry no category, so this stands in for a revenue-by-category view." });
+        topCard = ui.card({ title: isCount ? "Top Items by Units Sold" : "Top Items by Revenue", body: host, bodyClass: "tight", note: "Top 10 Square line items. Square items carry no category, so this stands in for a revenue-by-category view." + (sales.topItemsApprox ? " For a custom date range the top items cover all history; the other figures on this tab follow the range." : "") });
         after.push(() => viz.bar(host, {
           horizontal: true, labels: topRows.map((t) => t.name), format, height: hgt, barThickness: 18,
           xTick: (label) => (String(label).length > maxChars ? String(label).slice(0, maxChars - 1).trimEnd() + "…" : label),

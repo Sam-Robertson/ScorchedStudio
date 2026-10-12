@@ -6,13 +6,27 @@ Source for the two published dashboards that replaced `/admin/reporting` on 2026
 - Operations: https://claude.ai/artifact/VJu3gkKX5F32BxEcQCoSLd
 
 Each artifact is one page (`financials.html` or `operations.html`) plus the two shared
-files published alongside it (`shared.css`, `shared.js`). They are plain HTML and
-vanilla JS with Chart.js 4.4.1 from cdnjs. Data comes live from this app's admin API
-using the signed admin session token; the routes they may call cross-origin are listed
-in `DASHBOARD_API_ROUTES` in `next.config.ts`.
+files published alongside it (`shared.css`, `shared.js`): plain HTML and vanilla JS with
+Chart.js 4.4.1 from cdnjs.
 
-To change a dashboard, edit the files here, then republish the page to the same artifact
-URL with both shared files attached. The links the admin nav uses live in `lib/dashboards.ts`.
+## Where the data comes from
 
-Local preview: serve this folder statically, open the page, and in the sign-in card's
-"Sign-in settings" set the API address to `http://localhost:3000`.
+The artifact viewer blocks network requests, so the pages cannot call this app's API.
+Instead each artifact has its own database (the `db` capability) holding a snapshot of
+the report data, and the page answers its usual report requests from that snapshot
+(`snap.resolve` in `shared.js` reproduces the P&L, costs, sales, bookings and journal
+routes client-side). `scripts/dashboard-snapshot.ts` builds the snapshot from the API;
+Claude writes it into the artifacts with the ArtifactData tool. The procedure is the
+`refresh-dashboards` skill in the repo root's `.claude/skills/`. The top right of each
+dashboard shows when its data was taken.
+
+Outside claude.ai (a local preview served from this folder) the same pages fall back to
+real API calls with a sign-in card; set the API address under "Sign-in settings" to
+`http://localhost:3000` to test against a dev server.
+
+## Changing a page
+
+Edit the files here, then republish the page to the same artifact URL with both shared
+files attached and `capabilities: {db: {}}`. The links the admin nav uses live in
+`lib/dashboards.ts`. Projection model months and normalized EBITDA adjustments are
+entered in the app at `/admin/reporting/inputs`.

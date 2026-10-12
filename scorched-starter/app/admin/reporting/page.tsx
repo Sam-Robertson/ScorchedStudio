@@ -3,14 +3,16 @@
 // Reporting moved to two Claude dashboards on 2026-10-12. This page is the
 // in-app doorway to them: it exists so the Reporting group in the sidebar
 // still lands somewhere real, and so a bookmark to /admin/reporting keeps
-// working. The dashboards sign in with the same admin password.
+// working. The dashboards show a snapshot of this app's data that Claude
+// refreshes; the hand-entered inputs they report on are edited at
+// /admin/reporting/inputs.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { DASHBOARDS } from "@/lib/dashboards";
-import { ArrowUpRight, Landmark } from "lucide-react";
+import { ArrowUpRight, Landmark, PenLine } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminReportingPage() {
@@ -30,8 +32,8 @@ export default function AdminReportingPage() {
         <p className="eyebrow text-brand">Admin</p>
         <h1 className="h2 font-bold">Reporting</h1>
         <p className="text-sm text-neutral-500 mt-2 max-w-xl">
-          Reports now live in two dashboards that read this app&apos;s live data. They open in a new tab and
-          ask for the admin password the first time on each device.
+          Reports now live in two dashboards built from this app&apos;s data. They open in a new tab and
+          show the studio&apos;s numbers as of their last data refresh.
         </p>
       </div>
 
@@ -52,6 +54,17 @@ export default function AdminReportingPage() {
             <p className={`${vulfMono.className} text-[11px] text-neutral-400 mt-auto`}>Open dashboard</p>
           </a>
         ))}
+        <Link
+          href="/admin/reporting/inputs"
+          className="group rounded-2xl border border-black/10 bg-white shadow-sm p-6 flex flex-col gap-3 hover:border-[#884A20]/50 transition-colors"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className={`${vulfMono.className} text-xs font-bold uppercase tracking-wide text-[#884A20]`}>Report inputs</p>
+            <PenLine className="w-4 h-4 text-neutral-300 group-hover:text-[#884A20] transition-colors" />
+          </div>
+          <p className="text-sm text-neutral-600">Projection model months and normalized EBITDA adjustments.</p>
+          <p className={`${vulfMono.className} text-[11px] text-neutral-400 mt-auto`}>Edit in the app</p>
+        </Link>
       </div>
 
       <div className="mt-8">

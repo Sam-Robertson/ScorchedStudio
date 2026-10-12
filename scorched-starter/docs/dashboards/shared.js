@@ -3,11 +3,14 @@
  * Exposes window.Scorched = { api, auth, fmt, dates, range, ui, viz, journal, shell }.
  * Requires Chart.js 4 (UMD, global `Chart`) to be loaded before this file.
  *
- * Data comes live from the studio's own admin API (the same routes the old
- * in-app Reporting pages used), authenticated with the signed admin session
- * token the dashboard obtains from /api/admin/verify. The token and the API
- * base address are kept in this page's own localStorage (each artifact has
- * its own origin, so nothing leaks between pages).
+ * Data: inside claude.ai the page reads a snapshot of the studio's report data
+ * from its own artifact database (the `db` capability), pushed there by Claude
+ * from scripts/dashboard-snapshot.ts in the app repo. The artifact viewer
+ * blocks network requests, so there is no live API call from a published page.
+ * `api.get(path)` keeps the old route-shaped interface and is answered from
+ * that snapshot (see `snap.resolve`). Outside claude.ai (a local preview) the
+ * same calls fall back to real fetches against an API address with a sign-in
+ * card, which is how the pages are tested against the dev server.
  */
 (function () {
   "use strict";
@@ -34,6 +37,11 @@
     setBase(v) { const b = (v || "").trim().replace(/\/+$/, ""); if (!b || b === DEFAULT_API) store.del("apiBase"); else store.set("apiBase", b); },
     token() { return store.get("adminToken"); },
     async request(method, path, body) {
+      if (snap.enabled) {
+        if (method !== "GET") throw new ApiError(405, "Entry forms live in the app: Admin, Reporting, Report inputs.");
+        try { return await snap.resolve(path); }
+        catch (e) { throw e instanceof ApiError ? e : new ApiError(500, e && e.message ? e.message : "Could not read the dashboard data."); }
+      }
       const headers = {};
       const t = this.token();
       if (t) headers.Authorization = "Bearer " + t;
@@ -69,6 +77,17 @@
       this._title = title;
       this._onReady = onReady;
       this._ensureLoginDom();
+      if (snap.available()) {
+        this._showLogin(false, "Loading the latest numbers");
+        try {
+          const ok = await snap.init();
+          if (ok) { this._ready({ role: "snapshot", location: null }); return; }
+          this._showNotice("This dashboard's data is only available to its owner. Open it while signed in to claude.ai.");
+        } catch (e) {
+          this._showNotice("Could not read the dashboard data: " + (e && e.message ? e.message : "unknown error"));
+        }
+        return;
+      }
       if (!api.token()) { this._showLogin(); return; }
       this._showLogin(false, "Checking your session");
       try {
@@ -89,6 +108,12 @@
       if (login) login.hidden = true;
       if (app) app.hidden = false;
       this._onReady && this._onReady(session);
+    },
+    _showNotice(text) {
+      const login = document.getElementById("login"), app = document.getElementById("app");
+      if (app) app.hidden = true;
+      login.hidden = false; login.className = "login";
+      ui.replace(login, ui.h("div", { class: "login-card" }, ui.h("p", { class: "brand-eyebrow", text: "Scorched Studio" }), ui.h("h1", { text: this._title }), ui.h("p", { text })));
     },
     _ensureLoginDom() {
       let login = document.getElementById("login");
@@ -139,6 +164,150 @@
       card.append(f);
       login.append(card);
       setTimeout(() => pw.focus(), 0);
+    },
+  };
+
+  // ── snapshot data layer (artifact database) ─────────────────────────────
+  // Documents, written by Claude from the app's snapshot script:
+  //   snap/meta, snap/pl {months, lines}, snap/accounts, snap/seasonality,
+  //   snap/balance, snap/cashflow, snap/normalized, snap/projections,
+  //   snap/estimated, snap/sales-<start> and snap/sales-all,
+  //   journal/<YYYY-MM> {entries: [[id, date, memo, [[code, amount, lineMemo]]]]},
+  //   bookings/<YYYY-MM> {rows: [[created_at, date, time_slot, party_size,
+  //     amount_paid, status, referral_source, referral_other, location, cust]]}.
+  const LABOR_CODES = new Set(["6000", "6010"]);
+  const EXCLUDED_CODES = new Set(["7000", "8000"]);
+  const snap = {
+    enabled: false,
+    db: null,
+    meta: null,
+    docs: new Map(),        // "snap" collection, by doc id
+    _cols: new Map(),       // whole collections loaded on demand
+    _journal: new Map(),    // journal docs by month
+    available() { return !!(window.claude && typeof window.claude.use === "function"); },
+    async init() {
+      const db = await window.claude.use("db");
+      if (!db) return false;
+      this.db = db;
+      const q = await db.collection("snap").get();
+      for (const d of q.docs) this.docs.set(d.id, d.data());
+      this.meta = this.docs.get("meta") || null;
+      this.enabled = this.docs.size > 0;
+      return this.enabled;
+    },
+    doc(id) {
+      const d = this.docs.get(id);
+      if (!d) throw new ApiError(404, "The dashboard data has no \"" + id + "\" document yet. Ask Claude to refresh the dashboards.");
+      return d;
+    },
+    async collection(name) {
+      if (!this._cols.has(name)) {
+        const q = await this.db.collection(name).get();
+        this._cols.set(name, q.docs.map((d) => d.data()).sort((a, b) => String(a.month).localeCompare(String(b.month))));
+      }
+      return this._cols.get(name);
+    },
+    async journalMonth(m) {
+      if (!this._journal.has(m)) {
+        const d = await this.db.doc("journal/" + m).get();
+        this._journal.set(m, d.exists ? d.data() : { month: m, entries: [] });
+      }
+      return this._journal.get(m);
+    },
+    firstOfMonth(d) { return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(0, 7) + "-01" : d; },
+    pl(start, end) {
+      const src = this.doc("pl");
+      const s = this.firstOfMonth(start);
+      const inRange = (pm) => (!s || pm >= s) && (!end || pm <= end);
+      return { months: src.months.filter((m) => inRange(m.period_month)), lines: src.lines.filter((l) => inRange(l.period_month)), dataStartsAt: src.dataStartsAt };
+    },
+    costs(start, end) {
+      const rows = this.pl(start, end).lines.filter((r) => r.type === "expense" || r.type === "cogs");
+      let totalOperatingCosts = 0, totalLaborCosts = 0, totalCogs = 0;
+      const breakdown = new Map(), monthly = new Map(), laborByMonth = new Map(), names = new Map();
+      for (const r of rows) {
+        const amount = Number(r.amount); names.set(r.code, r.name);
+        if (r.type === "cogs") totalCogs += amount;
+        else if (LABOR_CODES.has(r.code)) { totalLaborCosts += amount; laborByMonth.set(r.period_month, (laborByMonth.get(r.period_month) || 0) + amount); }
+        else if (!EXCLUDED_CODES.has(r.code)) { totalOperatingCosts += amount; const b = breakdown.get(r.code); if (b) b.amount += amount; else breakdown.set(r.code, { code: r.code, name: r.name, amount }); }
+        else continue;
+        if (!EXCLUDED_CODES.has(r.code)) { if (!monthly.has(r.period_month)) monthly.set(r.period_month, new Map()); const m = monthly.get(r.period_month); m.set(r.code, (m.get(r.code) || 0) + amount); }
+      }
+      const round = (n) => Math.round(n * 100) / 100;
+      return {
+        totals: { totalOperatingCosts: round(totalOperatingCosts), totalLaborCosts: round(totalLaborCosts), totalCogs: round(totalCogs) },
+        breakdown: [...breakdown.values()].sort((a, b) => b.amount - a.amount),
+        monthlyCategories: [...monthly.keys()].sort().map((pm) => { const row = { period_month: pm }; for (const [code, amt] of monthly.get(pm)) row[names.get(code) || code] = amt; return row; }),
+        laborByMonth: [...laborByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period_month, amount]) => ({ period_month, amount })),
+        dataStartsAt: this.doc("pl").dataStartsAt,
+      };
+    },
+    sales(start, end) {
+      if (!start) return this.doc("sales-all");
+      if (this.docs.has("sales-" + start)) return this.docs.get("sales-" + start);
+      // Custom range: derive from the full history. Top items stay all-time.
+      const all = this.doc("sales-all");
+      const inR = (d) => (!start || d >= start) && (!end || d <= end);
+      const daily = (all.daily || []).filter((d) => inR(d.date));
+      const dos = (all.dailyOrderStats || []).filter((d) => inR(d.date));
+      const orderDays = new Set(dos.map((d) => d.date));
+      const byDow = new Map();
+      for (const d of daily) { if (!orderDays.has(d.date)) continue; const k = dates.dowIndex(d.date); byDow.set(k, (byDow.get(k) || 0) + d.netSales); }
+      const orders = dos.reduce((s, d) => s + d.orders, 0), items = dos.reduce((s, d) => s + d.items, 0), gross = dos.reduce((s, d) => s + (d.grossOrderRevenue || 0), 0);
+      return {
+        daily, dailyOrderStats: dos,
+        revenueByDayOfWeek: dates.DOW_NAMES.map((day, i) => ({ day, revenue: byDow.get(i) || 0 })).sort((a, b) => b.revenue - a.revenue),
+        orderStats: { totalOrders: orders, avgOrderValue: orders ? Math.round((gross / orders) * 100) / 100 : 0, avgItemsPerOrder: orders ? Math.round((items / orders) * 10) / 10 : 0, totalItems: items, daysWithOrderData: dos.length },
+        topItems: all.topItems || [], topItemsApprox: true, dataStartsAt: all.dataStartsAt,
+      };
+    },
+    async bookings() {
+      const months = await this.collection("bookings");
+      const out = [];
+      for (const m of months) (m.rows || []).forEach((r, i) => out.push({
+        id: m.month + "-" + i, name: "", email: "customer-" + r[9], phone: null,
+        created_at: r[0], date: r[1], time_slot: r[2], party_size: r[3], amount_paid: r[4], status: r[5],
+        referral_source: r[6], referral_other: r[7], location: r[8],
+        stripe_payment_intent_id: null, stripe_session_id: null, payment_method: null,
+      }));
+      return out;
+    },
+    async journal(params) {
+      const codes = new Set((params.get("accountCode") || "").split(",").filter(Boolean));
+      const from = params.get("from") || this.doc("pl").dataStartsAt || DATA_STARTS_AT;
+      const to = params.get("to") || dates.todayStr();
+      const limit = Math.min(parseInt(params.get("limit") || "100", 10) || 100, 500);
+      const accounts = (this.docs.get("accounts") || {}).codes || {};
+      const entries = [];
+      for (const m of dates.monthsBetween(from, to)) {
+        const doc = await this.journalMonth(m);
+        for (const [id, date, memo, lines] of doc.entries || []) {
+          if (date < from || date > to) continue;
+          if (codes.size && !lines.some((l) => codes.has(l[0]))) continue;
+          entries.push({ id, entry_date: date, memo, journal_lines: lines.map(([code, amount, lineMemo]) => ({ amount, memo: lineMemo || memo, accounts: { code, name: (accounts[code] || {}).name || code, type: (accounts[code] || {}).type || "" } })) });
+        }
+      }
+      entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+      return { entries: entries.slice(0, limit) };
+    },
+    async resolve(path) {
+      const u = new URL(path, "https://snapshot.local");
+      const q = u.searchParams, start = q.get("start") || undefined, end = q.get("end") || undefined;
+      switch (u.pathname) {
+        case "/api/admin/session": return { role: "snapshot", location: null };
+        case "/api/admin/accounting/reports/pl": return this.pl(start, end);
+        case "/api/admin/accounting/reports/costs": return this.costs(start, end);
+        case "/api/admin/accounting/reports/seasonality": return this.doc("seasonality");
+        case "/api/admin/accounting/reports/balance-sheet": return this.doc("balance");
+        case "/api/admin/accounting/reports/cash-flow": return this.doc("cashflow");
+        case "/api/admin/accounting/reports/normalized": return this.doc("normalized");
+        case "/api/admin/accounting/projections": return this.doc("projections");
+        case "/api/admin/accounting/reports/estimated-bookings": { const d = this.doc("estimated"); return { daily: (d.daily || []).filter((r) => (!start || r.date >= start) && (!end || r.date <= end)) }; }
+        case "/api/admin/accounting/reports/sales": return this.sales(start, end);
+        case "/api/admin/bookings": return this.bookings();
+        case "/api/admin/accounting/journal-entries": return this.journal(q);
+        default: throw new ApiError(404, "No snapshot data for " + u.pathname);
+      }
     },
   };
 
@@ -674,10 +843,12 @@
         if (fromClick) { try { history.replaceState(null, "", "#" + id); } catch { /* ignore */ } }
         onTab && onTab(id);
       }
-      const meta = h("div", { class: "brand-meta" },
-        h("span", { text: api.base().replace(/^https?:\/\//, "") }),
-        h("button", { type: "button", text: "Sign out", onClick: () => auth.signOut() }),
-      );
+      const meta = snap.enabled
+        ? h("div", { class: "brand-meta" }, h("span", { title: "Ask Claude to refresh the dashboards for newer numbers", text: snap.meta && snap.meta.generatedAt ? "Data as of " + new Date(snap.meta.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Snapshot data" }))
+        : h("div", { class: "brand-meta" },
+          h("span", { text: api.base().replace(/^https?:\/\//, "") }),
+          h("button", { type: "button", text: "Sign out", onClick: () => auth.signOut() }),
+        );
       const top = h("header", { class: "topbar" }, h("div", { class: "topbar-inner" },
         h("div", { class: "brand-row" }, h("div", { class: "brand" }, h("span", { class: "brand-eyebrow", text: "Scorched Studio" }), h("h1", { class: "brand-title", text: title })), meta),
         tabList,
@@ -691,5 +862,5 @@
     },
   };
 
-  window.Scorched = { api, auth, fmt, dates, range, ui, viz, journal, shell, ApiError, store };
+  window.Scorched = { api, auth, snap, fmt, dates, range, ui, viz, journal, shell, ApiError, store };
 })();

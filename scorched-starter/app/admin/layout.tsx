@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   Package,
+  PenLine,
   Printer,
   Share2,
   Users,
@@ -50,11 +51,13 @@ const IN_STUDIO_NAV = [
 // so clicking the group name goes somewhere rather than only toggling.
 const ADMIN_NAV = [
   // The two report dashboards are published Claude artifacts (lib/dashboards.ts)
-  // that read this app's live data; they open in a new tab. /admin/reporting
-  // itself is the in-app doorway to them.
+  // fed by a snapshot of this app's data; they open in a new tab. /admin/reporting
+  // itself is the in-app doorway to them, and Report inputs holds the two
+  // hand-entered datasets they report on.
   { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
     ...DASHBOARDS.map((d) => ({ href: d.url, label: d.label, icon: ExternalLink, external: true })),
-    { href: "/admin/accounting", label: "Accounting", icon: Landmark },
+    { href: "/admin/accounting",       label: "Accounting",    icon: Landmark },
+    { href: "/admin/reporting/inputs", label: "Report inputs", icon: PenLine },
   ] },
   { href: "/admin/customers",  label: "Customers",  icon: UserRound, children: [
     { href: "/admin/customers", label: "Accounts",  icon: UserRound },
