@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Source of the published Claude dashboards: browser globals, not app code.
+      "docs/dashboards/**",
     ],
   },
 ];

@@ -1,0 +1,603 @@
+<meta charset="utf-8">
+<title>Scorched Financials</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* Page-local tweaks on top of shared.css tokens. */
+  [hidden] { display: none !important; } /* the artifact skeleton ships this; kept here so local previews match */
+  .t-good { color: var(--good); font-weight: 600; }
+  .t-bad { color: var(--bad); font-weight: 600; }
+  .t-strong { color: var(--ink); font-weight: 600; }
+  .slice-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .slice-list .acct-row { align-items: center; }
+  .slice-list .acct-row.dim { opacity: .4; }
+  .slice-list .lab { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .slice-list .lab span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slice-list .dot { width: 10px; height: 10px; border-radius: 999px; flex: none; }
+  .slice-total { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; font-weight: 700; border-top: 1px solid var(--line); margin-top: 8px; padding: 8px 8px 0; }
+  .breakdown { display: grid; gap: 18px; grid-template-columns: 1fr; align-items: center; }
+  @media (min-width: 760px) { .breakdown { grid-template-columns: minmax(220px, 320px) 1fr; } }
+  .bs-group { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .bs-group:last-child { border-bottom: 0; }
+  .bs-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
+  .bs-row .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; }
+  .bs-row.total { font-family: var(--font-mono); font-weight: 600; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
+  .intro { color: var(--ink-2); font-size: 13.5px; }
+  .adj-list { display: flex; flex-direction: column; }
+  .adj-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line-2); font-size: 13px; }
+  .adj-item:last-child { border-bottom: 0; }
+  .adj-item .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; }
+  .adj-item .sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+  .info-btn { width: 22px; height: 22px; border-radius: 999px; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--line); margin-left: 6px; vertical-align: middle; }
+  .info-btn[aria-pressed="true"] { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+  .explainer { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; max-width: 60ch; padding: 0 18px 12px; }
+  .drill-cell { white-space: nowrap; }
+  td .drill { font: inherit; color: inherit; }
+</style>
+<div id="login" hidden></div>
+<div id="app" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+  const S = window.Scorched;
+  const { api, fmt, dates, ui, viz, journal } = S;
+  const h = ui.h;
+
+  const LABOR_CODES = ["6000", "6010"];
+  const MAX_SERIES = 9;
+  const OTHER = "Other";
+  const LABOR_SLICE = "Labor";
+  const LABOR_NAME_TO_CODE = { "Payroll: Wages": "6000", "Payroll: Employer Taxes": "6010" };
+  const LABOR_SERIES_NAMES = new Set(Object.keys(LABOR_NAME_TO_CODE));
+  const DSCR_MIN = 1.25;
+  const DSCR_EXPLAINER = "Debt Service Coverage Ratio: trailing 12-month EBITDA divided by trailing 12-month debt payments (principal plus interest). Above 1.0 means the business generates enough cash to cover its debt. Lenders typically want 1.25 or higher.";
+
+  const TABS = [
+    { id: "pl", label: "P&L" },
+    { id: "monthly", label: "Monthly P&L" },
+    { id: "costs", label: "Costs" },
+    { id: "balance", label: "Balance Sheet" },
+    { id: "cashflow", label: "Cash Flow" },
+    { id: "projections", label: "Projections" },
+    { id: "normalized", label: "Normalized EBITDA", quiet: true },
+  ];
+  const RANGED = ["pl", "monthly", "costs"];
+
+  let shell = null;
+  let mounted = false;
+  const cache = new Map();      // path -> promise of json
+  const tabData = {};           // tab -> { key, data }
+  const state = {
+    query: S.range.toQuery({ preset: "3m" }),
+    pl: { selected: null },
+    monthly: { sort: { col: "month", dir: "asc" }, drill: null, drillAccount: null },
+    costs: { selected: null, showCharges: false, sort: { col: "amount", dir: "desc" } },
+    balance: { asOf: dates.todayDenverYmd() },
+    projections: { showInfo: false, msg: null, msgTone: null },
+    normalized: { msg: null, msgTone: null },
+  };
+
+  // ── helpers ────────────────────────────────────────────────────────────
+  function num(v) { return Number(v || 0); }
+  function dropEmptyTrailingMonths(months) {
+    const out = [...months].sort((a, b) => a.period_month.localeCompare(b.period_month));
+    while (out.length) {
+      const l = out[out.length - 1];
+      if (num(l.revenue) === 0 && num(l.cogs) === 0 && num(l.operating_expenses) === 0 && num(l.net_income) === 0) out.pop(); else break;
+    }
+    return out;
+  }
+  function sumLinesByMonth(lines, codes) {
+    const set = new Set(codes), out = new Map();
+    for (const l of lines) { if (!set.has(l.code)) continue; out.set(l.period_month, (out.get(l.period_month) || 0) + num(l.amount)); }
+    return out;
+  }
+  function getJson(path) {
+    if (!cache.has(path)) {
+      const p = api.get(path).catch((e) => { cache.delete(path); throw e; });
+      cache.set(path, p);
+    }
+    return cache.get(path);
+  }
+  function withQ(path, q) { return q ? path + "?" + q : path; }
+  function negCls(v) { return v < 0 ? "neg" : ""; }
+  function moneyCell(v) { return fmt.money0(v); }
+
+  // ── per-tab data keys + loaders ────────────────────────────────────────
+  const loaders = {
+    pl: { key: () => "pl|" + state.query, load: async () => ({ pl: await getJson(withQ("/api/admin/accounting/reports/pl", state.query)), seasonality: await getJson("/api/admin/accounting/reports/seasonality") }) },
+    monthly: { key: () => "monthly|" + state.query, load: async () => ({ pl: await getJson(withQ("/api/admin/accounting/reports/pl", state.query)) }) },
+    costs: { key: () => "costs|" + state.query, load: async () => ({ costs: await getJson(withQ("/api/admin/accounting/reports/costs", state.query)) }) },
+    balance: { key: () => "balance|" + state.balance.asOf, load: async () => ({ bs: await getJson("/api/admin/accounting/reports/balance-sheet?asOf=" + state.balance.asOf) }) },
+    cashflow: { key: () => "cashflow", load: async () => ({ cf: await getJson("/api/admin/accounting/reports/cash-flow") }) },
+    projections: { key: () => "projections", load: async () => ({ pj: await getJson("/api/admin/accounting/projections") }) },
+    normalized: { key: () => "normalized", load: async () => ({ nm: await getJson("/api/admin/accounting/reports/normalized") }) },
+  };
+  const renderers = {};
+
+  async function show(tab) {
+    if (!shell) return;
+    const view = shell.views[tab];
+    const key = loaders[tab].key();
+    const cur = tabData[tab];
+    if (cur && cur.key === key && cur.data) { render(tab); return; }
+    if (cur && cur.data) view.classList.add("refreshing"); else ui.replace(view, ui.loading("Loading"));
+    try {
+      const data = await loaders[tab].load();
+      tabData[tab] = { key, data };
+      if (loaders[tab].key() === key) render(tab);
+    } catch (e) {
+      if (e.status !== 401) { tabData[tab] = null; ui.replace(view, ui.error(e.message)); }
+    } finally {
+      view.classList.remove("refreshing");
+    }
+  }
+  function render(tab) {
+    const view = shell.views[tab];
+    const td = tabData[tab];
+    if (!td || !td.data) return;
+    const nodes = [];
+    const after = [];
+    renderers[tab](td.data, nodes, after);
+    destroyChartsIn(view);
+    ui.replace(view, ...nodes);
+    for (const fn of after) fn();
+  }
+  // Every render builds fresh chart hosts, so the charts drawn into the old
+  // hosts have to be destroyed by hand or they keep animating off-screen.
+  function destroyChartsIn(view) {
+    for (const [host, chart] of [...viz._charts]) {
+      if (view.contains(host) || !host.isConnected) { try { chart.destroy(); } catch (e) { /* already gone */ } viz._charts.delete(host); }
+    }
+  }
+  function reload(tab) { const td = tabData[tab]; if (td) td.key = null; show(tab); }
+
+  // ── P&L ────────────────────────────────────────────────────────────────
+  renderers.pl = ({ pl, seasonality }, nodes, after) => {
+    const c = viz.colors();
+    const months = dropEmptyTrailingMonths(pl.months || []);
+    const labor = sumLinesByMonth(pl.lines || [], LABOR_CODES);
+    const totals = months.reduce((t, m) => ({ revenue: t.revenue + num(m.revenue), netIncome: t.netIncome + num(m.net_income), cogs: t.cogs + num(m.cogs), opex: t.opex + num(m.operating_expenses) }), { revenue: 0, netIncome: 0, cogs: 0, opex: 0 });
+    const sel = state.pl.selected;
+    const toggle = (k) => { state.pl.selected = sel === k ? null : k; render("pl"); };
+    const pctSub = totals.revenue > 0 ? null : "no revenue in range";
+
+    nodes.push(ui.kpis(4, [
+      ui.kpi({ label: "Net Revenue", value: fmt.money0(totals.revenue), sub: "click to isolate line", onClick: () => toggle("revenue"), selected: sel === "revenue" }),
+      ui.kpi({ label: "Net Profit", value: fmt.money0(totals.netIncome), tone: totals.netIncome < 0 ? "bad" : "good", sub: "click to isolate line", onClick: () => toggle("profit"), selected: sel === "profit" }),
+      ui.kpi({ label: "COGS % of Revenue", value: totals.revenue > 0 ? fmt.pct1(totals.cogs / totals.revenue) : "--", sub: pctSub || "click to highlight COGS", onClick: () => toggle("cogs"), selected: sel === "cogs" }),
+      ui.kpi({ label: "Operating Cost % of Revenue", value: totals.revenue > 0 ? fmt.pct1(totals.opex / totals.revenue) : "--", sub: pctSub || "click to highlight OpEx", onClick: () => toggle("opex"), selected: sel === "opex" }),
+    ]));
+
+    // Seasonality: latest complete month with an index (the in-progress month always reads as far below average).
+    const currentMonth = dates.todayDenverYmd().slice(0, 7);
+    const srows = (seasonality.rows || []).filter((r) => r.index != null && r.period_month.slice(0, 7) !== currentMonth).sort((a, b) => a.period_month.localeCompare(b.period_month));
+    const now = srows.length ? srows[srows.length - 1] : null;
+    if (now) {
+      const pct = Math.round((Number(now.index) - 1) * 100);
+      const line = h("p", { class: "subtle-line" }, "Seasonality: " + fmt.monthShort(now.period_month) + " revenue is running ");
+      if (pct === 0) line.append(h("span", { class: "t-strong", text: "in line with" }));
+      else line.append(h("span", { class: pct > 0 ? "t-good" : "t-bad", text: Math.abs(pct) + "% " + (pct > 0 ? "above" : "below") }));
+      line.append(" its 12-month average.");
+      nodes.push(line);
+    }
+
+    const labels = months.map((m) => fmt.monthShort(m.period_month));
+    const lineAlpha = (which) => {
+      if (sel !== "revenue" && sel !== "profit") return 1;
+      if (sel === "revenue") return which === "revenue" ? 1 : 0.15;
+      return which === "netProfit" ? 1 : 0.15;
+    };
+    const col = (base, a) => (a === 1 ? base : viz.withAlpha(base, a));
+    const revHost = h("div", {}), costHost = h("div", {});
+    const revLegend = viz.legend([
+      { label: "Net Revenue", color: c.green, kind: "line" },
+      { label: "Gross Profit", color: c.brown, kind: "line" },
+      { label: "Net Profit", color: c.blue, kind: "line" },
+    ]);
+    const costLegend = viz.legend([
+      { label: "COGS", color: c.brown, kind: "rect" },
+      { label: "Labor", color: c.green, kind: "rect" },
+      { label: "Other OpEx", color: c.blue, kind: "rect" },
+    ]);
+    const revNote = (sel === "revenue" || sel === "profit") ? ui.note("Isolating " + (sel === "revenue" ? "Net Revenue" : "Net Profit") + ". Click the tile again to reset.") : null;
+    const costNote = (sel === "cogs" || sel === "opex") ? ui.note("Highlighting " + (sel === "cogs" ? "COGS" : "operating costs (labor plus other OpEx)") + ". Click the tile again to reset.") : null;
+    const empty = months.length === 0;
+    nodes.push(h("div", { class: "grid-2" },
+      ui.card({ title: "Revenue vs Profit by Month", bodyClass: "tight", body: empty ? ui.empty("No posted activity in this range.") : [revHost, revLegend, revNote] }),
+      ui.card({ title: "Cost Structure by Month", bodyClass: "tight", body: empty ? ui.empty("No posted activity in this range.") : [costHost, costLegend, costNote] }),
+    ));
+    if (!empty) after.push(() => {
+      viz.line(revHost, {
+        labels, format: "money", height: 300, xTick: fmt.monthTick,
+        datasets: [
+          { label: "Net Revenue", data: months.map((m) => Math.round(num(m.revenue) * 100) / 100), color: col(c.green, lineAlpha("revenue")) },
+          { label: "Gross Profit", data: months.map((m) => Math.round(num(m.gross_profit) * 100) / 100), color: col(c.brown, lineAlpha("grossProfit")) },
+          { label: "Net Profit", data: months.map((m) => Math.round(num(m.net_income) * 100) / 100), color: col(c.blue, lineAlpha("netProfit")) },
+        ],
+      });
+      viz.bar(costHost, {
+        labels, format: "money", height: 300, stacked: true, tooltipTotal: true, xTick: fmt.monthTick,
+        datasets: [
+          { label: "COGS", data: months.map((m) => Math.round(num(m.cogs) * 100) / 100), color: c.brown },
+          { label: "Labor", data: months.map((m) => Math.round((labor.get(m.period_month) || 0) * 100) / 100), color: c.green },
+          { label: "Other OpEx", data: months.map((m) => Math.round((num(m.operating_expenses) - (labor.get(m.period_month) || 0)) * 100) / 100), color: c.blue },
+        ],
+        dim: (i, di) => (sel === "cogs" ? di !== 0 : sel === "opex" ? di === 0 : false),
+      });
+    });
+  };
+
+  // ── Monthly P&L ────────────────────────────────────────────────────────
+  const DRILL_LABEL = { revenue: "Net Revenue", cogs: "COGS", labor: "Labor Costs", opex: "OpEx", depreciation: "Depreciation", interest: "Interest" };
+  function lineMatchesCol(line, col) {
+    switch (col) {
+      case "revenue": return line.type === "revenue";
+      case "cogs": return line.type === "cogs";
+      case "labor": return LABOR_CODES.includes(line.code);
+      case "opex": return line.type === "expense" && line.code !== "7000" && line.code !== "8000";
+      case "depreciation": return line.code === "7000";
+      case "interest": return line.code === "8000";
+    }
+    return false;
+  }
+  renderers.monthly = ({ pl }, nodes, after) => {
+    const st = state.monthly;
+    const months = dropEmptyTrailingMonths(pl.months || []);
+    const labor = sumLinesByMonth(pl.lines || [], LABOR_CODES);
+    let rows = months.map((m) => ({
+      period_month: m.period_month, revenue: num(m.revenue), cogs: num(m.cogs), labor: labor.get(m.period_month) || 0, gross: num(m.gross_profit),
+      opex: num(m.operating_expenses), ebitda: num(m.ebitda), depreciation: num(m.depreciation), interest: num(m.interest), net: num(m.net_income),
+    }));
+    rows = ui.sortRows(rows, st.sort, { month: (r) => r.period_month });
+    const totals = rows.reduce((t, r) => { for (const k of ["revenue", "cogs", "labor", "gross", "opex", "ebitda", "depreciation", "interest", "net"]) t[k] += r[k]; return t; }, { revenue: 0, cogs: 0, labor: 0, gross: 0, opex: 0, ebitda: 0, depreciation: 0, interest: 0, net: 0 });
+    const onSort = (col) => { st.sort = ui.nextSort(st.sort, col, col === "month" ? "asc" : "desc"); render("monthly"); };
+    const toggleDrill = (month, col) => { st.drillAccount = null; st.drill = st.drill && st.drill.month === month && st.drill.col === col ? null : { month, col }; render("monthly"); };
+    const drillCell = (col) => (r) => {
+      const active = st.drill && st.drill.month === r.period_month && st.drill.col === col;
+      return h("button", { type: "button", class: "drill", "aria-expanded": String(!!active), title: "Break down " + DRILL_LABEL[col] + " for " + fmt.monthShort(r.period_month), onClick: () => toggleDrill(r.period_month, col) }, fmt.money0(r[col]));
+    };
+    const columns = [
+      { key: "month", label: "Month", sortable: true, sticky: true, strong: true, cell: (r) => fmt.monthShort(r.period_month) },
+      { key: "revenue", label: "Net Revenue", align: "r", sortable: true, cell: drillCell("revenue") },
+      { key: "cogs", label: "COGS", align: "r", sortable: true, cell: drillCell("cogs") },
+      { key: "labor", label: "Labor Costs", align: "r", sortable: true, cell: drillCell("labor") },
+      { key: "gross", label: "Gross Profit", align: "r", sortable: true, strong: true, cls: (r) => negCls(r.gross), cell: (r) => fmt.money0(r.gross) },
+      { key: "opex", label: "OpEx", align: "r", sortable: true, cell: drillCell("opex") },
+      { key: "ebitda", label: "EBITDA", align: "r", sortable: true, strong: true, cls: (r) => negCls(r.ebitda), cell: (r) => fmt.money0(r.ebitda) },
+      { key: "depreciation", label: "Depreciation", align: "r", sortable: true, cell: drillCell("depreciation") },
+      { key: "interest", label: "Interest", align: "r", sortable: true, cell: drillCell("interest") },
+      { key: "net", label: "Net Income", align: "r", sortable: true, strong: true, cls: (r) => negCls(r.net), cell: (r) => fmt.money0(r.net) },
+    ];
+    const tcell = (v) => h("span", { class: negCls(v), text: fmt.money0(v) });
+    const total = ["Total", tcell(totals.revenue), tcell(totals.cogs), tcell(totals.labor), tcell(totals.gross), tcell(totals.opex), tcell(totals.ebitda), tcell(totals.depreciation), tcell(totals.interest), tcell(totals.net)];
+    const afterRow = (r) => {
+      if (!st.drill || st.drill.month !== r.period_month) return null;
+      const lines = (pl.lines || []).filter((l) => l.period_month === st.drill.month && lineMatchesCol(l, st.drill.col)).sort((a, b) => num(b.amount) - num(a.amount));
+      const panel = h("div", { class: "drill-panel", style: { maxWidth: "640px" } },
+        h("div", { class: "drill-head" },
+          h("p", { class: "drill-title", text: DRILL_LABEL[st.drill.col] + ", " + fmt.monthShort(r.period_month) }),
+          h("button", { type: "button", class: "link-btn", text: "Close", onClick: () => { st.drill = null; st.drillAccount = null; render("monthly"); } })),
+      );
+      if (!lines.length) panel.append(h("p", { class: "note plain", text: "No account activity for this cell." }));
+      for (const l of lines) {
+        const open = st.drillAccount === l.code;
+        panel.append(h("button", { type: "button", class: "acct-row", "aria-expanded": String(open), onClick: () => { st.drillAccount = open ? null : l.code; render("monthly"); } },
+          h("span", {}, h("span", { class: "code", text: l.code }), l.name), h("span", { class: "num", text: fmt.money0(l.amount) })));
+        if (open) {
+          const host = h("div", { style: { margin: "4px 0 8px 8px" } });
+          panel.append(host);
+          after.push(() => journal.mount(host, { from: r.period_month.slice(0, 10), to: dates.monthEnd(r.period_month), accountCodes: [l.code] }));
+        }
+      }
+      if (lines.length) panel.append(h("p", { class: "note plain", style: { paddingTop: "8px" }, text: "Every account that rolled into this cell, biggest first. Click an account to see its transactions for the month." }));
+      return h("tr", {}, h("td", { colspan: "10", style: { padding: "6px 12px", background: "var(--surface-2)" } }, panel));
+    };
+    const body = rows.length === 0 ? ui.empty("No posted activity in this range.") : ui.table({ columns, rows, sort: st.sort, onSort, total, afterRow, rowKey: (r) => r.period_month });
+    nodes.push(ui.card({
+      title: "Monthly P&L Table", bodyClass: "flush", body,
+      note: "Labor Costs = Payroll: Wages (6000) + Payroll: Employer Taxes (6010); labor is included in OpEx. Gross Profit = Net Revenue minus COGS. Click a column header to sort; oldest month first by default. Click a dollar amount (except the computed Gross Profit, EBITDA and Net Income columns) to see the accounts behind it, then click an account for its transactions.",
+    }));
+  };
+
+  // ── Costs ──────────────────────────────────────────────────────────────
+  renderers.costs = ({ costs }, nodes, after) => {
+    const st = state.costs;
+    const c = viz.colors();
+    const other = viz.css("--series-other");
+    const data = costs;
+    // Rank accounts by total spend; top 9 get their own series/color, the rest fold into "Other".
+    const totalsByName = new Map();
+    for (const row of data.monthlyCategories || []) for (const [k, v] of Object.entries(row)) { if (k === "period_month" || typeof v !== "number") continue; totalsByName.set(k, (totalsByName.get(k) || 0) + v); }
+    const ranked = [...totalsByName.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const majors = ranked.slice(0, MAX_SERIES), minors = ranked.slice(MAX_SERIES), minorSet = new Set(minors);
+    const colors = new Map(); majors.forEach((n, i) => colors.set(n, viz.series(i))); colors.set(OTHER, other);
+    const colorFor = (n) => colors.get(n) || other;
+    const stacked = (data.monthlyCategories || []).map((row) => {
+      const out = { label: fmt.monthShort(String(row.period_month)) }; let oth = 0;
+      for (const [k, v] of Object.entries(row)) { if (k === "period_month" || typeof v !== "number") continue; if (minorSet.has(k)) oth += v; else out[k] = Math.round(v * 100) / 100; }
+      if (minors.length) out[OTHER] = Math.round(oth * 100) / 100;
+      return out;
+    });
+    const seriesNames = minors.length ? [...majors, OTHER] : majors;
+    // Donut: opex accounts + synthetic Labor slice + Other.
+    const majorSet = new Set(seriesNames);
+    const slices = []; let othAmt = 0;
+    for (const b of data.breakdown || []) { if (majorSet.has(b.name)) slices.push({ name: b.name, value: Math.round(b.amount * 100) / 100 }); else othAmt += b.amount; }
+    const laborTotal = num(data.totals && data.totals.totalLaborCosts);
+    if (laborTotal > 0) slices.push({ name: LABOR_SLICE, value: Math.round(laborTotal * 100) / 100 });
+    if (othAmt > 0) slices.push({ name: OTHER, value: Math.round(othAmt * 100) / 100 });
+    slices.sort((a, b) => (a.name === OTHER ? 1 : b.name === OTHER ? -1 : b.value - a.value));
+    const pieTotal = slices.reduce((s, x) => s + x.value, 0);
+    const sliceColor = (n) => (n === LABOR_SLICE ? c.green : colorFor(n));
+    const matches = (name, sel) => name === sel || (name === LABOR_SLICE && LABOR_SERIES_NAMES.has(sel)) || (sel === LABOR_SLICE && LABOR_SERIES_NAMES.has(name));
+    const sel = st.selected;
+    const active = (n) => sel == null || matches(n, sel);
+    const toggle = (n) => { st.showCharges = false; st.selected = sel === n ? null : n; render("costs"); };
+    const nameToCode = new Map((data.breakdown || []).map((b) => [b.name, b.code]));
+    let selectedCodes = [];
+    if (sel === LABOR_SLICE) selectedCodes = LABOR_CODES;
+    else if (sel && LABOR_NAME_TO_CODE[sel]) selectedCodes = [LABOR_NAME_TO_CODE[sel]];
+    else if (sel === OTHER) selectedCodes = minors.map((n) => nameToCode.get(n)).filter(Boolean);
+    else if (sel) { const code = nameToCode.get(sel); if (code) selectedCodes = [code]; }
+    const bounds = S.range.bounds(state.query);
+    const totals = data.totals || {};
+
+    nodes.push(ui.kpis(3, [
+      ui.kpi({ label: "Total Operating Costs", value: fmt.money0(totals.totalOperatingCosts), sub: "excl. labor, COGS and interest" }),
+      ui.kpi({ label: "Total Labor Costs", value: fmt.money0(totals.totalLaborCosts), sub: "wages + employer taxes" }),
+      ui.kpi({ label: "Total COGS", value: fmt.money0(totals.totalCogs), sub: "materials and goods sold" }),
+    ]));
+
+    // Breakdown card
+    if (!slices.length) nodes.push(ui.card({ title: "Costs Breakdown", body: ui.empty("No costs in this range.") }));
+    else {
+      const list = h("div", { class: "slice-list" });
+      for (const s of slices) {
+        const label = s.name === OTHER ? "Other (" + minors.length + " accounts)" : s.name === LABOR_SLICE ? "Labor (wages + employer taxes)" : s.name;
+        list.append(h("button", { type: "button", class: "acct-row" + (active(s.name) ? "" : " dim"), "aria-expanded": String(sel === s.name), "aria-pressed": String(sel === s.name), onClick: () => toggle(s.name) },
+          h("span", { class: "lab" }, h("span", { class: "dot", style: { background: sliceColor(s.name) } }), h("span", { text: label })),
+          h("span", { class: "num", text: fmt.money0(s.value) })));
+      }
+      list.append(h("div", { class: "slice-total" }, h("span", { text: "Total" }), h("span", { class: "num", text: fmt.money0(pieTotal) })));
+      list.append(h("p", { class: "note plain", style: { paddingTop: "10px" }, text: "Operating expenses plus labor (COGS excluded). The monthly chart below also includes COGS, so its bars sum higher than this total. Click an account to isolate it in that chart. The full account list is in the table at the bottom of this page." }));
+      const donutHost = h("div", {});
+      nodes.push(ui.card({ title: "Costs Breakdown", body: h("div", { class: "breakdown" }, list, donutHost) }));
+      after.push(() => viz.donut(donutHost, { labels: slices.map((s) => s.name === LABOR_SLICE ? "Labor" : s.name), data: slices.map((s) => s.value), colors: slices.map((s) => sliceColor(s.name)), format: "money", height: 280, dim: (i) => !active(slices[i].name), onClick: (i) => toggle(slices[i].name) }));
+    }
+
+    // Stacked monthly chart
+    const action = sel != null ? h("div", { class: "filters-right" },
+      selectedCodes.length ? h("button", { type: "button", class: "btn", "aria-pressed": String(st.showCharges), text: st.showCharges ? "Hide charges" : "View charges", onClick: () => { st.showCharges = !st.showCharges; render("costs"); } }) : null,
+      h("button", { type: "button", class: "btn", text: "Reset, showing " + sel + " only", onClick: () => { st.selected = null; st.showCharges = false; render("costs"); } }),
+    ) : null;
+    if (!stacked.length) nodes.push(ui.card({ title: "Cost Categories by Month", action, body: ui.empty("No cost activity in this range.") }));
+    else {
+      const host = h("div", {});
+      const legend = viz.legend(seriesNames.map((n) => ({ label: n, color: colorFor(n), kind: "rect", pressed: active(n) })), (label) => toggle(label));
+      const noteTxt = "Includes COGS and labor alongside operating expenses, matching the old Domo chart." + (minors.length ? ' "Other" groups: ' + minors.join(", ") + "." : "");
+      nodes.push(ui.card({ title: "Cost Categories by Month", action, bodyClass: "tight", body: [host, legend], note: noteTxt }));
+      after.push(() => viz.bar(host, {
+        labels: stacked.map((r) => r.label), format: "money", height: 320, stacked: true, tooltipTotal: true, xTick: fmt.monthTick,
+        datasets: seriesNames.map((n) => ({ label: n, data: stacked.map((r) => (typeof r[n] === "number" ? r[n] : 0)), color: colorFor(n) })),
+        dim: (i, di) => !active(seriesNames[di]),
+      }));
+    }
+    if (sel != null && st.showCharges && selectedCodes.length) {
+      const host = h("div", {});
+      nodes.push(ui.card({ title: "Charges, " + sel, bodyClass: "flush", body: host }));
+      after.push(() => journal.mount(host, { from: bounds.start, to: bounds.end, accountCodes: selectedCodes }));
+    }
+
+    // Labor trend
+    const laborData = (data.laborByMonth || []).map((m) => ({ label: fmt.monthShort(m.period_month), v: Math.round(num(m.amount) * 100) / 100 }));
+    if (!laborData.length) nodes.push(ui.card({ title: "Labor Costs by Month", body: ui.empty("No labor costs in this range.") }));
+    else {
+      const host = h("div", {});
+      nodes.push(ui.card({ title: "Labor Costs by Month", bodyClass: "tight", body: host, note: "Payroll wages plus employer taxes per month." }));
+      after.push(() => viz.line(host, { labels: laborData.map((d) => d.label), format: "money", height: 260, xTick: fmt.monthTick, datasets: [{ label: "Labor", data: laborData.map((d) => d.v), color: c.green, area: true }] }));
+    }
+
+    // Accounts table
+    const totalOpex = num(totals.totalOperatingCosts);
+    let accountRows = (data.breakdown || []).map((b) => ({ code: b.code, name: b.name, amount: num(b.amount), pct: totalOpex > 0 ? num(b.amount) / totalOpex : 0 }));
+    accountRows = ui.sortRows(accountRows, st.sort, { name: (r) => r.name, amount: (r) => r.amount, pct: (r) => r.amount });
+    const onSort = (col) => { st.sort = ui.nextSort(st.sort, col, col === "name" ? "asc" : "desc"); render("costs"); };
+    const acctTable = accountRows.length === 0 ? ui.empty("No operating costs in this range.") : ui.table({
+      columns: [
+        { key: "name", label: "Account", sortable: true, cell: (r) => h("span", {}, h("span", { class: "code muted", style: { marginRight: "8px" }, text: r.code }), r.name) },
+        { key: "amount", label: "Amount", align: "r", sortable: true, cell: (r) => fmt.money0(r.amount) },
+        { key: "pct", label: "% of Operating Costs", align: "r", sortable: true, cell: (r) => ui.share(r.pct * 100) },
+      ],
+      rows: accountRows, sort: st.sort, onSort,
+      total: ["Total operating costs", fmt.money0(totalOpex), "100%"],
+    });
+    nodes.push(ui.card({ title: "Operating Cost Accounts", bodyClass: "flush", body: acctTable, note: "Operating-expense accounts only. Labor, COGS, depreciation and interest are excluded (see the totals at the top of this page for those)." }));
+  };
+
+  // ── Balance Sheet ──────────────────────────────────────────────────────
+  renderers.balance = ({ bs }, nodes) => {
+    const rows = bs.rows || [];
+    const input = h("input", { class: "field", type: "date", id: "bs-asof", value: state.balance.asOf, "aria-label": "As of date" });
+    input.addEventListener("change", () => { if (input.value) { state.balance.asOf = input.value; show("balance"); } });
+    const action = h("div", { class: "filters-right" }, h("label", { class: "lbl", for: "bs-asof", text: "As of" }), input);
+    const groups = h("div", {});
+    for (const [t, label] of [["asset", "Assets"], ["liability", "Liabilities"], ["equity", "Equity"]]) {
+      const g = rows.filter((r) => r.type === t);
+      const total = g.reduce((s, r) => s + num(r.balance), 0);
+      const box = h("div", { class: "bs-group" }, h("p", { class: "kpi-label", text: label }));
+      for (const r of g) box.append(h("div", { class: "bs-row" }, h("span", {}, h("span", { class: "muted mono", style: { marginRight: "8px" }, text: r.code }), r.name), h("span", { class: "amt", text: fmt.money0(r.balance) })));
+      if (!g.length) box.append(h("p", { class: "note plain", text: "Nothing posted." }));
+      box.append(h("div", { class: "bs-row total" }, h("span", { text: "Total " + label.toLowerCase() }), h("span", { class: "amt", text: fmt.money0(total) })));
+      groups.append(box);
+    }
+    nodes.push(ui.card({ title: "Balance Sheet", action, bodyClass: "flush", body: groups, note: "Balances as of the selected date, from the cash-basis ledger." }));
+  };
+
+  // ── Cash Flow ──────────────────────────────────────────────────────────
+  renderers.cashflow = ({ cf }, nodes) => {
+    const rows = cf.rows || [];
+    const months = [...new Set(rows.map((r) => r.period_month))].sort();
+    const find = (m, a) => { const r = rows.find((x) => x.period_month === m && x.activity === a); return r ? num(r.net_change) : 0; };
+    const mrows = months.map((m) => { const op = find(m, "operating"), inv = find(m, "investing"), fin = find(m, "financing"); return { m, op, inv, fin, net: op + inv + fin }; });
+    const t = mrows.reduce((a, r) => ({ op: a.op + r.op, inv: a.inv + r.inv, fin: a.fin + r.fin, net: a.net + r.net }), { op: 0, inv: 0, fin: 0, net: 0 });
+    const body = mrows.length === 0 ? ui.empty("No posted activity yet.") : ui.table({
+      columns: [
+        { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => fmt.monthShort(r.m) },
+        { key: "op", label: "Operating", align: "r", cell: (r) => moneyCell(r.op) },
+        { key: "inv", label: "Investing", align: "r", cell: (r) => moneyCell(r.inv) },
+        { key: "fin", label: "Financing", align: "r", cell: (r) => moneyCell(r.fin) },
+        { key: "net", label: "Net Change", align: "r", strong: true, cls: (r) => negCls(r.net), cell: (r) => moneyCell(r.net) },
+      ],
+      rows: mrows, total: ["Total", moneyCell(t.op), moneyCell(t.inv), moneyCell(t.fin), moneyCell(t.net)],
+    });
+    nodes.push(ui.card({ title: "Cash Flow by Month", bodyClass: "flush", body, note: "Net change in cash by activity, oldest month first. The most recent month sits directly above the total." }));
+  };
+
+  // ── Projections ────────────────────────────────────────────────────────
+  const MODEL_FIELDS = [["revenue", "Revenue"], ["cogs", "COGS"], ["payroll", "Payroll"], ["rent", "Rent"], ["marketing", "Marketing"], ["otherOpex", "Other OpEx"], ["ebitda", "EBITDA"], ["debtService", "Debt Service"]];
+  renderers.projections = ({ pj }, nodes) => {
+    const st = state.projections;
+    const projections = pj.projectionVsActual || [], dscr = pj.dscr || [];
+    nodes.push(h("p", { class: "intro", text: "The 24-month model vs. actuals, and trailing-12 DSCR." }));
+    if (!pj.modelLoaded) nodes.push(h("p", { class: "subtle-line muted", text: "No projection model is loaded yet. Add months below to start comparing the plan against actuals." }));
+
+    // Entry form, one month at a time.
+    const month = h("input", { class: "field", type: "month", id: "pj-month", required: true });
+    const inputs = {};
+    const fields = [h("div", { class: "f sm" }, h("label", { class: "lbl", for: "pj-month", text: "Month" }), month)];
+    for (const [k, label] of MODEL_FIELDS) {
+      inputs[k] = h("input", { class: "field", type: "number", step: "0.01", id: "pj-" + k, placeholder: "blank = unchanged" });
+      fields.push(h("div", { class: "f sm" }, h("label", { class: "lbl", for: "pj-" + k, text: label }), inputs[k]));
+    }
+    const btn = h("button", { type: "submit", class: "btn primary", text: "Save month" });
+    const msg = h("p", { class: "inline-msg" + (st.msgTone === "bad" ? " t-bad" : st.msgTone === "good" ? " t-good" : ""), text: st.msg || "", hidden: !st.msg });
+    const form = h("form", { id: "pj-form" }, h("div", { class: "form-row" }, ...fields, h("div", { class: "f sm" }, btn)), msg);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      st.msg = null;
+      if (!month.value) { st.msg = "Pick a month first."; st.msgTone = "bad"; render("projections"); return; }
+      const row = { periodMonth: month.value + "-01" };
+      for (const [k, label] of MODEL_FIELDS) {
+        const v = inputs[k].value.trim();
+        if (v !== "" && Number.isNaN(Number(v))) { st.msg = label + " must be a number (or left blank)."; st.msgTone = "bad"; render("projections"); return; }
+        row[k] = v === "" ? null : Number(v);
+      }
+      btn.disabled = true;
+      try {
+        await api.post("/api/admin/accounting/projections", { rows: [row] });
+        st.msg = "Saved " + fmt.monthLong(row.periodMonth) + "."; st.msgTone = "good";
+        cache.delete("/api/admin/accounting/projections");
+        reload("projections");
+      } catch (e) {
+        if (e.status === 401) return;
+        st.msg = e.message; st.msgTone = "bad"; btn.disabled = false; render("projections");
+      }
+    });
+    nodes.push(ui.card({ title: "Add or update a month", body: form, note: "Saves one month of the model. Leave a field blank to keep whatever is already stored for it." }));
+
+    const pvaBody = projections.length === 0 ? ui.empty("No projection months loaded.") : ui.table({
+      columns: [
+        { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => r.period_month.slice(0, 7) },
+        { key: "pr", label: "Proj Revenue", align: "r", cell: (r) => fmt.moneyOrDash(r.proj_revenue) },
+        { key: "ar", label: "Act Revenue", align: "r", cell: (r) => fmt.moneyOrDash(r.act_revenue) },
+        { key: "vr", label: "Var", align: "r", cls: (r) => negCls(num(r.var_revenue)), cell: (r) => fmt.moneyOrDash(r.var_revenue) },
+        { key: "pe", label: "Proj EBITDA", align: "r", cell: (r) => fmt.moneyOrDash(r.proj_ebitda) },
+        { key: "ae", label: "Act EBITDA", align: "r", cell: (r) => fmt.moneyOrDash(r.act_ebitda) },
+        { key: "ve", label: "Var", align: "r", cls: (r) => negCls(num(r.var_ebitda)), cell: (r) => fmt.moneyOrDash(r.var_ebitda) },
+      ],
+      rows: projections,
+    });
+    nodes.push(ui.card({ title: "Projection vs actual", bodyClass: "flush", body: pvaBody }));
+
+    const info = h("button", { type: "button", class: "info-btn", "aria-label": "What is DSCR?", "aria-pressed": String(st.showInfo), text: "i", onClick: () => { st.showInfo = !st.showInfo; render("projections"); } });
+    const dscrBody = dscr.length === 0 ? ui.empty("No data yet.") : ui.table({
+      columns: [
+        { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => r.period_month.slice(0, 7) },
+        { key: "e", label: "EBITDA (TTM)", align: "r", cell: (r) => fmt.money2(r.ebitda_ttm) },
+        { key: "d", label: "Debt Service (TTM)", align: "r", cell: (r) => fmt.money2(r.debt_service_ttm) },
+        { key: "r", label: "DSCR", align: "r", strong: true, cls: (r) => (r.dscr_ttm != null && r.dscr_ttm < DSCR_MIN ? "neg" : ""), cell: (r) => (r.dscr_ttm == null ? "--" : Number(r.dscr_ttm).toFixed(2) + "x") },
+      ],
+      rows: dscr,
+    });
+    const card = ui.card({ title: "Trailing-12 DSCR (lender minimum " + DSCR_MIN + "x)", action: info, bodyClass: "flush", body: dscrBody });
+    if (st.showInfo) card.insertBefore(h("p", { class: "explainer", style: { paddingTop: "12px" }, text: DSCR_EXPLAINER }), card.body);
+    nodes.push(card);
+  };
+
+  // ── Normalized EBITDA ──────────────────────────────────────────────────
+  renderers.normalized = ({ nm }, nodes) => {
+    const st = state.normalized;
+    const month = h("input", { class: "field", type: "month", id: "nm-month", required: true });
+    const label = h("input", { class: "field", type: "text", id: "nm-label", placeholder: "e.g. Owner health insurance add-back", required: true });
+    const amount = h("input", { class: "field", type: "number", step: "0.01", id: "nm-amount", placeholder: "positive = add back", required: true });
+    const note = h("input", { class: "field", type: "text", id: "nm-note", placeholder: "optional" });
+    const btn = h("button", { type: "submit", class: "btn primary", text: "Add" });
+    const msg = h("p", { class: "inline-msg" + (st.msgTone === "bad" ? " t-bad" : st.msgTone === "good" ? " t-good" : ""), text: st.msg || "", hidden: !st.msg });
+    const form = h("form", { id: "nm-form" }, h("div", { class: "form-row" },
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "nm-month", text: "Month" }), month),
+      h("div", { class: "f" }, h("label", { class: "lbl", for: "nm-label", text: "Label" }), label),
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "nm-amount", text: "Amount" }), amount),
+      h("div", { class: "f" }, h("label", { class: "lbl", for: "nm-note", text: "Note" }), note),
+      h("div", { class: "f sm" }, btn)), msg);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      st.msg = null;
+      const amt = parseFloat(amount.value);
+      if (!month.value || !label.value || Number.isNaN(amt)) { st.msg = "Month, label, and a numeric amount are required."; st.msgTone = "bad"; render("normalized"); return; }
+      btn.disabled = true;
+      try {
+        await api.post("/api/admin/accounting/reports/normalized", { periodMonth: month.value + "-01", label: label.value, amount: amt, note: note.value || undefined });
+        st.msg = "Adjustment added."; st.msgTone = "good";
+        cache.delete("/api/admin/accounting/reports/normalized");
+        reload("normalized");
+      } catch (e) {
+        if (e.status === 401) return;
+        st.msg = e.message; st.msgTone = "bad"; btn.disabled = false; render("normalized");
+      }
+    });
+    nodes.push(ui.card({ title: "Add an adjustment", body: form, note: "For financing or sale prep. Add-backs are entered to the cent and are never hidden from the list below." }));
+
+    const rows = nm.normalized || [];
+    const tbl = rows.length === 0 ? ui.empty("No months yet.") : ui.table({
+      columns: [
+        { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => r.period_month.slice(0, 7) },
+        { key: "e", label: "Base EBITDA", align: "r", cls: (r) => negCls(num(r.ebitda)), cell: (r) => fmt.money2(r.ebitda) },
+        { key: "a", label: "Adjustments", align: "r", cell: (r) => fmt.money2(r.adjustments) },
+        { key: "n", label: "Normalized EBITDA", align: "r", strong: true, cls: (r) => negCls(num(r.ebitda_normalized)), cell: (r) => fmt.money2(r.ebitda_normalized) },
+      ],
+      rows,
+    });
+    nodes.push(ui.card({ title: "Normalized EBITDA by month", bodyClass: "flush", body: tbl }));
+
+    const adjs = nm.adjustments || [];
+    const list = h("div", { class: "adj-list" });
+    if (!adjs.length) list.append(ui.empty("No adjustments recorded."));
+    for (const a of adjs) list.append(h("div", { class: "adj-item" },
+      h("div", {}, h("p", { text: a.period_month.slice(0, 7) + ", " + a.label }), a.note ? h("p", { class: "sub", text: a.note }) : null),
+      h("span", { class: "amt", text: fmt.money2(a.amount) })));
+    nodes.push(ui.card({ title: "Adjustment list (never hidden)", bodyClass: "flush", body: list }));
+  };
+
+  // ── boot ───────────────────────────────────────────────────────────────
+  function onReady() {
+    if (!shell) {
+      shell = S.shell.mount(document.getElementById("app"), {
+        title: "Financials", tabs: TABS, rangedTabs: RANGED, locationTabs: [], initialRange: { preset: "3m" },
+        onTab: (id) => { if (mounted) show(id); },
+        onRange: (r) => { state.query = S.range.toQuery(r); if (RANGED.includes(shell.currentTab())) show(shell.currentTab()); },
+      });
+      state.query = S.range.toQuery(shell.state.range);
+      mounted = true;
+      viz.onThemeChange(() => { if (shell) render(shell.currentTab()); });
+    } else {
+      cache.clear();
+      for (const k of Object.keys(tabData)) tabData[k] = null;
+    }
+    show(shell.currentTab());
+  }
+  S.auth.start({ title: "Financials", onReady });
+})();
+</script>

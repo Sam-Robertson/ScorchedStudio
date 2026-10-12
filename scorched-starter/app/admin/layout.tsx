@@ -6,6 +6,7 @@ import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/adminAuth";
 import { AdminSessionProvider, type LocationKey, type Role } from "@/lib/adminSession";
+import { DASHBOARDS } from "@/lib/dashboards";
 import clsx from "clsx";
 import {
   AlertTriangle,
@@ -19,19 +20,18 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  ExternalLink,
   FileText,
   GraduationCap,
   KanbanSquare,
   Landmark,
   Megaphone,
   UserRound,
-  LayoutDashboard,
   LogOut,
   Menu,
   Package,
   Printer,
   Share2,
-  TrendingUp,
   Users,
   X,
 } from "lucide-react";
@@ -49,10 +49,12 @@ const IN_STUDIO_NAV = [
 // Grouped so the sidebar stays short. Every group's parent href is a real page,
 // so clicking the group name goes somewhere rather than only toggling.
 const ADMIN_NAV = [
+  // The two report dashboards are published Claude artifacts (lib/dashboards.ts)
+  // that read this app's live data; they open in a new tab. /admin/reporting
+  // itself is the in-app doorway to them.
   { href: "/admin/reporting",  label: "Reporting",  icon: BarChart2, children: [
-    { href: "/admin/reporting",             label: "Overview",    icon: LayoutDashboard },
-    { href: "/admin/reporting/projections", label: "Projections", icon: TrendingUp },
-    { href: "/admin/accounting",            label: "Accounting",  icon: Landmark },
+    ...DASHBOARDS.map((d) => ({ href: d.url, label: d.label, icon: ExternalLink, external: true })),
+    { href: "/admin/accounting", label: "Accounting", icon: Landmark },
   ] },
   { href: "/admin/customers",  label: "Customers",  icon: UserRound, children: [
     { href: "/admin/customers", label: "Accounts",  icon: UserRound },
@@ -91,32 +93,35 @@ function NavItem({
   icon: Icon,
   pathname,
   onClick,
+  external,
 }: {
   href: string;
   label: string;
   icon: React.ElementType;
   pathname: string | null;
   onClick?: () => void;
+  // Opens in a new tab and is never "active": the report dashboards live on
+  // claude.ai, so there is no in-app route to match.
+  external?: boolean;
 }) {
-  const active =
-    href === "/admin/reporting"
-      // Exact match only — "/admin/reporting" is the Overview child of the
-      // Reporting group and must not light up on its sibling sub-route
-      // (/admin/reporting/projections).
-      ? pathname === "/admin/reporting"
-      : pathname?.startsWith(href);
+  const active = !external && pathname?.startsWith(href);
+  const className = clsx(
+    vulfMono.className,
+    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-colors",
+    active
+      ? "bg-[#884A20] text-white font-semibold"
+      : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900"
+  );
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
+        <Icon className="w-4 h-4 flex-shrink-0" />
+        {label}
+      </a>
+    );
+  }
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={clsx(
-        vulfMono.className,
-        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-colors",
-        active
-          ? "bg-[#884A20] text-white font-semibold"
-          : "text-neutral-500 hover:bg-black/5 hover:text-neutral-900"
-      )}
-    >
+    <Link href={href} onClick={onClick} className={className}>
       <Icon className="w-4 h-4 flex-shrink-0" />
       {label}
     </Link>
@@ -147,7 +152,7 @@ function NavGroup({
   href: string;
   label: string;
   icon: React.ElementType;
-  children: { href: string; label: string; icon: React.ElementType }[];
+  children: { href: string; label: string; icon: React.ElementType; external?: boolean }[];
   pathname: string | null;
   onClick?: () => void;
   flyout?: boolean;
@@ -159,7 +164,7 @@ function NavGroup({
   // the pointer arrives.
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onChildRoute = children.some((c) => pathname?.startsWith(c.href));
+  const onChildRoute = children.some((c) => !c.external && pathname?.startsWith(c.href));
   const isActiveGroup = pathname?.startsWith(href) || onChildRoute;
 
   function place() {
