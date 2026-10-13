@@ -3,14 +3,17 @@
  * Exposes window.Scorched = { api, auth, fmt, dates, range, ui, viz, journal, shell }.
  * Requires Chart.js 4 (UMD, global `Chart`) to be loaded before this file.
  *
- * Data: inside claude.ai the page reads a snapshot of the studio's report data
- * from its own artifact database (the `db` capability), pushed there by Claude
- * from scripts/dashboard-snapshot.ts in the app repo. The artifact viewer
- * blocks network requests, so there is no live API call from a published page.
- * `api.get(path)` keeps the old route-shaped interface and is answered from
- * that snapshot (see `snap.resolve`). Outside claude.ai (a local preview) the
- * same calls fall back to real fetches against an API address with a sign-in
- * card, which is how the pages are tested against the dev server.
+ * Data: the page reads a snapshot of the studio's report data from JSON files
+ * published next to it (data/manifest.json and data/<collection>/<id>.json),
+ * produced by scripts/dashboard-snapshot.mjs in the app repo and republished
+ * daily by a cloud routine. Published files load for anyone who can open the
+ * page, signed in or not, which is what makes the public link usable by staff.
+ * The artifact viewer blocks requests to other hosts, so there is no live API
+ * call from a published page. `api.get(path)` keeps the old route-shaped
+ * interface and is answered from that snapshot (see `snap.resolve`). When no
+ * data files are present (a local preview) the same calls fall back to real
+ * fetches against an API address with a sign-in card, which is how the pages
+ * are tested against the dev server.
  */
 (function () {
   "use strict";
@@ -77,17 +80,16 @@
       this._title = title;
       this._onReady = onReady;
       this._ensureLoginDom();
-      if (snap.available()) {
-        this._showLogin(false, "Loading the latest numbers");
-        try {
-          const ok = await snap.init();
-          if (ok) { this._ready({ role: "snapshot", location: null }); return; }
-          this._showNotice("This dashboard's data is only available to its owner. Open it while signed in to claude.ai.");
-        } catch (e) {
-          this._showNotice("Could not read the dashboard data: " + (e && e.message ? e.message : "unknown error"));
-        }
+      this._showLogin(false, "Loading the latest numbers");
+      try {
+        const ok = await snap.init();
+        if (ok) { this._ready({ role: "snapshot", location: null }); return; }
+        if (snap.inArtifact()) { this._showNotice("No data has been published to this dashboard yet. Ask Claude to refresh the dashboards."); return; }
+      } catch (e) {
+        this._showNotice("Could not read the dashboard data: " + (e && e.message ? e.message : "unknown error"));
         return;
       }
+      // No published data files: local preview against a real API.
       if (!api.token()) { this._showLogin(); return; }
       this._showLogin(false, "Checking your session");
       try {
@@ -167,31 +169,40 @@
     },
   };
 
-  // ── snapshot data layer (artifact database) ─────────────────────────────
-  // Documents, written by Claude from the app's snapshot script:
+  // ── snapshot data layer (published data files) ──────────────────────────
+  // data/manifest.json lists every document as {collection, doc_id, path}:
   //   snap/meta, snap/pl {months, lines}, snap/accounts, snap/seasonality,
   //   snap/balance, snap/cashflow, snap/normalized, snap/projections,
   //   snap/estimated, snap/sales-<start> and snap/sales-all,
   //   journal/<YYYY-MM> {entries: [[id, date, memo, [[code, amount, lineMemo]]]]},
   //   bookings/<YYYY-MM> {rows: [[created_at, date, time_slot, party_size,
   //     amount_paid, status, referral_source, referral_other, location, cust]]}.
+  // The small "snap" documents load up front; journal and bookings on demand.
   const LABOR_CODES = new Set(["6000", "6010"]);
   const EXCLUDED_CODES = new Set(["7000", "8000"]);
   const snap = {
     enabled: false,
-    db: null,
     meta: null,
+    manifest: null,
     docs: new Map(),        // "snap" collection, by doc id
     _cols: new Map(),       // whole collections loaded on demand
     _journal: new Map(),    // journal docs by month
-    available() { return !!(window.claude && typeof window.claude.use === "function"); },
+    inArtifact() { return !!(window.claude && typeof window.claude.use === "function"); },
+    async fetchJson(path) {
+      const r = await fetch(path, { cache: "no-store" });
+      if (!r.ok) throw new ApiError(r.status, "Could not load " + path + " (" + r.status + ")");
+      return r.json();
+    },
+    /** Loads the manifest and the small "snap" documents. False when no data files are published. */
     async init() {
-      const db = await window.claude.use("db");
-      if (!db) return false;
-      this.db = db;
-      const q = await db.collection("snap").get();
-      for (const d of q.docs) this.docs.set(d.id, d.data());
-      this.meta = this.docs.get("meta") || null;
+      let manifest;
+      try { manifest = await this.fetchJson("data/manifest.json"); } catch { return false; }
+      if (!manifest || !Array.isArray(manifest.docs)) return false;
+      this.manifest = manifest;
+      const small = manifest.docs.filter((d) => d.collection === "snap");
+      const bodies = await Promise.all(small.map((d) => this.fetchJson(d.path)));
+      small.forEach((d, i) => this.docs.set(d.doc_id, bodies[i]));
+      this.meta = this.docs.get("meta") || { generatedAt: manifest.generatedAt };
       this.enabled = this.docs.size > 0;
       return this.enabled;
     },
@@ -202,15 +213,16 @@
     },
     async collection(name) {
       if (!this._cols.has(name)) {
-        const q = await this.db.collection(name).get();
-        this._cols.set(name, q.docs.map((d) => d.data()).sort((a, b) => String(a.month).localeCompare(String(b.month))));
+        const entries = this.manifest.docs.filter((d) => d.collection === name);
+        const bodies = await Promise.all(entries.map((d) => this.fetchJson(d.path)));
+        this._cols.set(name, bodies.sort((a, b) => String(a.month).localeCompare(String(b.month))));
       }
       return this._cols.get(name);
     },
     async journalMonth(m) {
       if (!this._journal.has(m)) {
-        const d = await this.db.doc("journal/" + m).get();
-        this._journal.set(m, d.exists ? d.data() : { month: m, entries: [] });
+        const d = this.manifest.docs.find((x) => x.collection === "journal" && x.doc_id === m);
+        this._journal.set(m, d ? await this.fetchJson(d.path) : { month: m, entries: [] });
       }
       return this._journal.get(m);
     },

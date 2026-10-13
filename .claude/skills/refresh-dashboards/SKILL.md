@@ -5,13 +5,14 @@ description: Push fresh report data into the two Claude dashboards (Financials a
 
 # Refresh the reporting dashboards
 
-The dashboards are published artifacts that read a snapshot from their own
-artifact database (they cannot call the app's API from inside claude.ai).
-Refreshing them is two steps: build the snapshot, then write it with the
-ArtifactData tool.
+The dashboards are published artifacts whose pages read a data snapshot from JSON
+files published next to them (`data/manifest.json` plus `data/<collection>/<id>.json`).
+Published files load for anyone who can open the page, signed in or not, which is
+what lets the public link work for staff. Refreshing is two steps: build the
+snapshot, then republish the data files with the Artifact tool.
 
 Artifacts:
-- Financials: https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r
+- Financials: https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r (public link)
 - Operations: https://claude.ai/artifact/VJu3gkKX5F32BxEcQCoSLd
 
 ## 1. Build the snapshot
@@ -23,30 +24,25 @@ by default, set `DASHBOARD_API_BASE=http://localhost:3000` to use a dev server):
 node scripts/dashboard-snapshot.mjs
 ```
 
-It writes `.dashboard-snapshot/manifest.json` plus one JSON file per document
-under `.dashboard-snapshot/financials/` and `.dashboard-snapshot/operations/`.
-Read the manifest; each entry has `artifact`, `collection`, `doc_id`, `file`.
+It writes `.dashboard-snapshot/<artifact>/data/manifest.json` plus one JSON file per
+document under each artifact's `data/` folder, and a top-level
+`.dashboard-snapshot/manifest.json` for tooling.
 
-## 2. Write the documents
+## 2. Republish the data files
 
-For each artifact, one `ArtifactData` call with `action: "batch"` and the
-artifact's `url`, listing every manifest entry for that artifact as
-`{op: "set", collection, doc_id, file_path: <absolute path to file>}`.
-
-Documents that already exist need `if_version`. Get current versions with
-`ArtifactData` `action: "list"` on each collection (`snap`, `journal` for
-Financials; `snap`, `bookings` for Operations) and pass each document's
-`version` as `if_version` on its entry. If a list result elides some documents, fetch
-each missing one with `get` to read its version; never guess a version. A new month (a new `journal/<YYYY-MM>`
-or `bookings/<YYYY-MM>` document) has no version yet and is created without one.
-
-A batch holds at most 50 writes and 1 MiB; Financials is about 25 documents
-and 400 KiB, Operations about 15 documents and 250 KiB, so one batch each.
+For each artifact, one `Artifact` publish with `url` set to the artifact, `file_path`
+the page (`docs/dashboards/financials.html` or `operations.html`), `root` the
+artifact's snapshot folder (`scorched-starter/.dashboard-snapshot/financials` or
+`.../operations`), and `files` mapping every path in that artifact's
+`data/manifest.json` to itself, plus `data/manifest.json`. Leave out `capabilities`
+and `icon`; files not mentioned (`shared.css`, `shared.js`) are kept. If the session
+has not read or published the artifact yet, `Artifact` action `read` with the url
+first (and `list` with scope `files` so the existing paths count as seen).
 
 ## 3. Confirm
 
 Open either dashboard: the top right shows "Data as of <time>" from the new
-`snap/meta` document. Nothing else needs republishing.
+`data/snap/meta.json`.
 
 ## Automatic refresh
 
@@ -68,4 +64,4 @@ whose network access must allow www.scorchedstudio.com. To check on it, use Remo
   for that month are incomplete until the journal route pages.
 - To change the pages themselves, edit `scorched-starter/docs/dashboards/` and
   republish with the Artifact tool to the same URL, attaching `shared.css` and
-  `shared.js` as files and `capabilities: {db: {}}`.
+  `shared.js` as files (the data files already published are kept).

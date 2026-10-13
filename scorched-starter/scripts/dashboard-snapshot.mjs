@@ -17,8 +17,10 @@
 // (whose egress proxy Node's fetch ignores). The daily cloud routine carries
 // a verbatim copy of this file in its prompt: keep the two in sync.
 //
-// Output: .dashboard-snapshot/{financials,operations}/<collection>__<doc>.json
-// plus .dashboard-snapshot/manifest.json. Signs in with ADMIN_PASSWORD from the
+// Output: .dashboard-snapshot/<artifact>/data/<collection>/<doc>.json plus a
+// per-artifact data/manifest.json (the page fetches these as published files)
+// and a top-level .dashboard-snapshot/manifest.json for tooling. Signs in with
+// ADMIN_PASSWORD from the
 // environment or .env (never printed). Every document stays under the store's
 // 256 KiB cap: journal entries and bookings are split by month, and bookings
 // carry a customer group id instead of email or phone, so no contact details
@@ -167,16 +169,22 @@ function main() {
   push("financials", "snap", "meta", meta);
   push("operations", "snap", "meta", meta);
 
-  // Write files + manifest.
+  // Write files + manifests. Each artifact gets a self-contained data/ folder
+  // (published next to its page) with its own manifest the page reads first.
   rmSync(OUT, { recursive: true, force: true });
   const manifest = [];
   for (const d of docs) {
-    const dir = join(OUT, d.artifact); mkdirSync(dir, { recursive: true });
-    const file = join(dir, `${d.collection}__${d.doc_id}.json`);
+    const rel = `data/${d.collection}/${d.doc_id}.json`;
+    const file = join(OUT, d.artifact, rel);
+    mkdirSync(join(OUT, d.artifact, "data", d.collection), { recursive: true });
     const body = JSON.stringify(d.data);
-    if (body.length > DOC_CAP) throw new Error(`${file} is ${body.length} bytes, over the 256 KiB document cap`);
+    if (body.length > DOC_CAP) throw new Error(`${file} is ${body.length} bytes, over the 256 KiB cap`);
     writeFileSync(file, body);
-    manifest.push({ artifact: d.artifact, collection: d.collection, doc_id: d.doc_id, file, bytes: body.length });
+    manifest.push({ artifact: d.artifact, collection: d.collection, doc_id: d.doc_id, path: rel, file, bytes: body.length });
+  }
+  for (const artifact of ["financials", "operations"]) {
+    const mine = manifest.filter((m) => m.artifact === artifact).map(({ collection, doc_id, path, bytes }) => ({ collection, doc_id, path, bytes }));
+    writeFileSync(join(OUT, artifact, "data", "manifest.json"), JSON.stringify({ generatedAt, docs: mine }));
   }
   writeFileSync(join(OUT, "manifest.json"), JSON.stringify({ generatedAt, apiBase: API, docs: manifest }, null, 2));
 
