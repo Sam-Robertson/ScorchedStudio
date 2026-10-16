@@ -80,6 +80,19 @@ export async function createBookingFromIntent(
     .select()
     .single();
 
+  // The confirm route and the webhook both run this for the same payment,
+  // often in the same instant, so both can pass the check above. The unique
+  // index on stripe_payment_intent_id lets exactly one insert through; the
+  // loser returns the winner's row and sends no second email.
+  if (dbError?.code === "23505") {
+    const { data: winner } = await getSupabase()
+      .from("bookings")
+      .select("id")
+      .eq("stripe_payment_intent_id", paymentIntentId)
+      .maybeSingle();
+    if (winner) return { ok: true, booking_id: winner.id };
+  }
+
   if (dbError) {
     console.error("CREATE_BOOKING_DB_ERROR", dbError);
     return { ok: false, error: "Failed to save booking.", status: 500 };
