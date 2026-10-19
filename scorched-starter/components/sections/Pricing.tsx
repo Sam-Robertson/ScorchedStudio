@@ -12,6 +12,7 @@ const items = [
   ['Cup', '$14'],
   ['Wallet', '$16'],
   ['Coaster Set', '$16'],
+  ['Wireless Charger', '$25'],
 ];
 
 export default function Pricing() {
