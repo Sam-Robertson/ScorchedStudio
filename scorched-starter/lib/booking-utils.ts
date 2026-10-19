@@ -7,6 +7,7 @@ export const MAX_CAPACITY = 20;
 // Defined in booking-rules so client components and tests can read them
 // without pulling in this file's Supabase import.
 export { MAX_PARTY_SIZE, PRICE_PER_PERSON, PRICE_PER_PERSON_CENTS } from "@/lib/booking-rules";
+import { resolveDayHours, type SpecialDay } from "@/lib/booking-rules";
 
 // Fixed, not admin-configurable.
 export const SESSION_LENGTH_MINUTES = 90;
@@ -59,19 +60,33 @@ async function getBusinessHours(location: LocationKey): Promise<DayHours[] | nul
   }
 }
 
-let blockedCache: { data: Set<string>; expiresAt: number } | null = null;
+let specialCache: { data: Map<string, SpecialDay>; expiresAt: number } | null = null;
 
-async function getBlockedDates(): Promise<Set<string>> {
-  if (blockedCache && blockedCache.expiresAt > Date.now()) return blockedCache.data;
+// Holidays and other one-off dates. A row with no hours closes the date; a
+// row with hours opens it with those hours instead of the weekday's.
+async function getSpecialDates(): Promise<Map<string, SpecialDay>> {
+  if (specialCache && specialCache.expiresAt > Date.now()) return specialCache.data;
   try {
-    const { data, error } = await getSupabase().from("blocked_dates").select("date");
-    if (error) throw error;
-    const set = new Set((data ?? []).map((row) => row.date as string));
-    blockedCache = { data: set, expiresAt: Date.now() + HOURS_CACHE_TTL_MS };
-    return set;
+    let rows: { date: string; open_time?: string | null; close_time?: string | null }[];
+    const withHours = await getSupabase().from("blocked_dates").select("date, open_time, close_time");
+    if (withHours.error) {
+      // The hours columns are added by supabase-holiday-hours-setup.sql. Until
+      // it has run, every row still has to close its date.
+      const datesOnly = await getSupabase().from("blocked_dates").select("date");
+      if (datesOnly.error) throw datesOnly.error;
+      rows = datesOnly.data ?? [];
+    } else {
+      rows = withHours.data ?? [];
+    }
+    const map = new Map<string, SpecialDay>();
+    for (const row of rows) {
+      map.set(row.date, { open_time: row.open_time ?? null, close_time: row.close_time ?? null });
+    }
+    specialCache = { data: map, expiresAt: Date.now() + HOURS_CACHE_TTL_MS };
+    return map;
   } catch (e) {
     console.error("Failed to load blocked_dates, treating as none blocked:", e);
-    return new Set();
+    return new Map();
   }
 }
 
@@ -101,8 +116,7 @@ export function generateSlots(openTime: string, closeTime: string, intervalMin: 
 // `location` defaults to "orem" so callers that haven't been updated yet
 // keep today's single-location behavior exactly.
 export async function getSlotsForDate(dateStr: string, location: LocationKey = "orem"): Promise<string[]> {
-  const blocked = await getBlockedDates();
-  if (blocked.has(dateStr)) return [];
+  const special = (await getSpecialDates()).get(dateStr);
 
   // Use noon local time to avoid timezone edge cases
   const d = new Date(dateStr + "T12:00:00");
@@ -112,7 +126,8 @@ export async function getSlotsForDate(dateStr: string, location: LocationKey = "
   if (hours === null) return []; // no hours configured for this location yet — closed
 
   const dayHours = hours.find((h) => h.weekday === weekday) ?? FALLBACK_HOURS[weekday];
-  if (!dayHours.is_open) return [];
+  const open = resolveDayHours(special, dayHours.is_open ? dayHours : null);
+  if (!open) return [];
 
-  return generateSlots(dayHours.open_time, dayHours.close_time, SLOT_INTERVAL_MINUTES);
+  return generateSlots(open.open_time, open.close_time, SLOT_INTERVAL_MINUTES);
 }

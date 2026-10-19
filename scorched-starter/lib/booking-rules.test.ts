@@ -8,6 +8,7 @@ import {
   isBookingEditable,
   isUnpaidReservation,
   refundDueCents,
+  resolveDayHours,
   sameCustomer,
 } from "./booking-rules.ts";
 
@@ -117,4 +118,17 @@ test("a refund comes off the newest payment first, then the original", () => {
 
 test("a refund larger than the tracked payments is refused rather than guessed at", () => {
   assert.throws(() => allocateRefund([{ id: "pi_extra", remaining: 1500 }], 3000));
+});
+
+test("a special date closes the day, opens it with its own hours, or leaves the weekday alone", () => {
+  const weekday = { open_time: "17:00:00", close_time: "22:00:00" };
+  // No row: the weekday schedule stands, open or closed.
+  assert.deepEqual(resolveDayHours(undefined, weekday), weekday);
+  assert.equal(resolveDayHours(undefined, null), null);
+  // A row without hours closes the day.
+  assert.equal(resolveDayHours({ open_time: null, close_time: null }, weekday), null);
+  // A row with hours wins over the weekday, including a weekday that is normally closed.
+  const holiday = { open_time: "11:00:00", close_time: "16:00:00" };
+  assert.deepEqual(resolveDayHours(holiday, weekday), holiday);
+  assert.deepEqual(resolveDayHours(holiday, null), holiday);
 });

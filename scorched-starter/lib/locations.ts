@@ -1,6 +1,7 @@
 // lib/locations.ts — server-only data layer for the locations table
 import { getSupabase } from "@/lib/supabase";
 import { hashPassword, verifyPassword, type LocationKey } from "@/lib/admin-session";
+import { todayInDenverYmd } from "@/lib/timezone";
 
 export type LocationRecord = {
   key: LocationKey;
@@ -32,6 +33,36 @@ export function formatClockTime(hhmmss: string): string {
   const ampm = h >= 12 ? "PM" : "AM";
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+export type SpecialDateRecord = {
+  date: string;
+  reason: string | null;
+  open_time: string | null;
+  close_time: string | null;
+};
+
+// Holidays and special dates coming up soon, for the public hours displays.
+// Fails soft to none: a missing column or a fetch error should never take the
+// homepage down with it.
+export async function getUpcomingSpecialDates(days = 60): Promise<SpecialDateRecord[]> {
+  const today = todayInDenverYmd();
+  const end = new Date(today + "T12:00:00");
+  end.setDate(end.getDate() + days);
+  const endYmd = end.toISOString().slice(0, 10);
+  try {
+    const { data, error } = await getSupabase()
+      .from("blocked_dates")
+      .select("date, reason, open_time, close_time")
+      .gte("date", today)
+      .lte("date", endYmd)
+      .order("date");
+    if (error) throw error;
+    return (data ?? []) as SpecialDateRecord[];
+  } catch (e) {
+    console.error("Failed to load upcoming special dates:", e);
+    return [];
+  }
 }
 
 // Read-only, for the public /locations page. Unlike booking-utils' hours

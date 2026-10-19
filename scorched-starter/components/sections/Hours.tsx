@@ -1,12 +1,13 @@
 import Container from '@/components/ui/Container';
-import { getLocationByKey, getPublicBusinessHours, DAY_LABELS, formatClockTime } from '@/lib/locations';
+import { getLocationByKey, getPublicBusinessHours, getUpcomingSpecialDates, DAY_LABELS, formatClockTime } from '@/lib/locations';
 
 // Reads live from the same `locations` / `business_hours` tables as
 // /locations, so the homepage can't drift out of sync with an admin edit.
 export default async function Hours() {
-  const [orem, hours] = await Promise.all([
+  const [orem, hours, special] = await Promise.all([
     getLocationByKey('orem'),
     getPublicBusinessHours('orem'),
+    getUpcomingSpecialDates(),
   ]);
   const sorted = [...hours].sort((a, b) => a.weekday - b.weekday);
 
@@ -25,6 +26,27 @@ export default async function Hours() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {special.length > 0 && (
+          <div className="max-w-lg mx-auto mt-10">
+            <h3 className="text-center text-2xl font-extrabold mb-4">Holiday Hours</h3>
+            <div className="grid grid-cols-2 text-xl font-semibold gap-y-3">
+              {special.map((s) => (
+                <div key={s.date} className="contents">
+                  <div>
+                    {new Date(s.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {s.reason && <span className="block text-sm font-normal opacity-80">{s.reason}</span>}
+                  </div>
+                  <div className="text-right">
+                    {s.open_time && s.close_time
+                      ? `${formatClockTime(s.open_time)} – ${formatClockTime(s.close_time)}`
+                      : 'Closed'}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

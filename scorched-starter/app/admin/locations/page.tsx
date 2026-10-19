@@ -35,6 +35,14 @@ const EMPTY_HOURS: BusinessHoursRecord[] = Array.from({ length: 7 }, (_, weekday
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40";
 
+// "11:00:00" or "11:00" -> "11:00 AM"
+function formatClock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 export default function AdminLocationsPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -76,6 +84,9 @@ function LocationsDashboard({ token }: { token: string }) {
   const [blockedError, setBlockedError] = useState<string | null>(null);
   const [newBlockedDate, setNewBlockedDate] = useState("");
   const [newBlockedReason, setNewBlockedReason] = useState("");
+  const [newBlockedMode, setNewBlockedMode] = useState<"closed" | "hours">("closed");
+  const [newBlockedOpen, setNewBlockedOpen] = useState("11:00");
+  const [newBlockedClose, setNewBlockedClose] = useState("16:00");
   const [addingBlocked, setAddingBlocked] = useState(false);
 
   const loadLocations = useCallback(() => {
@@ -249,11 +260,19 @@ function LocationsDashboard({ token }: { token: string }) {
       const res = await fetch("/api/admin/blocked-dates", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ date: newBlockedDate, reason: newBlockedReason }),
+        body: JSON.stringify({
+          date: newBlockedDate,
+          reason: newBlockedReason,
+          open_time: newBlockedMode === "hours" ? newBlockedOpen : null,
+          close_time: newBlockedMode === "hours" ? newBlockedClose : null,
+        }),
       });
       const { blockedDate, error: err } = await res.json();
       if (err) throw new Error(err);
-      setBlockedDates((prev) => [...prev, blockedDate].sort((a, b) => a.date.localeCompare(b.date)));
+      // The server upserts, so a re-added date replaces its earlier row.
+      setBlockedDates((prev) =>
+        [...prev.filter((b) => b.date !== blockedDate.date), blockedDate].sort((a, b) => a.date.localeCompare(b.date))
+      );
       setNewBlockedDate("");
       setNewBlockedReason("");
     } catch (e) {
@@ -520,11 +539,12 @@ function LocationsDashboard({ token }: { token: string }) {
         </>
       )}
 
-      {/* ── Blocked dates (shared across all locations) ─────────────────── */}
+      {/* ── Holidays and special dates (shared across all locations) ─────── */}
       <div>
-        <p className={`${vulfMono.className} font-bold text-sm mb-1`}>Blocked Dates</p>
+        <p className={`${vulfMono.className} font-bold text-sm mb-1`}>Holidays &amp; Special Dates</p>
         <p className={`${vulfMono.className} text-xs text-neutral-400 mb-4`}>
-          Close specific dates for holidays or private events — applies to every location.
+          Close a date, or open it with different hours than usual. Applies to every location.
+          Adding a date again replaces it.
         </p>
 
         {blockedError && (
@@ -552,6 +572,39 @@ function LocationsDashboard({ token }: { token: string }) {
               className={`${inputCls} w-full`}
             />
           </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">That day</label>
+            <select
+              value={newBlockedMode}
+              onChange={(e) => setNewBlockedMode(e.target.value as "closed" | "hours")}
+              className={inputCls}
+            >
+              <option value="closed">Closed all day</option>
+              <option value="hours">Open different hours</option>
+            </select>
+          </div>
+          {newBlockedMode === "hours" && (
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Hours</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  required
+                  value={newBlockedOpen}
+                  onChange={(e) => setNewBlockedOpen(e.target.value)}
+                  className={inputCls}
+                />
+                <span className="text-neutral-400 text-sm">to</span>
+                <input
+                  type="time"
+                  required
+                  value={newBlockedClose}
+                  onChange={(e) => setNewBlockedClose(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          )}
           <button
             type="submit"
             disabled={addingBlocked}
@@ -567,7 +620,7 @@ function LocationsDashboard({ token }: { token: string }) {
             Loading blocked dates…
           </div>
         ) : blockedDates.length === 0 ? (
-          <p className="text-sm text-neutral-400">No blocked dates.</p>
+          <p className="text-sm text-neutral-400">No holidays or special dates.</p>
         ) : (
           <div className="rounded-2xl border border-black/10 bg-white divide-y divide-black/5">
             {blockedDates.map((b) => (
@@ -578,11 +631,16 @@ function LocationsDashboard({ token }: { token: string }) {
                       weekday: "short", month: "short", day: "numeric", year: "numeric",
                     })}
                   </p>
-                  {b.reason && <p className="text-xs text-neutral-400 mt-0.5">{b.reason}</p>}
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {b.open_time && b.close_time
+                      ? `Open ${formatClock(b.open_time)} to ${formatClock(b.close_time)}`
+                      : "Closed"}
+                    {b.reason && ` · ${b.reason}`}
+                  </p>
                 </div>
                 <button
                   onClick={() => removeBlockedDate(b.date)}
-                  aria-label={`Remove blocked date ${b.date}`}
+                  aria-label={`Remove special date ${b.date}`}
                   className="p-2 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50"
                 >
                   <Trash2 className="w-4 h-4" />

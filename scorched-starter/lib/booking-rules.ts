@@ -140,3 +140,21 @@ export function duplicateBookingIds<T extends Contact & { id: string; date: stri
   }
   return ids;
 }
+
+// ── Holidays and special dates ──────────────────────────────────────────────
+//
+// A blocked_dates row overrides the weekday schedule for one date. Without
+// hours it closes the studio that day. With hours it opens those hours
+// instead, even on a weekday that is normally closed (a Sunday holiday
+// opening, say). `weekday` is null when the day is normally closed.
+
+export type SpecialDay = { open_time: string | null; close_time: string | null };
+export type OpenHours = { open_time: string; close_time: string };
+
+export function resolveDayHours(special: SpecialDay | undefined, weekday: OpenHours | null): OpenHours | null {
+  if (!special) return weekday;
+  if (special.open_time && special.close_time) {
+    return { open_time: special.open_time, close_time: special.close_time };
+  }
+  return null;
+}

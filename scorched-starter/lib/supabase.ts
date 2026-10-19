@@ -84,6 +84,10 @@ export type BusinessHoursRecord = {
 export type BlockedDateRecord = {
   date: string;
   reason: string | null;
+  // Both null: closed all day. Both set: open these hours instead of the
+  // weekday's usual ones. Postgres returns them as "HH:MM:SS".
+  open_time: string | null;
+  close_time: string | null;
   created_at: string;
 };
 
