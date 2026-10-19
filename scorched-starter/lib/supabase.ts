@@ -91,6 +91,30 @@ export type BlockedDateRecord = {
   created_at: string;
 };
 
+export type ArtworkStatus = "on_display" | "returned" | "sold";
+
+// Artwork on loan from a local artist. See supabase-artwork-setup.sql.
+export type ArtworkRecord = {
+  id: string;
+  title: string;
+  artist_name: string;
+  artist_email: string | null;
+  artist_phone: string | null;
+  medium: string | null;
+  dimensions: string | null;
+  location: "orem" | "slc";
+  lease_start: string;
+  lease_end: string | null;
+  sale_price_cents: number | null;
+  commission_percent: number | null;
+  status: ArtworkStatus;
+  image_url: string | null;
+  image_path: string | null;
+  agreement_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProductRecord = {
   id: string;
   name: string;

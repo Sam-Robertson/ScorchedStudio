@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Palette,
   PenLine,
   Printer,
   Share2,
@@ -74,6 +75,7 @@ const ADMIN_NAV = [
     { href: "/admin/courses",   label: "Courses",   icon: GraduationCap },
     { href: "/admin/inventory", label: "Inventory", icon: Boxes },
     { href: "/admin/products",  label: "Products",  icon: Package },
+    { href: "/admin/artwork",   label: "Artwork",   icon: Palette },
   ] },
   // Boards was a 77 line hub page whose only job was linking to Projects and
   // Social. They are children here instead, which saves a click on the two
