@@ -48,8 +48,9 @@ export default function TermsPage() {
           <p>
             If you cancel a card booking before it starts, the full amount is refunded automatically
             to your original payment method. Refunds typically appear within 5 to 10 business days.
-            Bookings reserved with a gift card or a Get Out Pass are not charged online, so there is
-            nothing to refund; those are settled in studio.
+            Bookings reserved with a gift card are not charged online, so there is nothing to
+            refund; those are settled in studio. A Get Out Pass is a $15 wood credit redeemed at
+            checkout and does not cover the studio fee.
           </p>
           {/*
             TODO(sam): the paragraph above describes exactly what the code does today
