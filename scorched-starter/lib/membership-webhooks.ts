@@ -45,6 +45,21 @@ function periodEndIso(subscription: Stripe.Subscription): string | null {
   return seconds ? new Date(seconds * 1000).toISOString() : null;
 }
 
+// Everything the memberships row mirrors from a Stripe subscription. A member
+// who cancels stays "active" in Stripe until the paid period ends, with
+// cancel_at set, so that date is part of the snapshot rather than a status.
+export function subscriptionSnapshot(subscription: Stripe.Subscription): {
+  status: MembershipStatus;
+  current_period_end: string | null;
+  cancel_at: string | null;
+} {
+  return {
+    status: mapStripeStatus(subscription.status),
+    current_period_end: periodEndIso(subscription),
+    cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
+  };
+}
+
 function idOf(ref: string | { id: string } | null | undefined): string | null {
   if (!ref) return null;
   return typeof ref === "string" ? ref : ref.id;
@@ -114,8 +129,7 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
     stripe_subscription_id: subscription.id,
     plan_key: planKey,
     billing_interval: billingInterval,
-    status: mapStripeStatus(subscription.status),
-    current_period_end: periodEndIso(subscription),
+    ...subscriptionSnapshot(subscription),
   });
 
   const multiplier = periodMultiplier(billingInterval);
@@ -138,11 +152,7 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
 
 export async function handleSubscriptionSync(subscriptionId: string) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  await syncMembershipStatus({
-    stripe_subscription_id: subscription.id,
-    status: mapStripeStatus(subscription.status),
-    current_period_end: periodEndIso(subscription),
-  });
+  await syncMembershipStatus({ stripe_subscription_id: subscription.id, ...subscriptionSnapshot(subscription) });
 }
 
 export async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -170,11 +180,7 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  await syncMembershipStatus({
-    stripe_subscription_id: subscriptionId,
-    status: mapStripeStatus(subscription.status),
-    current_period_end: periodEndIso(subscription),
-  });
+  await syncMembershipStatus({ stripe_subscription_id: subscriptionId, ...subscriptionSnapshot(subscription) });
 
   const multiplier = periodMultiplier(membership.billing_interval);
   await grantMembershipPeriod(membership, {

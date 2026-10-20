@@ -33,6 +33,7 @@ export type MembershipRecord = {
   billing_interval: BillingInterval;
   status: MembershipStatus;
   current_period_end: string | null;
+  cancel_at: string | null; // set while a cancellation is scheduled; the member keeps access until then
   entrances_remaining: number;
   wood_credit_remaining_cents: number;
   created_at: string;
@@ -110,6 +111,7 @@ export async function upsertMembershipShell(input: {
   billing_interval: BillingInterval;
   status: MembershipStatus;
   current_period_end: string | null;
+  cancel_at: string | null;
 }): Promise<MembershipRecord> {
   const { data, error } = await getSupabase()
     .from("memberships")
@@ -127,12 +129,14 @@ export async function syncMembershipStatus(input: {
   stripe_subscription_id: string;
   status: MembershipStatus;
   current_period_end: string | null;
+  cancel_at: string | null;
 }): Promise<void> {
   const { error } = await getSupabase()
     .from("memberships")
     .update({
       status: input.status,
       current_period_end: input.current_period_end,
+      cancel_at: input.cancel_at,
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_subscription_id", input.stripe_subscription_id);

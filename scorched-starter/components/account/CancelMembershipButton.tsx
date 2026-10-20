@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDenverDate } from "@/lib/timezone";
 
 export default function CancelMembershipButton({ membershipId }: { membershipId: string }) {
+  const router = useRouter();
   const [state, setState] = useState<"idle" | "confirming" | "done">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,8 +25,11 @@ export default function CancelMembershipButton({ membershipId }: { membershipId:
       setError(data.error || "Failed to cancel membership.");
       return;
     }
-    setPeriodEnd(data.current_period_end ?? null);
+    setPeriodEnd(data.cancel_at ?? null);
     setState("done");
+    // Re-render the server page so the card itself switches to its "Ends"
+    // state instead of only this button changing.
+    router.refresh();
   }
 
   if (state === "done") {

@@ -71,21 +71,31 @@ export default async function AccountPage() {
                     <div className="flex items-center justify-between mb-2">
                       <p className="font-semibold text-neutral-900">{plans[i]?.name ?? m.plan_key}</p>
                       <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                        m.status === "active" ? "bg-green-100 text-green-700" : "bg-neutral-100 text-neutral-500"
+                        m.status === "active" && m.cancel_at ? "bg-amber-100 text-amber-700"
+                        : m.status === "active" ? "bg-green-100 text-green-700"
+                        : "bg-neutral-100 text-neutral-500"
                       }`}>
-                        {m.status}
+                        {m.status === "active" && m.cancel_at ? "ending" : m.status}
                       </span>
                     </div>
                     <p className={`${vulfMono.className} text-xs text-neutral-500 mb-1`}>
                       {m.entrances_remaining} entrance{m.entrances_remaining === 1 ? "" : "s"} remaining
                       {m.wood_credit_remaining_cents > 0 && ` · ${fmtCents(m.wood_credit_remaining_cents)} wood credit`}
                     </p>
-                    {m.current_period_end && (
-                      <p className={`${vulfMono.className} text-xs text-neutral-400 mb-3`}>
-                        Renews {formatDenverDate(m.current_period_end)}
+                    {m.status === "active" && m.cancel_at ? (
+                      <p className={`${vulfMono.className} text-xs text-neutral-500`}>
+                        Cancellation scheduled. Your membership ends {formatDenverDate(m.cancel_at)}. You can use your remaining entrances until then, and you won&apos;t be charged again.
                       </p>
+                    ) : (
+                      <>
+                        {m.current_period_end && (
+                          <p className={`${vulfMono.className} text-xs text-neutral-400 mb-3`}>
+                            Renews {formatDenverDate(m.current_period_end)}
+                          </p>
+                        )}
+                        {m.status === "active" && <CancelMembershipButton membershipId={m.id} />}
+                      </>
                     )}
-                    {m.status === "active" && <CancelMembershipButton membershipId={m.id} />}
                   </div>
                 ))}
               </div>

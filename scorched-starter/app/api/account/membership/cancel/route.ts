@@ -3,7 +3,8 @@ import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { CUSTOMER_SESSION_COOKIE, verifyCustomerSessionToken } from "@/lib/customer-session";
-import { getMembershipById } from "@/lib/memberships";
+import { getMembershipById, syncMembershipStatus } from "@/lib/memberships";
+import { subscriptionSnapshot } from "@/lib/membership-webhooks";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -29,18 +30,31 @@ export async function POST(req: NextRequest) {
   if (membership.status !== "active") {
     return Response.json({ error: "This membership isn't active." }, { status: 409 });
   }
+  if (membership.cancel_at) {
+    // Already scheduled: a second click (or a stale page) is not an error.
+    return Response.json({ ok: true, cancel_at: membership.cancel_at });
+  }
 
   try {
     const subscription = await stripe.subscriptions.update(membership.stripe_subscription_id, {
       cancel_at_period_end: true,
     });
-    // Stripe SDK v20: current_period_end lives on each subscription item, not
-    // on the subscription itself (same shape lib/membership-webhooks.ts
-    // already accounts for).
-    const periodEndSeconds = subscription.items.data[0]?.current_period_end;
+    // Write the scheduled end to our row right away rather than waiting on the
+    // customer.subscription.updated webhook, so the account page reflects the
+    // cancellation the moment it reloads. The webhook writes the same snapshot
+    // again, which is harmless. Before this, nothing on our side changed and
+    // the page kept showing Active with a cancel button.
+    const snapshot = subscriptionSnapshot(subscription);
+    try {
+      await syncMembershipStatus({ stripe_subscription_id: subscription.id, ...snapshot });
+    } catch (err) {
+      // Stripe already has the cancellation, so the member must not be told it
+      // failed. The webhook will bring the row up to date.
+      console.error("ACCOUNT_MEMBERSHIP_CANCEL_SYNC_ERROR", err);
+    }
     return Response.json({
       ok: true,
-      current_period_end: periodEndSeconds ? new Date(periodEndSeconds * 1000).toISOString() : membership.current_period_end,
+      cancel_at: snapshot.cancel_at ?? snapshot.current_period_end ?? membership.current_period_end,
     });
   } catch (err) {
     console.error("ACCOUNT_MEMBERSHIP_CANCEL_ERROR", err);

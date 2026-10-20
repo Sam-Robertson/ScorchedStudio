@@ -30,6 +30,13 @@ const STATUS_LABEL: Record<MembershipStatus, string> = {
   incomplete: "Incomplete",
 };
 
+// A scheduled cancellation keeps the Stripe status "active" until the paid
+// period ends, so it gets its own badge rather than a status.
+function statusBadge(m: Pick<MembershipRecord, "status" | "cancel_at">): { cls: string; label: string } {
+  if (m.status === "active" && m.cancel_at) return { cls: "bg-amber-100 text-amber-700", label: "Ending" };
+  return { cls: STATUS_BADGE[m.status], label: STATUS_LABEL[m.status] };
+}
+
 function fmtCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -120,8 +127,8 @@ function MembershipsDashboard({ token }: { token: string }) {
               <p className="text-sm font-medium text-neutral-900 truncate">{m.name || m.email}</p>
               <p className="text-xs text-neutral-400 truncate">{m.email}{m.phone ? ` · ${m.phone}` : ""}</p>
             </div>
-            <span className={`${vulfMono.className} shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${STATUS_BADGE[m.status]}`}>
-              {STATUS_LABEL[m.status]}
+            <span className={`${vulfMono.className} shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusBadge(m).cls}`}>
+              {statusBadge(m).label}
             </span>
           </button>
         ))}
@@ -274,13 +281,17 @@ function MembershipDetailModal({
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${STATUS_BADGE[membership.status]}`}>
-                  {STATUS_LABEL[membership.status]}
+                <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusBadge(membership).cls}`}>
+                  {statusBadge(membership).label}
                 </span>
                 <span className={`${vulfMono.className} text-[10px] px-2 py-0.5 rounded-full font-semibold bg-[#F6E4E1] text-[#884A20]`}>
                   {plan.name} · {membership.billing_interval}
                 </span>
-                {membership.current_period_end && (
+                {membership.status === "active" && membership.cancel_at ? (
+                  <span className="text-xs text-amber-700">
+                    Canceled by the member. Ends {formatDenverDate(membership.cancel_at)}; entrances stay usable until then.
+                  </span>
+                ) : membership.current_period_end && (
                   <span className="text-xs text-neutral-400">
                     Renews {formatDenverDate(membership.current_period_end)}
                   </span>
