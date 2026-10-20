@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
-import { Check, ImageIcon, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
-import type { ArtworkRecord } from "@/lib/supabase";
+import { Check, ExternalLink, FileText, ImageIcon, Paperclip, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { ARTWORK_STATUSES, ARTWORK_STATUS_LABELS, leaseDaysLeft, type ArtworkStatus } from "@/lib/artwork";
+import type { ArtworkFileKind, ArtworkWithFiles as ArtworkRecord } from "@/lib/artwork-files";
 
 const inputCls =
   "rounded-lg border border-black/20 bg-white px-3 py-2 text-sm outline-none focus:border-black/40 w-full";
@@ -75,6 +75,46 @@ function toBody(f: FormState) {
   };
 }
 
+// Files the form has picked but not yet sent; they upload once the row exists.
+type PickedFiles = Partial<Record<ArtworkFileKind, File>>;
+
+const FILE_ACCEPT: Record<ArtworkFileKind, string> = { image: "image/*", contract: "application/pdf,image/*" };
+
+// Browser to storage directly: ask the server for a signed upload URL, PUT the
+// file there, then tell the server which path to attach. Returns the updated row.
+async function uploadArtworkFile(token: string, id: string, kind: ArtworkFileKind, file: File): Promise<ArtworkRecord> {
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const signRes = await fetch(`/api/admin/artwork/${id}/files/${kind}/sign`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
+  });
+  const signed = await signRes.json();
+  if (!signRes.ok) throw new Error(signed.error ?? `Upload failed (${signRes.status})`);
+
+  const fd = new FormData();
+  fd.append("cacheControl", "3600");
+  fd.append("", file);
+  const putRes = await fetch(signed.signedUrl, { method: "PUT", headers: { "x-upsert": "true" }, body: fd });
+  if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status})`);
+
+  const finalRes = await fetch(`/api/admin/artwork/${id}/files/${kind}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ path: signed.path, fileName: file.name }),
+  });
+  const { artwork, error: err } = await finalRes.json();
+  if (err) throw new Error(err);
+  return artwork;
+}
+
+async function removeArtworkFile(token: string, id: string, kind: ArtworkFileKind): Promise<ArtworkRecord> {
+  const res = await fetch(`/api/admin/artwork/${id}/files/${kind}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+  const { artwork, error: err } = await res.json();
+  if (err) throw new Error(err);
+  return artwork;
+}
+
 function money(cents: number): string {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
@@ -125,7 +165,25 @@ function ArtworkDashboard({ token }: { token: string }) {
     setItems((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
 
-  async function create(form: FormState) {
+  // The row has to exist before its files can be stored, so a save is the row
+  // first and then each picked file. If an upload fails the row is still saved
+  // and the card offers to try the file again.
+  async function uploadPicked(row: ArtworkRecord, files: PickedFiles): Promise<ArtworkRecord> {
+    let latest = row;
+    for (const kind of ["image", "contract"] as const) {
+      const file = files[kind];
+      if (!file) continue;
+      try {
+        latest = await uploadArtworkFile(token, row.id, kind, file);
+        replace(latest);
+      } catch (e) {
+        throw new Error(`Saved, but the ${kind === "image" ? "photo" : "contract"} did not upload: ${e instanceof Error ? e.message : "unknown error"}`);
+      }
+    }
+    return latest;
+  }
+
+  async function create(form: FormState, files: PickedFiles) {
     const res = await fetch("/api/admin/artwork", { method: "POST", headers: authHeaders, body: JSON.stringify(toBody(form)) });
     const { artwork, error: err } = await res.json();
     if (err) throw new Error(err);
@@ -133,14 +191,16 @@ function ArtworkDashboard({ token }: { token: string }) {
     setShowAdd(false);
     // A new piece lands in the list it belongs to, not behind the filter.
     if (filter !== "all" && filter !== artwork.status) setFilter(artwork.status);
+    await uploadPicked(artwork, files);
   }
 
-  async function update(id: string, form: FormState) {
+  async function update(id: string, form: FormState, files: PickedFiles) {
     const res = await fetch(`/api/admin/artwork/${id}`, { method: "PATCH", headers: authHeaders, body: JSON.stringify(toBody(form)) });
     const { artwork, error: err } = await res.json();
     if (err) throw new Error(err);
     replace(artwork);
     setEditingId(null);
+    await uploadPicked(artwork, files);
   }
 
   async function remove(id: string) {
@@ -200,7 +260,6 @@ function ArtworkDashboard({ token }: { token: string }) {
             onCancel={() => setShowAdd(false)}
             onError={setError}
           />
-          <p className="text-xs text-neutral-400 mt-3">Save first, then add the photo from the card.</p>
         </div>
       )}
 
@@ -221,7 +280,8 @@ function ArtworkDashboard({ token }: { token: string }) {
                 <p className={`${vulfMono.className} font-bold text-sm mb-4`}>Edit: {a.title}</p>
                 <ArtworkForm
                   initial={toForm(a)}
-                  onSubmit={(f) => update(a.id, f)}
+                  current={a}
+                  onSubmit={(f, files) => update(a.id, f, files)}
                   onCancel={() => setEditingId(null)}
                   onError={setError}
                 />
@@ -248,16 +308,19 @@ function ArtworkDashboard({ token }: { token: string }) {
 
 function ArtworkForm({
   initial,
+  current,
   onSubmit,
   onCancel,
   onError,
 }: {
   initial: FormState;
-  onSubmit: (f: FormState) => Promise<void>;
+  current?: ArtworkRecord; // set when editing, so the form can show what is already attached
+  onSubmit: (f: FormState, files: PickedFiles) => Promise<void>;
   onCancel: () => void;
   onError: (msg: string | null) => void;
 }) {
   const [f, setF] = useState<FormState>(initial);
+  const [files, setFiles] = useState<PickedFiles>({});
   const [saving, setSaving] = useState(false);
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
@@ -267,7 +330,7 @@ function ArtworkForm({
     setSaving(true);
     onError(null);
     try {
-      await onSubmit(f);
+      await onSubmit(f, files);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -351,6 +414,23 @@ function ArtworkForm({
         />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FilePicker
+          kind="image"
+          label="Photo of the artwork"
+          picked={files.image ?? null}
+          currentName={current?.image_url ? "Photo attached" : null}
+          onPick={(file) => setFiles((s) => ({ ...s, image: file ?? undefined }))}
+        />
+        <FilePicker
+          kind="contract"
+          label="Signed agreement (PDF or photo)"
+          picked={files.contract ?? null}
+          currentName={current?.contract_path ? current.contract_name ?? "Contract attached" : null}
+          onPick={(file) => setFiles((s) => ({ ...s, contract: file ?? undefined }))}
+        />
+      </div>
+
       <div className="flex gap-3">
         <button
           type="submit"
@@ -373,6 +453,54 @@ function ArtworkForm({
   );
 }
 
+function FilePicker({
+  kind,
+  label,
+  picked,
+  currentName,
+  onPick,
+}: {
+  kind: ArtworkFileKind;
+  label: string;
+  picked: File | null;
+  currentName: string | null; // what is already on the row, when editing
+  onPick: (file: File | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const Icon = kind === "image" ? ImageIcon : FileText;
+  return (
+    <div>
+      <label className="block text-xs text-neutral-500 mb-1">{label}</label>
+      <input
+        ref={ref}
+        type="file"
+        accept={FILE_ACCEPT[kind]}
+        className="hidden"
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => ref.current?.click()}
+          className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-2 text-xs text-neutral-600 hover:bg-neutral-50`}
+        >
+          <Upload className="w-3 h-3" />
+          {picked ? "Change" : currentName ? "Replace" : "Choose file"}
+        </button>
+        <span className="flex items-center gap-1 text-xs text-neutral-500 truncate min-w-0">
+          <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">{picked ? picked.name : currentName ?? "Nothing attached yet"}</span>
+        </span>
+        {picked && (
+          <button type="button" onClick={() => { onPick(null); if (ref.current) ref.current.value = ""; }} aria-label="Clear file" className="p-1 rounded text-neutral-400 hover:text-red-500">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Card ─────────────────────────────────────────────────────────────────────
 
 function ArtworkCard({
@@ -391,7 +519,8 @@ function ArtworkCard({
   onError: (msg: string | null) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const contractRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<ArtworkFileKind | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [zoomed, setZoomed] = useState(false);
 
@@ -413,46 +542,27 @@ function ArtworkCard({
     : daysLeft <= 30 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
     : null;
 
-  async function upload(file: File) {
-    setUploading(true);
+  async function upload(kind: ArtworkFileKind, file: File) {
+    setUploading(kind);
     onError(null);
     try {
-      const signRes = await fetch(`/api/admin/artwork/${a.id}/image/sign`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
-      });
-      const signed = await signRes.json();
-      if (!signRes.ok) throw new Error(signed.error ?? `Upload failed (${signRes.status})`);
-
-      const fd = new FormData();
-      fd.append("cacheControl", "3600");
-      fd.append("", file);
-      const putRes = await fetch(signed.signedUrl, { method: "PUT", headers: { "x-upsert": "true" }, body: fd });
-      if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status})`);
-
-      const finalRes = await fetch(`/api/admin/artwork/${a.id}/image`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ path: signed.path }),
-      });
-      const { artwork, error: err } = await finalRes.json();
-      if (err) throw new Error(err);
-      onChange(artwork);
+      onChange(await uploadArtworkFile(token, a.id, kind, file));
     } catch (e) {
       onError(e instanceof Error ? e.message : "Upload failed");
     } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      setUploading(null);
+      const ref = kind === "image" ? fileRef : contractRef;
+      if (ref.current) ref.current.value = "";
     }
   }
 
-  async function removeImage() {
+  async function removeFile(kind: ArtworkFileKind) {
     onError(null);
-    const res = await fetch(`/api/admin/artwork/${a.id}/image`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    const { artwork, error: err } = await res.json();
-    if (err) { onError(err); return; }
-    onChange(artwork);
+    try {
+      onChange(await removeArtworkFile(token, a.id, kind));
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Remove failed");
+    }
   }
 
   return (
@@ -471,18 +581,18 @@ function ArtworkCard({
             </div>
           )}
           <div className="flex gap-2 mt-2">
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+            <input ref={fileRef} type="file" accept={FILE_ACCEPT.image} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload("image", f); }} />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={uploading}
+              disabled={uploading !== null}
               className={`${vulfMono.className} flex-1 flex items-center justify-center gap-1 rounded-lg border border-black/15 bg-white px-2 py-1.5 text-[11px] text-neutral-600 hover:bg-neutral-50 disabled:opacity-60`}
             >
               <Upload className="w-3 h-3" />
-              {uploading ? "Uploading…" : a.image_url ? "Replace" : "Add photo"}
+              {uploading === "image" ? "Uploading…" : a.image_url ? "Replace" : "Add photo"}
             </button>
             {a.image_url && (
-              <button type="button" onClick={removeImage} aria-label="Remove photo" className="p-1.5 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50">
+              <button type="button" onClick={() => removeFile("image")} aria-label="Remove photo" className="p-1.5 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -521,6 +631,41 @@ function ArtworkCard({
           {a.agreement_notes && (
             <p className="text-xs text-neutral-400 mt-2 whitespace-pre-line">{a.agreement_notes}</p>
           )}
+
+          {/* Contract */}
+          <div className="flex items-center gap-2 flex-wrap mt-3 text-xs">
+            <input ref={contractRef} type="file" accept={FILE_ACCEPT.contract} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload("contract", f); }} />
+            {a.contract_url ? (
+              <>
+                <a
+                  href={a.contract_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 py-1.5 text-neutral-700 hover:bg-neutral-50 max-w-full`}
+                >
+                  <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">{a.contract_name ?? "Signed agreement"}</span>
+                  <ExternalLink className="w-3 h-3 flex-shrink-0 text-neutral-400" />
+                </a>
+                <button type="button" onClick={() => contractRef.current?.click()} disabled={uploading !== null} className="text-neutral-500 underline hover:text-black disabled:opacity-60">
+                  {uploading === "contract" ? "Uploading…" : "Replace"}
+                </button>
+                <button type="button" onClick={() => removeFile("contract")} aria-label="Remove contract" className="p-1 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => contractRef.current?.click()}
+                disabled={uploading !== null}
+                className={`${vulfMono.className} flex items-center gap-1.5 rounded-lg border border-dashed border-black/20 bg-neutral-50 px-3 py-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-60`}
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+                {uploading === "contract" ? "Uploading…" : a.contract_path ? "Contract link expired, reload" : "Attach signed agreement"}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Actions */}

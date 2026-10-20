@@ -110,6 +110,8 @@ export type ArtworkRecord = {
   status: ArtworkStatus;
   image_url: string | null;
   image_path: string | null;
+  contract_path: string | null; // signed agreement in the private artwork-contracts bucket
+  contract_name: string | null; // original file name, shown in the admin
   agreement_notes: string | null;
   created_at: string;
   updated_at: string;

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { parseArtworkInput } from "@/lib/artwork";
+import { removeArtworkFiles, withContractUrl } from "@/lib/artwork-files";
 
 // The form always sends every field, so an edit is validated as a whole row
 // rather than field by field.
@@ -18,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
     if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json({ artwork: data });
+    return Response.json({ artwork: await withContractUrl(data) });
   } catch {
     return Response.json({ error: "Server error" }, { status: 500 });
   }
@@ -29,8 +30,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const sb = getSupabase();
-    const { data: row } = await sb.from("artwork_leases").select("image_path").eq("id", id).maybeSingle();
-    if (row?.image_path) await sb.storage.from("artwork-images").remove([row.image_path]);
+    const { data: row } = await sb.from("artwork_leases").select("image_path, contract_path").eq("id", id).maybeSingle();
+    if (row) await removeArtworkFiles(row);
     const { error } = await sb.from("artwork_leases").delete().eq("id", id);
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });
