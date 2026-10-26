@@ -8,7 +8,7 @@ import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
 import type { BookingRecord } from "@/lib/supabase";
 import { MAX_PARTY_SIZE } from "@/lib/booking-utils";
-import { duplicateBookingIds, sameCustomer } from "@/lib/booking-rules";
+import { amountDueCents, duplicateBookingIds, isUnpaidReservation, sameCustomer } from "@/lib/booking-rules";
 import LocationFilter from "@/components/admin/LocationFilter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1046,6 +1046,7 @@ function DayBookings({
               <p className={`${vulfMono.className} text-sm font-medium truncate`}>{b.time_slot} · {b.name}</p>
               <p className={`${vulfMono.className} text-xs text-neutral-500 mt-0.5`}>
                 {b.party_size} {b.party_size === 1 ? "person" : "people"}
+                <span className="ml-2"><PaidStatus booking={b} /></span>
                 {b.payment_method && b.payment_method !== "stripe" && (
                   <span className="ml-2"><PaymentBadge method={b.payment_method} /></span>
                 )}
@@ -1097,7 +1098,10 @@ function DayBookings({
               </td>
               <td className="px-3 py-3 text-xs text-neutral-500 hidden lg:table-cell">{b.phone ?? "—"}</td>
               <td className="px-3 py-3">{b.party_size}</td>
-              <td className="px-3 py-3"><PaymentBadge method={b.payment_method} /></td>
+              <td className="px-3 py-3">
+                <PaymentBadge method={b.payment_method} />
+                <span className="block mt-0.5"><PaidStatus booking={b} /></span>
+              </td>
               <td className="px-3 py-3 pr-4 text-right">
                 <span className="text-xs text-brand underline underline-offset-2">View</span>
               </td>
@@ -1123,6 +1127,28 @@ function PaymentBadge({ method }: { method: BookingRecord["payment_method"] }) {
     return <span className="inline-block whitespace-nowrap rounded-full bg-yellow-100 text-yellow-700 text-[11px] font-medium px-2 py-0.5">Gift card</span>;
   }
   return <span className="inline-block whitespace-nowrap rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium px-2 py-0.5">Get Out Pass</span>;
+}
+
+// Whether money has actually been collected, so staff can tell from the list
+// who still owes at the door without opening each booking. Silent for a Get
+// Out Pass or complimentary booking, where the method badge already says
+// nothing is due.
+function PaidStatus({ booking: b }: { booking: BookingRecord }) {
+  const dollars = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+  if (b.amount_paid > 0) {
+    const due = b.payment_method === "stripe" ? amountDueCents(b) : 0;
+    return due > 0 ? (
+      <span className={`${vulfMono.className} text-[11px] text-amber-600`}>
+        Paid {dollars(b.amount_paid)} · {dollars(due)} due
+      </span>
+    ) : (
+      <span className={`${vulfMono.className} text-[11px] text-[#519A70]`}>Paid {dollars(b.amount_paid)}</span>
+    );
+  }
+  if (isUnpaidReservation(b)) {
+    return <span className={`${vulfMono.className} text-[11px] text-amber-600`}>Not paid</span>;
+  }
+  return null;
 }
 
 function DuplicateBadge() {
