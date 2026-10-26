@@ -3,8 +3,9 @@
 
 import { useState } from "react";
 import clsx from "clsx";
+import type { LocationOption } from "@/lib/locations";
 
-export default function GroupContactForm() {
+export default function GroupContactForm({ locations }: { locations: LocationOption[] }) {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
   const [msg, setMsg] = useState("");
 
@@ -20,6 +21,7 @@ export default function GroupContactForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          location: data.location,
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -43,6 +45,26 @@ export default function GroupContactForm() {
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="md:col-span-2">
+        <Label htmlFor="location">Which studio? *</Label>
+        <select
+          id="location"
+          name="location"
+          required
+          defaultValue=""
+          className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-green/60 focus:ring-2 focus:ring-green/30"
+        >
+          <option value="" disabled>
+            Pick a studio
+          </option>
+          {locations.map((loc) => (
+            <option key={loc.key} value={loc.key}>
+              {loc.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <Text name="name" label="Name" required autoComplete="name" />
       <Text name="email" label="Email" type="email" required autoComplete="email" />
       <Text name="phone" label="Phone" autoComplete="tel" />

@@ -4,6 +4,7 @@ import ContactForm from "@/components/forms/ContactForm";
 import { vulfMono } from "@/app/fonts";
 import Image from "next/image";
 import GroupPricingSection from "@/components/sections/GroupPricing";
+import { getLocationOptions, type LocationOption } from "@/lib/locations";
 
 export const metadata = {
   title: "Group Events & Pricing | Scorched Studio",
@@ -11,12 +12,16 @@ export const metadata = {
     "Group pricing for church groups, youth groups, team offsites, birthdays, and more. Contact us to reserve your spot.",
 };
 
-export default function GroupEventsPage() {
+// The studio picker on the contact form lists admin-managed locations.
+export const dynamic = "force-dynamic";
+
+export default async function GroupEventsPage() {
+  const locations = await getLocationOptions();
   return (
     <main className="pb-20">
       <Intro />
       <GroupPricingSection />
-      <ContactBlock />
+      <ContactBlock locations={locations} />
     </main>
   );
 }
@@ -87,7 +92,7 @@ function Feature({
 }
 
 /* ------------------ Contact ------------------ */
-function ContactBlock() {
+function ContactBlock({ locations }: { locations: LocationOption[] }) {
   return (
     <section className="py-12 md:py-16">
       <Container>
@@ -96,7 +101,7 @@ function ContactBlock() {
           Send us the basics and we will get back to you with availability and next steps.
         </p>
         <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-black/10 bg-white p-6 md:p-8 shadow-sm">
-          <ContactForm />
+          <ContactForm locations={locations} />
         </div>
       </Container>
     </section>

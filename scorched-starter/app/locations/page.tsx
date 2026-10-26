@@ -109,6 +109,14 @@ function LocationSection({ location, hours }: { location: LocationRecord; hours:
               {location.phone}
             </a>
           )}
+          {location.email && (
+            <a
+              href={`mailto:${location.email}`}
+              className={`${vulfMono.className} block text-sm text-neutral-700 hover:text-neutral-900 underline-offset-2 hover:underline`}
+            >
+              {location.email}
+            </a>
+          )}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {location.is_bookable && (

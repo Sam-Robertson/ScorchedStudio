@@ -173,6 +173,15 @@ export default function FooterShell({ locations }: { locations: LocationRecord[]
                       {loc.opening_estimate ? `Coming ${loc.opening_estimate}` : "Coming soon"}
                     </p>
                   )}
+                  {/* Shown even before opening: questions about the new studio should reach its own inbox. */}
+                  {loc.email && (
+                    <a
+                      href={`mailto:${loc.email}`}
+                      className="block text-sm text-white/70 hover:text-white underline-offset-2 hover:underline"
+                    >
+                      {loc.email}
+                    </a>
+                  )}
                 </div>
               ))}
             </div>

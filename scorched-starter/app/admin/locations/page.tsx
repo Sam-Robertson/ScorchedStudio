@@ -17,6 +17,7 @@ type LocationRow = {
   max_party_size: number;
   address: string | null;
   phone: string | null;
+  email: string | null;
   opening_estimate: string | null;
   has_password: boolean;
 };
@@ -72,7 +73,7 @@ function LocationsDashboard({ token }: { token: string }) {
 
   const [capacityDraft, setCapacityDraft] = useState({ capacity: "", max_party_size: "" });
   const [savingCapacity, setSavingCapacity] = useState(false);
-  const [contactDraft, setContactDraft] = useState({ address: "", phone: "", opening_estimate: "" });
+  const [contactDraft, setContactDraft] = useState({ address: "", phone: "", email: "", opening_estimate: "" });
   const [savingContact, setSavingContact] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [settingPassword, setSettingPassword] = useState(false);
@@ -136,6 +137,7 @@ function LocationsDashboard({ token }: { token: string }) {
       setContactDraft({
         address: current.address ?? "",
         phone: current.phone ?? "",
+        email: current.email ?? "",
         opening_estimate: current.opening_estimate ?? "",
       });
       setPasswordMessage(null);
@@ -216,6 +218,7 @@ function LocationsDashboard({ token }: { token: string }) {
         body: JSON.stringify({
           address: contactDraft.address || null,
           phone: contactDraft.phone || null,
+          email: contactDraft.email.trim() || null,
           opening_estimate: contactDraft.opening_estimate || null,
         }),
       });
@@ -423,7 +426,7 @@ function LocationsDashboard({ token }: { token: string }) {
           <div className="rounded-2xl border border-black/10 bg-white p-5">
             <p className={`${vulfMono.className} font-bold text-sm mb-1`}>Contact Info</p>
             <p className={`${vulfMono.className} text-xs text-neutral-400 mb-4`}>
-              Shown on the public Studio Locations page.
+              Shown on the public Studio Locations page. Contact messages and job applications for this studio are sent to its email.
             </p>
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex-1 min-w-[220px]">
@@ -444,6 +447,16 @@ function LocationsDashboard({ token }: { token: string }) {
                   className={`${inputCls} w-48`}
                   value={contactDraft.phone}
                   onChange={(e) => setContactDraft((s) => ({ ...s, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Email</label>
+                <input
+                  type="email"
+                  placeholder="orem@scorchedstudio.com"
+                  className={`${inputCls} w-60`}
+                  value={contactDraft.email}
+                  onChange={(e) => setContactDraft((s) => ({ ...s, email: e.target.value }))}
                 />
               </div>
               {!current.is_bookable && (

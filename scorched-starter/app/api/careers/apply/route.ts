@@ -4,8 +4,29 @@
 // bucket of strangers' resumes is a liability nobody asked for.
 import { Resend } from "resend";
 import { z } from "zod";
+import { getSupabase } from "@/lib/supabase";
+import { findLocationByNameOrKey } from "@/lib/locations";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// The studio an opening belongs to, read from the opening itself rather than
+// the form, so a tampered jobTitle cannot redirect the application. Null when
+// the opening is unknown or not tied to one studio.
+async function lookupJobLocation(jobId: string | undefined): Promise<string | null> {
+  if (!jobId) return null;
+  try {
+    const { data, error } = await getSupabase()
+      .from("job_openings")
+      .select("location")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data?.location as string | null) ?? null;
+  } catch (e) {
+    console.error("CAREERS_APPLY_JOB_LOOKUP_ERROR", e);
+    return null;
+  }
+}
 
 // Vercel caps a serverless request body at 4.5MB, so the ceiling is the
 // transport, not Resend (which allows 40MB a message). 4MB leaves room for the
@@ -63,7 +84,11 @@ export async function POST(req: Request) {
     // Filled honeypot: succeed silently rather than tell a bot it was caught.
     if (data.company) return Response.json({ ok: true });
 
-    if (!process.env.CONTACT_FROM || !process.env.CONTACT_TO) {
+    // Applications go to the hiring studio's inbox when the opening names one.
+    const studio = await findLocationByNameOrKey(await lookupJobLocation(data.jobId));
+    const to = studio?.email || process.env.CONTACT_TO;
+
+    if (!process.env.CONTACT_FROM || !to) {
       console.error("Missing CONTACT_FROM or CONTACT_TO env var");
       return Response.json({ error: "Server misconfigured" }, { status: 500 });
     }
@@ -89,6 +114,7 @@ export async function POST(req: Request) {
 
     const lines = [
       `Position: ${data.jobTitle}`,
+      studio ? `Studio: ${studio.name}` : "",
       `Name: ${data.name}`,
       `Email: ${data.email}`,
       data.phone ? `Phone: ${data.phone}` : "",
@@ -102,7 +128,7 @@ export async function POST(req: Request) {
     // await would let a rejected send return ok to the applicant.
     const { error: sendError } = await resend.emails.send({
       from: process.env.CONTACT_FROM,
-      to: process.env.CONTACT_TO,
+      to,
       subject: `Application: ${data.jobTitle} - ${data.name}`,
       replyTo: data.email,
       text: lines.join("\n"),

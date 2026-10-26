@@ -11,6 +11,7 @@ const patchSchema = z.object({
   name: z.string().min(1).optional(),
   address: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
+  email: z.string().trim().email().nullable().optional(),
   opening_estimate: z.string().nullable().optional(),
 });
 

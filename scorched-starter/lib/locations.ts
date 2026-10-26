@@ -13,10 +13,66 @@ export type LocationRecord = {
   max_party_size: number;
   address: string | null;
   phone: string | null;
+  // The studio's own inbox. Contact messages and job applications for this
+  // location land here; CONTACT_TO is the fallback when it is unset.
+  email: string | null;
   opening_estimate: string | null;
   created_at: string;
   updated_at: string;
 };
+
+// The key/name pair a public form needs to offer a studio choice.
+export type LocationOption = { key: LocationKey; name: string };
+
+// Both studios, open or not: someone asking about the Salt Lake studio before
+// it opens still needs to reach the right inbox. Falls back to the known pair
+// so a Supabase hiccup never takes a contact form down.
+export async function getLocationOptions(): Promise<LocationOption[]> {
+  try {
+    const locations = await getLocations();
+    if (locations.length > 0) return locations.map((l) => ({ key: l.key, name: l.name }));
+  } catch (e) {
+    console.error("LOCATION_OPTIONS_ERROR", e);
+  }
+  return [
+    { key: "orem", name: "Orem" },
+    { key: "slc", name: "Salt Lake City" },
+  ];
+}
+
+// Where mail about a studio should land: its own inbox when one is set,
+// otherwise the shared CONTACT_TO address. Also returns the location so the
+// caller can name the studio in the message.
+export async function getLocationContactEmail(
+  key: string | null | undefined
+): Promise<{ to: string | undefined; location: LocationRecord | null }> {
+  let location: LocationRecord | null = null;
+  if (key) {
+    try {
+      location = await getLocationByKey(key);
+    } catch (e) {
+      console.error("LOCATION_EMAIL_LOOKUP_ERROR", e);
+    }
+  }
+  return { to: location?.email || process.env.CONTACT_TO || undefined, location };
+}
+
+// Job openings store their location as display text ("Orem"), so an opening
+// is matched to a studio by name or key, case-insensitively. Null when the
+// text is blank or names no studio.
+export async function findLocationByNameOrKey(text: string | null | undefined): Promise<LocationRecord | null> {
+  const needle = (text ?? "").trim().toLowerCase();
+  if (!needle) return null;
+  try {
+    const locations = await getLocations();
+    return (
+      locations.find((l) => l.key.toLowerCase() === needle || l.name.trim().toLowerCase() === needle) ?? null
+    );
+  } catch (e) {
+    console.error("LOCATION_MATCH_ERROR", e);
+    return null;
+  }
+}
 
 export type PublicDayHours = {
   weekday: number;
@@ -121,7 +177,9 @@ export async function setLocationPassword(key: string, password: string): Promis
 
 export async function updateLocation(
   key: string,
-  patch: Partial<Pick<LocationRecord, "is_bookable" | "capacity" | "max_party_size" | "name" | "address" | "phone" | "opening_estimate">>
+  patch: Partial<
+    Pick<LocationRecord, "is_bookable" | "capacity" | "max_party_size" | "name" | "address" | "phone" | "email" | "opening_estimate">
+  >
 ): Promise<LocationRecord> {
   const { data, error } = await getSupabase()
     .from("locations")

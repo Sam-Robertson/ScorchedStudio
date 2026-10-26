@@ -86,6 +86,32 @@ function MarkdownTextarea({
   );
 }
 
+// Location picker for an opening. Blank means the opening is not tied to one
+// studio and applications fall back to the shared inbox. A value that is not
+// one of the current studio names (an old free-text entry) is kept as an
+// option so editing an opening never silently blanks it.
+function StudioSelect({
+  value,
+  onChange,
+  studioNames,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  studioNames: string[];
+}) {
+  const options = value && !studioNames.includes(value) ? [...studioNames, value] : studioNames;
+  return (
+    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Any studio</option>
+      {options.map((name) => (
+        <option key={name} value={name}>
+          {name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function AdminCareersPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -124,6 +150,10 @@ function CareersDashboard({ token }: { token: string }) {
   const [adding, setAdding] = useState(false);
 
   const [templates, setTemplates] = useState<JobTemplateRecord[]>([]);
+  // Studio names for the location picker. An opening's location text is
+  // matched against these names when routing an application to the hiring
+  // studio's inbox, so it has to be a choice rather than free text.
+  const [studioNames, setStudioNames] = useState<string[]>([]);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -152,7 +182,17 @@ function CareersDashboard({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  useEffect(() => { load(); loadTemplates(); }, [load, loadTemplates]);
+  const loadStudios = useCallback(() => {
+    fetch("/api/admin/locations", { headers: authHeaders })
+      .then((r) => r.json())
+      .then((rows: { name: string }[] | { error: string }) => {
+        if (Array.isArray(rows)) setStudioNames(rows.map((l) => l.name));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => { load(); loadTemplates(); loadStudios(); }, [load, loadTemplates, loadStudios]);
 
   function applyTemplate(template: JobTemplateRecord) {
     setNewJob({
@@ -353,12 +393,11 @@ function CareersDashboard({ token }: { token: string }) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">Location (optional)</label>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Orem"
+                <label className="block text-xs text-neutral-500 mb-1">Studio (optional)</label>
+                <StudioSelect
                   value={newJob.location}
-                  onChange={(e) => setNewJob((s) => ({ ...s, location: e.target.value }))}
+                  onChange={(v) => setNewJob((s) => ({ ...s, location: v }))}
+                  studioNames={studioNames}
                 />
               </div>
               <div>
@@ -469,11 +508,11 @@ function CareersDashboard({ token }: { token: string }) {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs text-neutral-500 mb-1">Location</label>
-                        <input
-                          className={inputCls}
+                        <label className="block text-xs text-neutral-500 mb-1">Studio</label>
+                        <StudioSelect
                           value={editState.location}
-                          onChange={(e) => setEditState((s) => ({ ...s, location: e.target.value }))}
+                          onChange={(v) => setEditState((s) => ({ ...s, location: v }))}
+                          studioNames={studioNames}
                         />
                       </div>
                       <div>

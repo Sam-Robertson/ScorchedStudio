@@ -1,6 +1,7 @@
 // app/api/contact/route.ts
 import { Resend } from "resend";
 import { z } from "zod";
+import { getLocationContactEmail } from "@/lib/locations";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -18,6 +19,10 @@ const schema = z
     groupSize: z.string().optional().transform(emptyToUndef),
     date: z.string().optional().transform(emptyToUndef),
     message: z.string().optional().transform(emptyToUndef),
+
+    // Which studio the message is for. Routes the email to that studio's
+    // inbox; a missing value falls back to CONTACT_TO.
+    location: z.enum(["orem", "slc"]).optional(),
 
     source: z.string().optional().default("web"),
 
@@ -48,7 +53,9 @@ export async function POST(req: Request) {
       });
     }
 
-    if (!process.env.CONTACT_FROM || !process.env.CONTACT_TO) {
+    const { to, location } = await getLocationContactEmail(data.location);
+
+    if (!process.env.CONTACT_FROM || !to) {
       console.error("Missing CONTACT_FROM or CONTACT_TO env var");
       return new Response(JSON.stringify({ error: "Server misconfigured" }), {
         status: 500,
@@ -57,6 +64,7 @@ export async function POST(req: Request) {
     }
 
     const lines: string[] = [
+      location ? `Studio: ${location.name}` : "",
       `Name: ${data.name}`,
       `Email: ${data.email}`,
       data.phone ? `Phone: ${data.phone}` : "",
@@ -69,8 +77,8 @@ export async function POST(req: Request) {
 
     await resend.emails.send({
       from: process.env.CONTACT_FROM,
-      to: process.env.CONTACT_TO,
-      subject: `New contact: ${data.name}`,
+      to,
+      subject: location ? `New contact (${location.name}): ${data.name}` : `New contact: ${data.name}`,
       replyTo: data.email,
       text: lines.join("\n"),
     });
