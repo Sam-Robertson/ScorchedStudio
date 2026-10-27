@@ -161,11 +161,6 @@
     for (const [source, count] of counts) if (!best || count > best.count) best = { source, count };
     return best;
   }
-  function dropEmptyTrailingMonths(months) {
-    const out = [...months];
-    while (out.length) { const l = out[out.length - 1]; if (l.revenue === 0 && l.cogs === 0 && l.operating_expenses === 0 && l.net_income === 0) out.pop(); else break; }
-    return out;
-  }
   const monthEndOf = (key) => dates.monthEnd(key);
   // shared.js leaves the tick callback undefined when no xTick is given, which prints indices; pass identity instead.
   const keepLabel = (l) => l;
@@ -185,7 +180,6 @@
   const loadBookings = () => load("/api/admin/bookings");
   const loadCosts = (q) => load("/api/admin/accounting/reports/costs", q);
   const loadEstimated = (q) => load("/api/admin/accounting/reports/estimated-bookings", q);
-  const loadPl = (q) => load("/api/admin/accounting/reports/pl", q);
   const loadSales = (q) => load("/api/admin/accounting/reports/sales", q);
 
   // ── Page state ───────────────────────────────────────────────────────────
@@ -223,74 +217,8 @@
 
   function chartHost(height) { const el = h("div", { class: "chart" }); el.style.height = height + "px"; return el; }
 
-  // ── Overview ─────────────────────────────────────────────────────────────
-  // Insights are a short note Claude writes during the daily refresh from the
-  // snapshot's facts document (data/snap/insights.json). Missing is normal
-  // before the first refresh, so the loader resolves to null instead of failing.
-  let insightsPromise = null;
-  function loadInsights() {
-    if (!insightsPromise) {
-      insightsPromise = api.get("/api/admin/insights").catch(() => null);
-      insightsPromise.settled = false;
-      insightsPromise.then(() => { insightsPromise.settled = true; });
-    }
-    return insightsPromise;
-  }
-  const TAB_LABEL = { pl: "Financials, P&L", monthly: "Financials, Monthly P&L", costs: "Financials, Costs", balance: "Financials, Balance Sheet", cashflow: "Financials, Cash Flow", projections: "Financials, Projections", overview: "Overview", marketing: "Marketing", website: "Website", capacity: "Capacity", sales: "Sales & Products" };
-  function insightsCard(ins) {
-    const items = ins && Array.isArray(ins.items) ? ins.items.filter((it) => it && it.title) : [];
-    if (!items.length) {
-      return ui.card({ title: "Insights", body: h("p", { class: "closing", text: "Nothing written yet. During each overnight refresh Claude reads the day's numbers and leaves a few notes here about what moved and what to look at." }) });
-    }
-    const list = h("div", { class: "insights" }, items.map((it) => {
-      const where = it.tab && TAB_LABEL[it.tab] ? h("button", { type: "button", class: "iwhere", text: TAB_LABEL[it.tab], onClick: () => state.shell.setTab(it.tab, true) }) : null;
-      return h("div", { class: "insight" },
-        h("span", { class: "idot " + (["good", "bad", "warn"].includes(it.tone) ? it.tone : "neutral") }),
-        h("div", { class: "stack", style: "gap: 3px" }, h("p", { class: "ititle", text: it.title }), h("p", { class: "ibody", text: it.body || "" }), where));
-    }));
-    const when = ins.asOf ? fmt.dateLong(ins.asOf) : "";
-    return ui.card({
-      title: "Insights", action: h("span", { class: "lbl", text: when ? "Written by Claude from the " + when + " numbers" : "Written by Claude" }),
-      body: list,
-      note: "Claude writes these during the daily refresh from the same data the charts use, comparing the last week and the last four weeks with the periods before. Every number here can be checked in the tab it names.",
-    });
-  }
-
-  function renderOverview() {
-    const view = state.shell.views.overview;
-    const q = state.query;
-    withData(view, [loadPl(q), loadCosts(q), loadBookings(), loadInsights()], ([pl, costs, bookings, insights]) => {
-      const months = dropEmptyTrailingMonths(pl.months || []);
-      const revenue = months.reduce((s, m) => s + m.revenue, 0);
-      const netIncome = months.reduce((s, m) => s + m.net_income, 0);
-      const marketingSpend = (costs.breakdown || []).filter((b) => b.code === MARKETING_CODE).reduce((s, b) => s + b.amount, 0);
-      const confirmed = bookings.filter((b) => b.status === "confirmed");
-      const top = topChannel(bookingsInRange(confirmed, q));
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const thisWeekStart = toDateStr(addDays(today, -6)), todayStr = toDateStr(today);
-      const lastWeekStart = toDateStr(addDays(today, -13)), lastWeekEnd = toDateStr(addDays(today, -7));
-      let thisWeek = 0, lastWeek = 0;
-      for (const b of confirmed) {
-        if (b.date >= thisWeekStart && b.date <= todayStr) thisWeek += b.party_size;
-        else if (b.date >= lastWeekStart && b.date <= lastWeekEnd) lastWeek += b.party_size;
-      }
-      const deltaPct = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : null;
-      const { uniqueCustomers, returningCustomers } = buildRepeatData(bookings);
-      const repeatRate = uniqueCustomers > 0 ? returningCustomers / uniqueCustomers : 0;
-      return [
-        insightsCard(insights),
-        ui.kpis(3, [
-          ui.kpi({ label: "Net Revenue", value: fmt.money0(revenue), sub: "full ledger, selected range" }),
-          ui.kpi({ label: "Net Profit", value: fmt.money0(netIncome), tone: netIncome < 0 ? "bad" : "good", sub: "after all costs" }),
-          ui.kpi({ label: "Marketing Spend", value: fmt.money0(marketingSpend), sub: "selected range, detail in Marketing" }),
-          ui.kpi({ label: "Top Channel", value: top ? top.source : "--", sub: top ? `${top.count} confirmed bookings in range` : "how customers found us" }),
-          ui.kpi({ label: "Booked Seats This Week", value: thisWeek.toLocaleString("en-US"), sub: deltaPct == null ? "no seats booked last week" : `${fmt.signedPct(deltaPct)} vs last week`, subTone: deltaPct == null ? undefined : deltaPct >= 0 ? "good" : "bad" }),
-          ui.kpi({ label: "Repeat Customer Rate", value: fmt.pct(repeatRate), sub: `${returningCustomers} of ${uniqueCustomers} customers booked again` }),
-        ]),
-        h("p", { class: "closing", text: "Each number has a detailed home elsewhere. Revenue and profit live under Financials, spend and channels in Marketing, bookings and repeat behavior in Capacity." }),
-      ];
-    });
-  }
+  // (The old Overview tab's insights card and headline tiles now live on the
+  // Home tab, see home.js; its booking tiles moved into Bookings & Capacity.)
 
   // ── Marketing ────────────────────────────────────────────────────────────
   function renderMarketing() {
@@ -463,26 +391,44 @@
     });
   }
 
-  // ── Capacity ─────────────────────────────────────────────────────────────
-  function renderCapacity() {
-    const view = state.shell.views.capacity;
+  // ── Bookings & Capacity ──────────────────────────────────────────────────
+  function renderBookings() {
+    const view = state.shell.views.bookings;
     const q = state.query;
     const cp = state.capacity;
     withData(view, [loadBookings(), loadEstimated(q)], ([allBookings, estimated], after) => {
       const c = viz.colors();
       const bookings = locFilter(allBookings);
       const confirmed = bookings.filter((b) => b.status === "confirmed");
-      const cancelled = bookings.filter((b) => b.status === "cancelled");
-      const avgParty = confirmed.length ? confirmed.reduce((s, b) => s + b.party_size, 0) / confirmed.length : 0;
-      const cancelRate = bookings.length > 0 ? cancelled.length / bookings.length : 0;
-      const kpis = ui.kpis(2, [
-        ui.kpi({ label: "Avg party size", value: avgParty.toFixed(1), sub: "confirmed bookings" }),
-        ui.kpi({ label: "Cancellation rate", value: fmt.pct(cancelRate), sub: `${cancelled.length} of ${bookings.length} total` }),
+      const ranged = bookingsInRange(bookings, q);
+      const rangedConfirmed = ranged.filter((b) => b.status === "confirmed");
+      const rangedCancelled = ranged.filter((b) => b.status === "cancelled");
+      const avgParty = rangedConfirmed.length ? rangedConfirmed.reduce((s, b) => s + b.party_size, 0) / rangedConfirmed.length : 0;
+      const cancelRate = ranged.length > 0 ? rangedCancelled.length / ranged.length : 0;
+      const top = topChannel(rangedConfirmed);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const thisWeekStart = toDateStr(addDays(today, -6)), todayStr = toDateStr(today);
+      const lastWeekStart = toDateStr(addDays(today, -13)), lastWeekEnd = toDateStr(addDays(today, -7));
+      let thisWeek = 0, lastWeek = 0;
+      for (const b of confirmed) {
+        if (b.date >= thisWeekStart && b.date <= todayStr) thisWeek += b.party_size;
+        else if (b.date >= lastWeekStart && b.date <= lastWeekEnd) lastWeek += b.party_size;
+      }
+      const deltaPct = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : null;
+      const repAll = buildRepeatData(bookings);
+      const repeatRateAll = repAll.uniqueCustomers > 0 ? repAll.returningCustomers / repAll.uniqueCustomers : 0;
+      const kpis = ui.kpis(3, [
+        ui.kpi({ label: "Confirmed bookings", value: rangedConfirmed.length.toLocaleString("en-US"), sub: "made in the selected range" }),
+        ui.kpi({ label: "Booked seats this week", value: thisWeek.toLocaleString("en-US"), sub: deltaPct == null ? "no seats booked last week" : `${fmt.signedPct(deltaPct)} vs last week`, subTone: deltaPct == null ? undefined : deltaPct >= 0 ? "good" : "bad" }),
+        ui.kpi({ label: "Top channel", value: top ? top.source : "--", sub: top ? `${top.count} confirmed bookings in range` : "how customers found us" }),
+        ui.kpi({ label: "Avg party size", value: rangedConfirmed.length ? avgParty.toFixed(1) : "--", sub: "confirmed bookings in range" }),
+        ui.kpi({ label: "Cancellation rate", value: fmt.pct(cancelRate), sub: `${rangedCancelled.length} of ${ranged.length} made in range`, subTone: cancelRate > 0.2 ? "bad" : undefined }),
+        ui.kpi({ label: "Repeat customer rate", value: fmt.pct(repeatRateAll), sub: `${repAll.returningCustomers} of ${repAll.uniqueCustomers} customers booked again, all time` }),
       ]);
 
       // Booked seats per day
       const capData = buildCapacityData(bookings, cp.capDays);
-      const daysSeg = ui.seg([30, 60, 90].map((d) => ({ value: d, label: d + "d" })), cp.capDays, (v) => { cp.capDays = v; renderCapacity(); }, "Window");
+      const daysSeg = ui.seg([30, 60, 90].map((d) => ({ value: d, label: d + "d" })), cp.capDays, (v) => { cp.capDays = v; renderBookings(); }, "Window");
       const capHost = chartHost(220);
       const capCard = ui.card({
         title: "Booked seats per day", action: daysSeg, bodyClass: "tight",
@@ -550,7 +496,7 @@
       const rep = buildRepeatData(bookings);
       const repeatRate = rep.uniqueCustomers > 0 ? rep.returningCustomers / rep.uniqueCustomers : 0;
       const repChart = buildRepeatChart(rep.tagged, cp.repeatTf);
-      const repSeg = ui.seg(TF_OPTIONS, cp.repeatTf, (v) => { cp.repeatTf = v; renderCapacity(); }, "Bucket size");
+      const repSeg = ui.seg(TF_OPTIONS, cp.repeatTf, (v) => { cp.repeatTf = v; renderBookings(); }, "Bucket size");
       const repHost = chartHost(200);
       const repBody = [
         h("div", { class: "row-between" },
@@ -962,17 +908,17 @@
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
-  const renderers = { overview: renderOverview, marketing: renderMarketing, capacity: renderCapacity, sales: renderSales, website: renderWebsite };
+  const renderers = { bookings: renderBookings, marketing: renderMarketing, website: renderWebsite, sales: renderSales };
   function renderCurrent() { if (!state.shell) return; const id = state.shell.currentTab(); renderers[id] && renderers[id](); }
 
-  // reports.html mounts one shell for both sections and hands it over here.
-  // renderCurrent is a no-op when the shell's current tab belongs to Financials.
+  // reports.html mounts one shell for every group and hands it over here.
+  // renderCurrent is a no-op when the shell's current tab belongs to another module.
   S.modules = S.modules || {};
   S.modules.operations = {
-    id: "operations", label: "Operations",
-    tabs: [{ id: "overview", label: "Overview" }, { id: "marketing", label: "Marketing" }, { id: "website", label: "Website" }, { id: "capacity", label: "Capacity" }, { id: "sales", label: "Sales & Products" }],
-    rangedTabs: ["overview", "marketing", "website", "capacity", "sales"],
-    locationTabs: ["marketing", "capacity"],
+    id: "operations", label: "Customers", defaultGroup: "customers",
+    tabs: [{ id: "bookings", label: "Bookings & Capacity" }, { id: "marketing", label: "Marketing" }, { id: "website", label: "Website" }, { id: "sales", label: "Sales & Products", group: "sales" }],
+    rangedTabs: ["bookings", "marketing", "website", "sales"],
+    locationTabs: ["bookings", "marketing"],
     start(sh) {
       state.shell = sh;
       state.query = range.toQuery(sh.state.range);

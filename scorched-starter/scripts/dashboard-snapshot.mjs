@@ -2,7 +2,7 @@
 // scripts/dashboard-snapshot.mjs
 //
 // Builds the data documents the Claude reporting dashboard (docs/dashboards,
-// one artifact with a Financials and an Operations section) reads. The page
+// one artifact with Home, Money, Customers, Sales and Plan groups) reads. The page
 // cannot call this app's API from inside claude.ai (the artifact viewer blocks
 // network requests), so Claude publishes a snapshot next to the page instead;
 // this script produces that snapshot, one JSON file per document, plus a
@@ -219,11 +219,14 @@ function websiteDocs(today) {
 }
 
 // ── Facts for the daily insights ────────────────────────────────────────────
-// Deterministic week-over-week and month-over-month comparisons. During the
-// refresh Claude reads this document and writes data/snap/insights.json (a few
-// sentences shown on the Overview tab); the numbers come from here, never from
-// eyeballing the raw documents. Windows end today (the in-progress day).
-function factsDoc({ pl, bookings, salesAll, webDocs, today }) {
+// Deterministic week-over-week and month-over-month comparisons, plus the
+// context a recommendation needs: the month against its target, which
+// weekdays and time slots fill, how far ahead people book, a six-month trend
+// and cash on hand. During the refresh Claude reads this document and writes
+// data/snap/insights.json (shown on the Home tab, whose tiles read this file
+// too); the numbers come from here, never from eyeballing the raw documents.
+// Windows end today (the in-progress day).
+function factsDoc({ pl, bookings, salesAll, webDocs, today, balance, cashflow, projections, seasonality }) {
   const shift = (ymd, n) => { const d = new Date(ymd + "T12:00:00"); d.setDate(d.getDate() + n); return toDateStr(d); };
   const between = (d, w) => d >= w.start && d <= w.end;
   const win = (n, endOffset = 0) => { const end = shift(today, endOffset); return { start: shift(end, -(n - 1)), end }; };
@@ -287,6 +290,71 @@ function factsDoc({ pl, bookings, salesAll, webDocs, today }) {
     web: null,
   };
 
+  // Targets (Plan tab): the month in progress against its target, and the last full month.
+  const tRows = (projections && projections.projectionVsActual) || [];
+  const dim = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  if (tRows.length) {
+    const tFor = (ym) => tRows.find((r) => String(r.period_month).slice(0, 7) === ym);
+    const cur = pl.months.find((m) => m.period_month.slice(0, 7) === month);
+    const n = (v) => (v == null ? null : round2(Number(v)));
+    const t = tFor(month);
+    const lastFull = months[months.length - 1], lt = lastFull ? tFor(lastFull.period_month.slice(0, 7)) : null;
+    let thisMonth = null;
+    if (t) {
+      const soFar = round2(cur ? Number(cur.revenue) : 0), tr = n(t.proj_revenue), left = Math.max(1, dim - dom);
+      thisMonth = { month, revenueTarget: tr, revenueSoFar: soFar, revenuePctOfTarget: tr ? pct1(soFar / tr) : null, elapsedPct: pct1(dom / dim), onPaceFor: round2(soFar / (dom / dim)), neededPerDay: tr ? round2(Math.max(0, tr - soFar) / left) : null, daysLeft: dim - dom, ebitdaTarget: n(t.proj_ebitda), ebitdaSoFar: round2(cur ? Number(cur.ebitda) : 0) };
+    }
+    facts.targets = {
+      note: "Monthly revenue and EBITDA targets Sam entered (Plan tab). thisMonth compares the ledger month to date with its target: revenuePctOfTarget above elapsedPct means ahead of pace. onPaceFor scales month-to-date revenue to a full month. neededPerDay is what the remaining days must average to land on target.",
+      monthsWithTargets: tRows.length,
+      thisMonth,
+      lastFullMonth: lt && lastFull ? { month: lastFull.period_month.slice(0, 7), revenueTarget: n(lt.proj_revenue), revenueActual: round2(lastFull.revenue), ebitdaTarget: n(lt.proj_ebitda), ebitdaActual: round2(lastFull.ebitda) } : null,
+    };
+  } else {
+    facts.targets = null;
+  }
+
+  // Capacity: which session days and times fill, so a recommendation can point at the quiet ones.
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const emptyWeek = () => ({ Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 });
+  const dowOf = (ymd) => DOW[new Date(ymd + "T12:00:00").getDay()];
+  const seatsByDow = (w) => { const m = emptyWeek(); for (const b of bookings) if (b.status === "confirmed" && between(b.date, w)) m[dowOf(b.date)] += b.party_size; return m; };
+  const topSlots = (w) => { const m = new Map(); for (const b of bookings) if (b.status === "confirmed" && between(b.date, w) && b.time_slot) m.set(b.time_slot, (m.get(b.time_slot) || 0) + 1); return [...m].map(([slot, count]) => ({ slot, bookings: count })).sort((a, b) => b.bookings - a.bookings).slice(0, 5); };
+  const leadDays = (w) => { const xs = bookings.filter((b) => b.status === "confirmed" && between(created(b), w)).map((b) => Math.round((new Date(b.date + "T12:00:00") - new Date(created(b) + "T12:00:00")) / 86400000)).sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : null; };
+  facts.capacity = {
+    note: "Confirmed seats by session weekday (last 28 days vs the 28 before), the busiest time slots, and the median days between booking and visit. Low weekdays are where a promotion has room.",
+    seatsByWeekday: { last28: seatsByDow(w28.now), prev28: seatsByDow(w28.prev) },
+    topSlots: { last28: topSlots(w28.now) },
+    medianLeadTimeDays: { last28: leadDays(w28.now), prev28: leadDays(w28.prev) },
+  };
+  const salesByDow = (w) => { const m = emptyWeek(); for (const [d, v] of daily) if (between(d, w)) m[dowOf(d)] = round2(m[dowOf(d)] + v); return m; };
+  facts.squareSales.byWeekday = { last28: salesByDow(w28.now), prev28: salesByDow(w28.prev) };
+
+  // Trend: six full months plus the month in progress, for direction and seasonality.
+  const bookingsMadeIn = (ym) => bookings.filter((b) => b.status === "confirmed" && created(b).slice(0, 7) === ym).length;
+  const seatsIn = (ym) => bookings.filter((b) => b.status === "confirmed" && b.date.slice(0, 7) === ym).reduce((s, b) => s + b.party_size, 0);
+  const trendMonths = [...months.slice(-6), ...pl.months.filter((m) => m.period_month.slice(0, 7) === month)];
+  const lastYear = `${Number(month.slice(0, 4)) - 1}${month.slice(4)}`;
+  const lyRow = ((seasonality && seasonality.rows) || []).find((x) => String(x.period_month).slice(0, 7) === lastYear);
+  facts.trend = {
+    note: "Oldest first; the last row is the month in progress (partial). bookingsMade counts confirmed online bookings by the day they were made (none before " + ONLINE_BOOKING_LAUNCH_NOTE + "); seats by session date; marketing is ledger account 6200.",
+    months: trendMonths.map((m) => { const ym = m.period_month.slice(0, 7); return { month: ym, partial: ym === month, revenue: round2(m.revenue), ebitda: round2(m.ebitda), netIncome: round2(m.net_income), marketing: lineSum("6200", ym), bookingsMade: bookingsMadeIn(ym), seats: seatsIn(ym) }; }),
+    sameMonthLastYear: lyRow ? { month: lastYear, revenue: round2(Number(lyRow.revenue)) } : null,
+  };
+
+  // Cash: what is in the bank and whether running the studio adds to it.
+  const cashRows = ((balance && balance.rows) || []).filter((r) => r.type === "asset" && ["1000", "1100", "1110"].includes(String(r.code)));
+  const opCash = new Map();
+  for (const r of (cashflow && cashflow.rows) || []) if (r.activity === "operating") { const ym = String(r.period_month).slice(0, 7); opCash.set(ym, round2((opCash.get(ym) || 0) + Number(r.net_change))); }
+  const opKeys = [...opCash.keys()].filter((k) => k < month).sort();
+  const opAt = (i) => (opKeys[i] ? { month: opKeys[i], amount: opCash.get(opKeys[i]) } : null);
+  facts.cash = {
+    note: "Balance sheet as of today: checking plus the Square and Stripe clearing accounts. operatingCashFlow is cash from running the studio by month, before loan payments and purchases.",
+    onHand: round2(cashRows.reduce((s, r) => s + Number(r.balance), 0)),
+    byAccount: cashRows.map((r) => ({ name: r.name, balance: round2(Number(r.balance)) })),
+    operatingCashFlow: { lastFullMonth: opAt(opKeys.length - 1), monthBefore: opAt(opKeys.length - 2) },
+  };
+
   const webDoc = (id) => (webDocs.find((d) => d.collection === "web" && d.doc_id === id) || {}).data;
   const wd = webDoc("daily");
   if (wd) {
@@ -328,12 +396,16 @@ function main() {
   for (const l of pl.lines) accounts[l.code] = { name: l.name, type: l.type };
   push("snap", "pl", { months: pl.months, lines: pl.lines, dataStartsAt: pl.dataStartsAt || DATA_STARTS_AT });
 
-  // Financials: unranged reports straight through.
-  push("snap", "seasonality", get("/api/admin/accounting/reports/seasonality"));
-  push("snap", "balance", get(`/api/admin/accounting/reports/balance-sheet?asOf=${today}`));
-  push("snap", "cashflow", get("/api/admin/accounting/reports/cash-flow"));
+  // Money and Plan: unranged reports straight through (the facts below reuse them).
+  const seasonality = get("/api/admin/accounting/reports/seasonality");
+  const balance = get(`/api/admin/accounting/reports/balance-sheet?asOf=${today}`);
+  const cashflow = get("/api/admin/accounting/reports/cash-flow");
+  const projections = get("/api/admin/accounting/projections");
+  push("snap", "seasonality", seasonality);
+  push("snap", "balance", balance);
+  push("snap", "cashflow", cashflow);
   push("snap", "normalized", get("/api/admin/accounting/reports/normalized"));
-  push("snap", "projections", get("/api/admin/accounting/projections"));
+  push("snap", "projections", projections);
 
   // Financials: journal lines per month for the drill-downs. Compact rows:
   // [id, date, memo, [[code, amount, lineMemo], ...]].
@@ -375,7 +447,7 @@ function main() {
   const webMeta = webDocs.find((d) => d.doc_id === "web-meta").data;
 
   // Comparisons for the written insights (see factsDoc).
-  push("snap", "facts", factsDoc({ pl, bookings, salesAll, webDocs, today }));
+  push("snap", "facts", factsDoc({ pl, bookings, salesAll, webDocs, today, balance, cashflow, projections, seasonality }));
 
   push("snap", "meta", { generatedAt, apiBase: API, dataStartsAt: DATA_STARTS_AT, balanceAsOf: today, salesPresets: { ...presets, all: "" }, bookingMonths: [...byMonth.keys()].sort(), journalMonths: months, bookings: bookings.length, journalEntries });
 

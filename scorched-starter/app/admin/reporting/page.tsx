@@ -32,8 +32,8 @@ export default function AdminReportingPage() {
         <p className="eyebrow text-brand">Admin</p>
         <h1 className="h2 font-bold">Reporting</h1>
         <p className="text-sm text-neutral-500 mt-2 max-w-xl">
-          Reports live in a dashboard built from this app&apos;s data, with a Financials and an Operations
-          section. It opens in a new tab and shows the studio&apos;s numbers as of its last data refresh.
+          Reports live in a dashboard built from this app&apos;s data: Home, Money, Customers, Sales and Plan.
+          It opens in a new tab and shows the studio&apos;s numbers as of its last data refresh.
         </p>
       </div>
 

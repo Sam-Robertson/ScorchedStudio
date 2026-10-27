@@ -16,16 +16,17 @@
   const DSCR_MIN = 1.25;
   const DSCR_EXPLAINER = "Debt Service Coverage Ratio: trailing 12-month EBITDA divided by trailing 12-month debt payments (principal plus interest). Above 1.0 means the business generates enough cash to cover its debt. Lenders typically want 1.25 or higher.";
 
+  // Money group by default; the two planning tabs sit under Plan.
   const TABS = [
     { id: "pl", label: "P&L" },
     { id: "monthly", label: "Monthly P&L" },
     { id: "costs", label: "Costs" },
-    { id: "balance", label: "Balance Sheet" },
-    { id: "cashflow", label: "Cash Flow" },
-    { id: "projections", label: "Projections" },
-    { id: "normalized", label: "Normalized EBITDA", quiet: true },
+    { id: "cash", label: "Cash & Balance" },
+    { id: "plan", label: "Targets", group: "plan" },
+    { id: "normalized", label: "Normalized EBITDA", group: "plan", quiet: true },
   ];
   const RANGED = ["pl", "monthly", "costs"];
+  const CASH_CODES = new Set(["1000", "1100", "1110"]); // checking plus the card processors' clearing accounts
 
   let shell = null;
   let mounted = false;
@@ -37,7 +38,7 @@
     monthly: { sort: { col: "month", dir: "asc" }, drill: null, drillAccount: null },
     costs: { selected: null, showCharges: false, sort: { col: "amount", dir: "desc" } },
     balance: { asOf: dates.todayDenverYmd() },
-    projections: { showInfo: false, msg: null, msgTone: null },
+    plan: { showInfo: false, msg: null, msgTone: null },
     normalized: { msg: null, msgTone: null },
   };
 
@@ -72,9 +73,8 @@
     pl: { key: () => "pl|" + state.query, load: async () => ({ pl: await getJson(withQ("/api/admin/accounting/reports/pl", state.query)), seasonality: await getJson("/api/admin/accounting/reports/seasonality") }) },
     monthly: { key: () => "monthly|" + state.query, load: async () => ({ pl: await getJson(withQ("/api/admin/accounting/reports/pl", state.query)) }) },
     costs: { key: () => "costs|" + state.query, load: async () => ({ costs: await getJson(withQ("/api/admin/accounting/reports/costs", state.query)) }) },
-    balance: { key: () => "balance|" + state.balance.asOf, load: async () => ({ bs: await getJson("/api/admin/accounting/reports/balance-sheet?asOf=" + state.balance.asOf) }) },
-    cashflow: { key: () => "cashflow", load: async () => ({ cf: await getJson("/api/admin/accounting/reports/cash-flow") }) },
-    projections: { key: () => "projections", load: async () => ({ pj: await getJson("/api/admin/accounting/projections") }) },
+    cash: { key: () => "cash|" + state.balance.asOf, load: async () => ({ cf: await getJson("/api/admin/accounting/reports/cash-flow"), bs: await getJson("/api/admin/accounting/reports/balance-sheet?asOf=" + state.balance.asOf) }) },
+    plan: { key: () => "plan", load: async () => ({ pj: await getJson("/api/admin/accounting/projections"), pl: await getJson("/api/admin/accounting/reports/pl") }) },
     normalized: { key: () => "normalized", load: async () => ({ nm: await getJson("/api/admin/accounting/reports/normalized") }) },
   };
   const renderers = {};
@@ -379,15 +379,41 @@
     nodes.push(ui.card({ title: "Operating Cost Accounts", bodyClass: "flush", body: acctTable, note: "Operating-expense accounts only. Labor, COGS, depreciation and interest are excluded (see the totals at the top of this page for those)." }));
   };
 
-  // ── Balance Sheet ──────────────────────────────────────────────────────
-  renderers.balance = ({ bs }, nodes) => {
+  // ── Cash & Balance ─────────────────────────────────────────────────────
+  // One tab: cash on hand and operating cash flow up top, then the cash-flow
+  // table and the balance sheet that used to be two tabs.
+  const monthKey = (pm) => String(pm).slice(0, 7);
+  renderers.cash = (data, nodes, after) => {
+    const rows = data.bs.rows || [];
+    const cashRows = rows.filter((r) => r.type === "asset" && CASH_CODES.has(String(r.code)));
+    const onHand = cashRows.reduce((s, r) => s + num(r.balance), 0);
+    const thisMonth = dates.todayDenverYmd().slice(0, 7);
+    const opByMonth = new Map();
+    for (const r of data.cf.rows || []) if (r.activity === "operating") opByMonth.set(monthKey(r.period_month), (opByMonth.get(monthKey(r.period_month)) || 0) + num(r.net_change));
+    const fullMonths = [...opByMonth.keys()].filter((k) => k < thisMonth).sort();
+    const lastKey = fullMonths[fullMonths.length - 1];
+    const lastOp = lastKey ? opByMonth.get(lastKey) : null;
+    const last3 = fullMonths.slice(-3);
+    const avg3 = last3.length ? last3.reduce((s, k) => s + opByMonth.get(k), 0) / last3.length : null;
+    const shortName = (n) => n.replace(" Business Checking", "").replace(" Clearing", " clearing");
+    nodes.push(ui.kpis(3, [
+      ui.kpi({ label: "Cash on hand", value: fmt.money0(onHand), sub: cashRows.length ? cashRows.map((r) => `${shortName(r.name)} ${fmt.money0(r.balance)}`).join(", ") : "checking plus card clearing" }),
+      ui.kpi({ label: "Operating cash flow, last full month", value: lastOp == null ? "--" : fmt.money0(lastOp), tone: lastOp == null ? undefined : lastOp < 0 ? "bad" : "good", sub: lastKey ? fmt.monthLong(lastKey + "-01") + ", cash from running the studio" : "no full month yet" }),
+      ui.kpi({ label: "Operating cash flow, 3-month average", value: avg3 == null ? "--" : fmt.money0(avg3), tone: avg3 == null ? undefined : avg3 < 0 ? "bad" : "good", sub: avg3 != null && avg3 < 0 && onHand > 0 ? `about ${Math.round(onHand / -avg3)} months of cash at this rate, before loan payments` : "before loan payments and purchases" }),
+    ]));
+    renderCashflow(data, nodes, after);
+    renderBalance(data, nodes, after);
+  };
+
+  // ── Balance Sheet (part of Cash & Balance) ─────────────────────────────
+  const renderBalance = ({ bs }, nodes) => {
     const rows = bs.rows || [];
     let action;
     if (S.snap.enabled) {
       action = h("span", { class: "lbl", text: "As of " + fmt.dateLong(bs.asOf || state.balance.asOf) });
     } else {
       const input = h("input", { class: "field", type: "date", id: "bs-asof", value: state.balance.asOf, "aria-label": "As of date" });
-      input.addEventListener("change", () => { if (input.value) { state.balance.asOf = input.value; show("balance"); } });
+      input.addEventListener("change", () => { if (input.value) { state.balance.asOf = input.value; show("cash"); } });
       action = h("div", { class: "filters-right" }, h("label", { class: "lbl", for: "bs-asof", text: "As of" }), input);
     }
     const groups = h("div", {});
@@ -403,8 +429,8 @@
     nodes.push(ui.card({ title: "Balance Sheet", action, bodyClass: "flush", body: groups, note: "Balances as of the selected date, from the cash-basis ledger." }));
   };
 
-  // ── Cash Flow ──────────────────────────────────────────────────────────
-  renderers.cashflow = ({ cf }, nodes) => {
+  // ── Cash Flow (part of Cash & Balance) ─────────────────────────────────
+  const renderCashflow = ({ cf }, nodes) => {
     const rows = cf.rows || [];
     const months = [...new Set(rows.map((r) => r.period_month))].sort();
     const find = (m, a) => { const r = rows.find((x) => x.period_month === m && x.activity === a); return r ? num(r.net_change) : 0; };
@@ -423,64 +449,102 @@
     nodes.push(ui.card({ title: "Cash Flow by Month", bodyClass: "flush", body, note: "Net change in cash by activity, oldest month first. The most recent month sits directly above the total." }));
   };
 
-  // ── Projections ────────────────────────────────────────────────────────
-  const MODEL_FIELDS = [["revenue", "Revenue"], ["cogs", "COGS"], ["payroll", "Payroll"], ["rent", "Rent"], ["marketing", "Marketing"], ["otherOpex", "Other OpEx"], ["ebitda", "EBITDA"], ["debtService", "Debt Service"]];
-  renderers.projections = ({ pj }, nodes) => {
-    const st = state.projections;
-    const projections = pj.projectionVsActual || [], dscr = pj.dscr || [];
-    nodes.push(h("p", { class: "intro", text: "The 24-month model vs. actuals, and trailing-12 DSCR." }));
-    if (!pj.modelLoaded) nodes.push(h("p", { class: "subtle-line muted", text: "No projection model is loaded yet. Add months below to start comparing the plan against actuals." }));
+  // ── Plan: Targets ──────────────────────────────────────────────────────
+  // A target is the revenue and EBITDA Sam wants from a month (the app's
+  // projection_months table, entered at /admin/reporting/inputs). Actuals come
+  // from the P&L document rather than the app's projection view, so the
+  // in-progress month paces against its target too.
+  const daysIn = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
+  renderers.plan = ({ pj, pl }, nodes, after) => {
+    const st = state.plan;
+    const c = viz.colors();
+    const today = dates.todayDenverYmd(), thisMonth = today.slice(0, 7), dom = Number(today.slice(8, 10)), dim = daysIn(thisMonth);
+    const actuals = new Map((pl.months || []).map((m) => [monthKey(m.period_month), { revenue: num(m.revenue), ebitda: num(m.ebitda), net: num(m.net_income) }]));
+    const targets = (pj.projectionVsActual || []).map((r) => ({ month: monthKey(r.period_month), revenue: r.proj_revenue == null ? null : num(r.proj_revenue), ebitda: r.proj_ebitda == null ? null : num(r.proj_ebitda) })).sort((a, b) => a.month.localeCompare(b.month));
+    const fullMonths = [...actuals.keys()].filter((k) => k < thisMonth).sort();
+    const last3 = fullMonths.slice(-3).map((k) => actuals.get(k));
+    const avgOf = (k) => (last3.length ? last3.reduce((s, m) => s + m[k], 0) / last3.length : 0);
+    const inputsLink = () => h("a", { href: INPUTS_URL, target: "_blank", rel: "noopener", text: "Admin, Reporting, Report inputs" });
 
-    // Entry form, one month at a time.
-    const month = h("input", { class: "field", type: "month", id: "pj-month", required: true });
-    const inputs = {};
-    const fields = [h("div", { class: "f sm" }, h("label", { class: "lbl", for: "pj-month", text: "Month" }), month)];
-    for (const [k, label] of MODEL_FIELDS) {
-      inputs[k] = h("input", { class: "field", type: "number", step: "0.01", id: "pj-" + k, placeholder: "blank = unchanged" });
-      fields.push(h("div", { class: "f sm" }, h("label", { class: "lbl", for: "pj-" + k, text: label }), inputs[k]));
+    nodes.push(h("p", { class: "intro", text: "A target is the revenue and profit you want from a month. Set one, and this page shows how the month is pacing against it, which past months hit, and what the rest of the month has to do." }));
+
+    if (!targets.length) {
+      const avgRev = avgOf("revenue"), avgEbitda = avgOf("ebitda");
+      const suggested = Math.round((avgRev * 1.1) / 100) * 100;
+      nodes.push(ui.card({
+        title: "Start with one month",
+        body: h("ol", { class: "steps" },
+          h("li", {}, "Your last three full months averaged ", h("strong", { text: fmt.money0(avgRev) }), " in revenue and ", h("strong", { text: fmt.money0(avgEbitda) }), " EBITDA (profit before depreciation and interest). A first target a little above that, say ", h("strong", { text: fmt.money0(suggested) }), " revenue, is a fair place to start."),
+          h("li", {}, "Open ", inputsLink(), " in the app, pick the months (next month through the end of the year works), type the revenue target and the profit target, and save."),
+          h("li", {}, "The dashboard picks them up on its next refresh. From then on Home shows the month against its target and the morning insights say whether you are ahead or behind, and by how much."),
+        ),
+        note: "Only revenue and profit are needed. Expense lines (payroll, rent, marketing) are optional detail for later.",
+      }));
+    } else {
+      const t = targets.find((x) => x.month === thisMonth);
+      const a = actuals.get(thisMonth) || { revenue: 0, ebitda: 0, net: 0 };
+      const elapsed = dom / dim, left = dim - dom;
+      if (t && t.revenue != null && t.revenue > 0) {
+        const pct = a.revenue / t.revenue, ahead = pct >= elapsed;
+        const onPace = elapsed > 0 ? a.revenue / elapsed : 0;
+        const need = (t.revenue - a.revenue) / Math.max(1, left);
+        const tiles = [
+          ui.kpi({ label: `${fmt.monthLong(thisMonth + "-01")} revenue so far`, value: fmt.money0(a.revenue), tone: ahead ? "good" : "bad", sub: `${fmt.pct(pct)} of the ${fmt.money0(t.revenue)} target, ${fmt.pct(elapsed)} of the month gone` }),
+          ui.kpi({ label: "On pace for", value: fmt.money0(onPace), tone: onPace >= t.revenue ? "good" : "bad", sub: `${onPace >= t.revenue ? "+" : ""}${fmt.money0(onPace - t.revenue)} vs target if the rest of the month matches so far` }),
+          ui.kpi({ label: need <= 0 ? "Target met" : "Needed per day", value: need <= 0 ? fmt.money0(a.revenue - t.revenue) + " over" : fmt.money0(need), sub: need <= 0 ? "anything more is upside" : `for the remaining ${left} day${left === 1 ? "" : "s"} to land on target` }),
+        ];
+        if (t.ebitda != null) tiles.push(ui.kpi({ label: "EBITDA so far", value: fmt.money0(a.ebitda), tone: a.ebitda >= t.ebitda * elapsed ? "good" : "bad", sub: `target ${fmt.money0(t.ebitda)} for the month` }));
+        nodes.push(ui.kpis(tiles.length === 4 ? 4 : 3, tiles));
+      } else {
+        nodes.push(ui.card({ title: `No target for ${fmt.monthLong(thisMonth + "-01")}`, body: h("p", { class: "subtle-line" }, "Add one in the app: ", inputsLink(), ". The months that do have targets are below.") }));
+      }
+
+      const rows = targets.map((x) => {
+        const act = actuals.get(x.month);
+        const live = x.month === thisMonth, past = x.month < thisMonth;
+        const status = live ? "live" : !past ? "upcoming" : act && x.revenue != null ? (act.revenue >= x.revenue ? "hit" : "miss") : "none";
+        return { ...x, act, live, status };
+      });
+      const STATUS = { hit: "Hit", miss: "Missed", live: "In progress", upcoming: "Upcoming", none: "No actuals" };
+      const labels = rows.map((r) => fmt.monthShort(r.month + "-01"));
+      const barColor = rows.map((r) => (r.live ? c.greenSoft : c.green));
+      const revHost = h("div", {}), ebHost = h("div", {});
+      nodes.push(ui.card({
+        title: "Target vs actual by month", bodyClass: "tight",
+        body: [h("p", { class: "chart-label", text: "Revenue" }), revHost, h("p", { class: "chart-label", text: "EBITDA" }), ebHost,
+          viz.legend([{ label: "Actual", color: c.green, kind: "rect" }, { label: "Target", color: c.brown, kind: "line" }])],
+        note: "Bars are the ledger; the line is the target you entered. The current month's bar (lighter) is still filling in.",
+      }));
+      after.push(() => {
+        viz.mixed(revHost, { labels, format: "money", height: 220, xTick: fmt.monthTick, bars: [{ label: "Actual revenue", data: rows.map((r) => (r.act ? Math.round(r.act.revenue) : null)), color: barColor }], lines: [{ label: "Target", data: rows.map((r) => r.revenue), color: c.brown, points: true }] });
+        viz.mixed(ebHost, { labels, format: "money", height: 200, xTick: fmt.monthTick, bars: [{ label: "Actual EBITDA", data: rows.map((r) => (r.act ? Math.round(r.act.ebitda) : null)), color: barColor }], lines: [{ label: "Target", data: rows.map((r) => r.ebitda), color: c.brown, points: true }] });
+      });
+      const gap = (actual, target) => (actual == null || target == null ? "--" : (actual - target >= 0 ? "+" : "") + fmt.money0(actual - target));
+      nodes.push(ui.card({
+        title: "Month by month", bodyClass: "flush",
+        body: ui.table({
+          columns: [
+            { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => fmt.monthShort(r.month + "-01") },
+            { key: "tr", label: "Revenue target", align: "r", cell: (r) => fmt.money0OrDash(r.revenue) },
+            { key: "ar", label: "Actual", align: "r", cell: (r) => (r.act ? fmt.money0(r.act.revenue) : "--") },
+            { key: "gr", label: "Gap", align: "r", cls: (r) => (r.act && r.revenue != null && r.act.revenue < r.revenue ? "neg" : ""), cell: (r) => gap(r.act ? r.act.revenue : null, r.revenue) },
+            { key: "te", label: "EBITDA target", align: "r", cell: (r) => fmt.money0OrDash(r.ebitda) },
+            { key: "ae", label: "Actual", align: "r", cell: (r) => (r.act ? fmt.money0(r.act.ebitda) : "--") },
+            { key: "ge", label: "Gap", align: "r", cls: (r) => (r.act && r.ebitda != null && r.act.ebitda < r.ebitda ? "neg" : ""), cell: (r) => gap(r.act ? r.act.ebitda : null, r.ebitda) },
+            { key: "s", label: "", cell: (r) => h("span", { class: "status " + r.status, text: STATUS[r.status] }) },
+          ],
+          rows, rowKey: (r) => r.month,
+        }),
+        note: "Gap is actual minus target, so a negative number is a shortfall. A month counts as hit when revenue reached its target.",
+      }));
     }
-    const btn = h("button", { type: "submit", class: "btn primary", text: "Save month" });
-    const msg = h("p", { class: "inline-msg" + (st.msgTone === "bad" ? " t-bad" : st.msgTone === "good" ? " t-good" : ""), text: st.msg || "", hidden: !st.msg });
-    const form = h("form", { id: "pj-form" }, h("div", { class: "form-row" }, ...fields, h("div", { class: "f sm" }, btn)), msg);
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      st.msg = null;
-      if (!month.value) { st.msg = "Pick a month first."; st.msgTone = "bad"; render("projections"); return; }
-      const row = { periodMonth: month.value + "-01" };
-      for (const [k, label] of MODEL_FIELDS) {
-        const v = inputs[k].value.trim();
-        if (v !== "" && Number.isNaN(Number(v))) { st.msg = label + " must be a number (or left blank)."; st.msgTone = "bad"; render("projections"); return; }
-        row[k] = v === "" ? null : Number(v);
-      }
-      btn.disabled = true;
-      try {
-        await api.post("/api/admin/accounting/projections", { rows: [row] });
-        st.msg = "Saved " + fmt.monthLong(row.periodMonth) + "."; st.msgTone = "good";
-        cache.delete("/api/admin/accounting/projections");
-        reload("projections");
-      } catch (e) {
-        if (e.status === 401) return;
-        st.msg = e.message; st.msgTone = "bad"; btn.disabled = false; render("projections");
-      }
-    });
-    if (S.snap.enabled) nodes.push(inputsNote("Add or update a month"));
-    else nodes.push(ui.card({ title: "Add or update a month", body: form, note: "Saves one month of the model. Leave a field blank to keep whatever is already stored for it." }));
 
-    const pvaBody = projections.length === 0 ? ui.empty("No projection months loaded.") : ui.table({
-      columns: [
-        { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => r.period_month.slice(0, 7) },
-        { key: "pr", label: "Proj Revenue", align: "r", cell: (r) => fmt.moneyOrDash(r.proj_revenue) },
-        { key: "ar", label: "Act Revenue", align: "r", cell: (r) => fmt.moneyOrDash(r.act_revenue) },
-        { key: "vr", label: "Var", align: "r", cls: (r) => negCls(num(r.var_revenue)), cell: (r) => fmt.moneyOrDash(r.var_revenue) },
-        { key: "pe", label: "Proj EBITDA", align: "r", cell: (r) => fmt.moneyOrDash(r.proj_ebitda) },
-        { key: "ae", label: "Act EBITDA", align: "r", cell: (r) => fmt.moneyOrDash(r.act_ebitda) },
-        { key: "ve", label: "Var", align: "r", cls: (r) => negCls(num(r.var_ebitda)), cell: (r) => fmt.moneyOrDash(r.var_ebitda) },
-      ],
-      rows: projections,
-    });
-    nodes.push(ui.card({ title: "Projection vs actual", bodyClass: "flush", body: pvaBody }));
+    if (S.snap.enabled) nodes.push(inputsNote("Set or change targets"));
+    else nodes.push(targetsForm(st));
 
-    const info = h("button", { type: "button", class: "info-btn", "aria-label": "What is DSCR?", "aria-pressed": String(st.showInfo), text: "i", onClick: () => { st.showInfo = !st.showInfo; render("projections"); } });
+    // Lender view, kept from the old Projections tab.
+    const dscr = pj.dscr || [];
+    const info = h("button", { type: "button", class: "info-btn", "aria-label": "What is DSCR?", "aria-pressed": String(st.showInfo), text: "i", onClick: () => { st.showInfo = !st.showInfo; render("plan"); } });
     const dscrBody = dscr.length === 0 ? ui.empty("No data yet.") : ui.table({
       columns: [
         { key: "m", label: "Month", sticky: true, strong: true, cell: (r) => r.period_month.slice(0, 7) },
@@ -490,10 +554,45 @@
       ],
       rows: dscr,
     });
-    const card = ui.card({ title: "Trailing-12 DSCR (lender minimum " + DSCR_MIN + "x)", action: info, bodyClass: "flush", body: dscrBody });
+    const card = ui.card({ title: "Lender view: trailing-12 debt coverage (minimum " + DSCR_MIN + "x)", action: info, bodyClass: "flush", body: dscrBody, note: "Only matters when talking to a lender. It stays negative while trailing-12 EBITDA is negative, whatever the payments are." });
     if (st.showInfo) card.insertBefore(h("p", { class: "explainer", style: { paddingTop: "12px" }, text: DSCR_EXPLAINER }), card.body);
     nodes.push(card);
   };
+  // Local preview only (the published page cannot write): the same two numbers
+  // the app's form takes, applied to a range of months at once.
+  function targetsForm(st) {
+    const from = h("input", { class: "field", type: "month", id: "tg-from", required: true });
+    const to = h("input", { class: "field", type: "month", id: "tg-to" });
+    const rev = h("input", { class: "field", type: "number", step: "1", id: "tg-rev", placeholder: "e.g. 12000" });
+    const eb = h("input", { class: "field", type: "number", step: "1", id: "tg-eb", placeholder: "e.g. 1500" });
+    const btn = h("button", { type: "submit", class: "btn primary", text: "Save targets" });
+    const msg = h("p", { class: "inline-msg" + (st.msgTone === "bad" ? " t-bad" : st.msgTone === "good" ? " t-good" : ""), text: st.msg || "", hidden: !st.msg });
+    const form = h("form", { id: "tg-form" }, h("div", { class: "form-row" },
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "tg-from", text: "From month" }), from),
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "tg-to", text: "To month (optional)" }), to),
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "tg-rev", text: "Revenue target" }), rev),
+      h("div", { class: "f sm" }, h("label", { class: "lbl", for: "tg-eb", text: "Profit (EBITDA) target" }), eb),
+      h("div", { class: "f sm" }, btn)), msg);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      st.msg = null;
+      if (!from.value) { st.msg = "Pick a starting month."; st.msgTone = "bad"; render("plan"); return; }
+      const months = dates.monthsBetween(from.value + "-01", (to.value || from.value) + "-01");
+      const r = rev.value.trim() === "" ? null : Number(rev.value), e = eb.value.trim() === "" ? null : Number(eb.value);
+      if ((r != null && Number.isNaN(r)) || (e != null && Number.isNaN(e)) || (r == null && e == null)) { st.msg = "Enter a revenue target, a profit target, or both."; st.msgTone = "bad"; render("plan"); return; }
+      btn.disabled = true;
+      try {
+        await api.post("/api/admin/accounting/projections", { rows: months.map((m) => ({ periodMonth: m + "-01", revenue: r, ebitda: e })) });
+        st.msg = `Saved ${months.length} month${months.length === 1 ? "" : "s"}.`; st.msgTone = "good";
+        cache.delete("/api/admin/accounting/projections");
+        reload("plan");
+      } catch (err) {
+        if (err.status === 401) return;
+        st.msg = err.message; st.msgTone = "bad"; btn.disabled = false; render("plan");
+      }
+    });
+    return ui.card({ title: "Set targets", body: form, note: "Applies the same targets to every month in the range. Saving a month again overwrites it." });
+  }
 
   // ── Normalized EBITDA ──────────────────────────────────────────────────
   renderers.normalized = ({ nm }, nodes) => {
@@ -551,13 +650,13 @@
   };
 
   // ── module registration ────────────────────────────────────────────────
-  // reports.html mounts one shell for both sections and hands it over here.
+  // reports.html mounts one shell for every group and hands it over here.
   // Every callback checks that the tab is one of ours, since the shell's
-  // current tab can belong to the Operations section.
+  // current tab can belong to another module.
   const mine = (id) => !!loaders[id];
   S.modules = S.modules || {};
   S.modules.financials = {
-    id: "financials", label: "Financials", tabs: TABS, rangedTabs: RANGED, locationTabs: [],
+    id: "financials", label: "Money", defaultGroup: "money", tabs: TABS, rangedTabs: RANGED, locationTabs: [],
     start(sh) {
       shell = sh;
       state.query = S.range.toQuery(shell.state.range);

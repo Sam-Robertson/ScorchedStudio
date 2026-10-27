@@ -7,7 +7,7 @@
   [hidden] { display: none !important; } /* the artifact skeleton ships this; kept here so local previews match */
   .view.refreshing { opacity: .55; transition: opacity .2s; }
 
-  /* Financials section */
+  /* Money and Plan */
   .t-good { color: var(--good); font-weight: 600; }
   .t-bad { color: var(--bad); font-weight: 600; }
   .t-strong { color: var(--ink); font-weight: 600; }
@@ -25,7 +25,7 @@
   .bs-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
   .bs-row .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; }
   .bs-row.total { font-family: var(--font-mono); font-weight: 600; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
-  .intro { color: var(--ink-2); font-size: 13.5px; }
+  .intro { color: var(--ink-2); font-size: 13.5px; max-width: 72ch; }
   .adj-list { display: flex; flex-direction: column; }
   .adj-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line-2); font-size: 13px; }
   .adj-item:last-child { border-bottom: 0; }
@@ -36,8 +36,14 @@
   .explainer { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; max-width: 60ch; padding: 0 18px 12px; }
   .drill-cell { white-space: nowrap; }
   td .drill { font: inherit; color: inherit; }
+  .steps { margin: 0; padding: 0 0 0 20px; color: var(--ink-2); font-size: 13.5px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px; }
+  .steps strong { color: var(--ink); }
+  .status { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); white-space: nowrap; }
+  .status.hit { color: var(--good); border-color: var(--good); }
+  .status.miss { color: var(--bad); border-color: var(--bad); }
+  .status.live { color: var(--accent-ink); border-color: var(--accent); }
 
-  /* Operations section */
+  /* Customers and Sales */
   .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .row-end { display: flex; justify-content: flex-end; }
   .stack { display: flex; flex-direction: column; gap: 6px; }
@@ -54,30 +60,45 @@
   .tbl .two { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
   .tbl .two .sub { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
   .tbl td.wrap { white-space: normal; overflow-wrap: anywhere; min-width: 120px; }
-  /* Insights card (Overview) */
-  .insights { display: flex; flex-direction: column; gap: 14px; }
+
+  /* Insights card (Home) */
+  .insights { display: flex; flex-direction: column; gap: 18px; }
   .insight { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 12px; align-items: start; }
-  .idot { width: 10px; height: 10px; border-radius: 999px; margin-top: 5px; background: var(--ink-3); }
+  .idot { width: 10px; height: 10px; border-radius: 999px; margin-top: 6px; background: var(--ink-3); }
   .idot.good { background: var(--good); } .idot.bad { background: var(--bad); } .idot.warn { background: var(--warn); }
-  .ititle { font-weight: 600; font-size: 13.5px; }
-  .ibody { color: var(--ink-2); font-size: 13px; line-height: 1.5; max-width: 72ch; }
+  .ihead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ikind { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); white-space: nowrap; }
+  .ikind.k-act { color: var(--on-accent); background: var(--accent); border-color: transparent; }
+  .ikind.k-check { color: var(--warn); border-color: var(--warn); }
+  .ikind.k-good { color: var(--good); border-color: var(--good); }
+  .ikind.k-target { color: var(--accent-ink); border-color: var(--accent); }
+  .ititle { font-weight: 600; font-size: 14px; }
+  .ibody { color: var(--ink-2); font-size: 13px; line-height: 1.5; max-width: 76ch; }
+  .iline { color: var(--ink-2); font-size: 13px; line-height: 1.5; max-width: 76ch; display: flex; gap: 10px; align-items: baseline; }
+  .ilbl { flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); min-width: 72px; padding-top: 2px; }
   .iwhere { align-self: flex-start; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
 </style>
 <div id="login" hidden></div>
 <div id="app" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="shared.js"></script>
+<script src="home.js"></script>
 <script src="financials.js"></script>
 <script src="operations.js"></script>
 <script>
-// One page, two sections. Each section's tabs, loaders and renderers live in
-// its own file (financials.js, operations.js) and register themselves on
-// S.modules; this boot mounts a single shell carrying both and routes the
-// shell's callbacks to whichever section owns the current tab.
+// One page, five groups: Home, Money, Customers, Sales, Plan. Each module
+// (home.js, financials.js, operations.js) registers its tabs on S.modules
+// with the group each tab belongs to; this boot mounts a single shell
+// carrying all of them and routes the shell's callbacks to whichever module
+// owns the current tab.
 (function () {
   "use strict";
   const S = window.Scorched;
-  const modules = [S.modules.financials, S.modules.operations];
+  const modules = [S.modules.home, S.modules.financials, S.modules.operations];
+  const SECTIONS = [{ id: "home", label: "Home" }, { id: "money", label: "Money" }, { id: "customers", label: "Customers" }, { id: "sales", label: "Sales" }, { id: "plan", label: "Plan" }];
+  // Retired tab ids from the Financials | Operations layout, so old links and
+  // old insight files still land somewhere sensible.
+  const ALIASES = { overview: "home", capacity: "bookings", balance: "cash", cashflow: "cash", projections: "plan" };
   const ownerOf = (tabId) => modules.find((m) => m.tabs.some((t) => t.id === tabId)) || modules[0];
   let shell = null;
 
@@ -85,8 +106,9 @@
     if (!shell) {
       shell = S.shell.mount(document.getElementById("app"), {
         title: "Reports",
-        sections: modules.map((m) => ({ id: m.id, label: m.label })),
-        tabs: modules.flatMap((m) => m.tabs.map((t) => ({ ...t, section: m.id }))),
+        sections: SECTIONS,
+        aliases: ALIASES,
+        tabs: modules.flatMap((m) => m.tabs.map((t) => ({ ...t, section: t.group || m.defaultGroup }))),
         rangedTabs: modules.flatMap((m) => m.rangedTabs),
         locationTabs: modules.flatMap((m) => m.locationTabs),
         initialRange: { preset: "3m" },

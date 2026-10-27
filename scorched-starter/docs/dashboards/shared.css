@@ -126,20 +126,22 @@ a { color: var(--accent-ink); }
 }
 .topbar-inner {
   max-width: 1120px; margin: 0 auto; padding: 14px 16px 0;
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column;
 }
-.brand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; }
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex-wrap: wrap; }
 .brand-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); font-weight: 600; }
 .brand-title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-/* Section switch (Financials | Operations) standing in for the title */
-.sections { display: flex; align-items: baseline; }
-.section { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-3); padding: 0 12px; transition: color .15s; }
+/* Group switch (Home | Money | Customers | Sales | Plan) standing in for the title.
+   A group with one tab hides the tab row, so this row is the whole navigation then. */
+.sections { display: flex; align-items: baseline; flex-wrap: wrap; row-gap: 4px; }
+.section { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-3); padding: 0 11px; transition: color .15s; }
 .section:first-child { padding-left: 0; }
 .section:last-child { padding-right: 0; }
 .section + .section { border-left: 1px solid var(--line); }
 .section:hover { color: var(--ink); }
 .section[aria-selected="true"] { color: var(--ink); }
+@media (max-width: 480px) { .section { font-size: 16px; padding: 0 9px; } }
 .brand-meta { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .brand-meta button { color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; }
 .brand-meta button:hover { color: var(--ink); }

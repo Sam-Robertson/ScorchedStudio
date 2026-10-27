@@ -1,6 +1,6 @@
 ---
 name: refresh-dashboards
-description: Push fresh report data into the Claude reporting dashboard (Financials and Operations sections). Use when Sam asks to refresh, update or reload the dashboard, or says the dashboard numbers are stale.
+description: Push fresh report data into the Claude reporting dashboard (Home, Money, Customers, Sales, Plan) and write the day's insights. Use when Sam asks to refresh, update or reload the dashboard, or says the dashboard numbers are stale.
 ---
 
 # Refresh the reporting dashboard
@@ -11,9 +11,9 @@ Published files load for anyone who can open the page, signed in or not, which i
 what lets the public link work for staff. Refreshing is two steps: build the
 snapshot, then republish the data files with the Artifact tool.
 
-Artifact: https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r (public link; one page with a
-Financials and an Operations section. Until 2026-10-26 Operations was a separate artifact,
-since deleted.)
+Artifact: https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r (public link; one page with
+Home, Money, Customers, Sales and Plan groups. Until 2026-10-26 Operations was a separate
+artifact, since deleted.)
 
 ## 1. Build the snapshot
 
@@ -35,25 +35,51 @@ fails the rest of the snapshot, the Website tab just shows the reason.
 
 ## 1b. Write the insights
 
-The Overview tab opens with an "Insights" card that Claude writes at refresh time. Read
-`.dashboard-snapshot/data/snap/facts.json` (week-over-week and month-over-month comparisons
-the script computed: Square sales, ledger months, bookings, sources, returning customers,
-and website traffic when GA is connected) and write
-`.dashboard-snapshot/data/snap/insights.json`:
+The Home tab opens with an "Insights" card that Claude writes at refresh time. Read
+`.dashboard-snapshot/data/snap/facts.json` (what the script computed: Square sales and
+ledger months, bookings, sources, returning customers, website traffic when GA is
+connected, the month against its target under `targets`, seats by weekday and time slot
+and booking lead time under `capacity`, a six-month `trend`, and `cash`) and, if the
+artifact already has one, the previous `data/snap/insights.json` (Artifact read with
+`path`), then write `.dashboard-snapshot/data/snap/insights.json`:
 
 ```
-{"asOf": "<facts.asOf>", "generatedAt": "<ISO now>", "items": [{"title", "body", "tone", "tab"}, ...]}
+{"asOf": "<facts.asOf>", "generatedAt": "<ISO now>",
+ "items": [{"kind", "title", "body", "why", "action", "watch", "tone", "tab"}, ...]}
 ```
 
-4 to 7 items, biggest move first. `title` under 9 words stating the finding; `body` one to
-three sentences under 50 words quoting the facts' numbers (rounded, with $ or %) and
-saying which windows; `tone` is good, bad, warn (something to check, such as a ledger line
-that looks miscoded or a comparison that is not apples to apples) or neutral; `tab` is one
-of pl, monthly, costs, balance, cashflow, projections, overview, marketing, website,
-capacity, sales. Always cover bookings and, when `facts.web` exists, the website. Treat
-`seats.next7` as what is booked so far, not a drop. Never invent causes: connect two facts
-only when both are in the file. Plain language, no em dashes. The file is outside the
-manifest; add it to the publish map by hand.
+4 to 6 items, the one that matters most first. Each item is a finding with a reason and a
+move, not a chart caption:
+
+- `kind`: `act` (a move to make this week), `why` (what is behind a change), `check`
+  (something that looks wrong: a miscoded ledger line, a tracking gap, a spike in
+  cancellations), `target` (the month against its target; include one whenever
+  `facts.targets` is not null, and when it is null, one `target` item saying so and
+  suggesting a first target from `trend`), `good` (something working, worth keeping).
+  At least one `act`, and one `check` whenever anything in the facts looks off.
+- `title`: under 9 words, states the finding, not the topic.
+- `body`: one to three sentences under 50 words, with the numbers from the facts (rounded,
+  with $ or %) and the windows they cover.
+- `why`: the most likely explanation, built only from facts that are in the file (for
+  example sessions fell while Paid Social went to zero and ledger marketing went to $0),
+  worded as a reading ("most likely", "lines up with"), never as a certainty. Leave it out
+  when the facts do not support one.
+- `action`: one specific move sized for a small studio, with the number it is aimed at:
+  which weekday or slot to promote (the low ones in `capacity`), whether to restart a
+  channel and at roughly what spend (the ledger's past marketing line), who to message
+  (returning customers, a cohort), what ledger cell to open. Not "consider" or
+  "monitor". For `good` items it may be omitted.
+- `watch`: the number that should move if the action works, and by when (next week's
+  facts, next month's ledger).
+- `tone`: good, bad, warn or neutral (the dot colour); `tab`: where to see it, one of
+  home, pl, monthly, costs, cash, bookings, marketing, website, sales, plan, normalized.
+
+Always cover bookings and, when `facts.web` exists, the website. Treat `seats.next7` as
+what is booked so far, not a drop. When yesterday's file had an `act` item whose action is
+still the right call, keep it with today's numbers and say how many days it has been
+open; drop it once the `watch` number has moved. Never invent a number or a cause. Plain
+language, no jargon, no em dashes. The file is outside the manifest; add it to the publish
+map by hand.
 
 ## 2. Republish the data files
 
@@ -62,8 +88,8 @@ One `Artifact` publish with `url` set to the artifact, `file_path` the page
 (`scorched-starter/.dashboard-snapshot`), and `files` mapping every path in
 `data/manifest.json` to itself, plus `data/manifest.json` and
 `data/snap/insights.json`. Leave out `capabilities`
-and `icon`; files not mentioned (`shared.css`, `shared.js`, `financials.js`,
-`operations.js`) are kept. If the session has not read or published the artifact yet,
+and `icon`; files not mentioned (`shared.css`, `shared.js`, `home.js`, `financials.js`,
+`operations.js`, `dashboard-snapshot.mjs`) are kept. If the session has not read or published the artifact yet,
 `Artifact` action `read` with the url first (and `list` with scope `files` so the
 existing paths count as seen).
 
@@ -91,12 +117,12 @@ then `get_run_log`. Running this skill by hand is still fine between runs.
 
 ## Notes
 
-- Projection model months and normalized EBITDA adjustments are entered in the
-  app at Admin, Reporting, Report inputs; they reach the dashboard on the next
-  refresh.
+- Monthly targets (the Plan group's Targets tab) and normalized EBITDA adjustments
+  are entered in the app at Admin, Reporting, Report inputs; they reach the dashboard
+  on the next refresh.
 - If a journal month hits the API's 500-entry cap the script warns; drill-downs
   for that month are incomplete until the journal route pages.
 - To change the page itself, edit `scorched-starter/docs/dashboards/` and
   republish with the Artifact tool to the same URL, attaching `shared.css`,
-  `shared.js`, `financials.js` and `operations.js` as files (the data files already
-  published are kept).
+  `shared.js`, `home.js`, `financials.js` and `operations.js` as files (the data files
+  already published are kept).

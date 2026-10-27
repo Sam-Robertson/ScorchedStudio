@@ -179,9 +179,10 @@
   //     amount_paid, status, referral_source, referral_other, location, cust]]},
   //   snap/web-meta {connected, ...} and web/<daily|channels|sources|pages|
   //     events|cities|devices> {id, from, to, rows} from Google Analytics,
-  //   snap/facts (week/month comparisons the insights are written from).
-  // data/snap/insights.json {asOf, items: [{title, body, tone, tab}]} is written by
-  // Claude during the refresh and is not in the manifest (see resolve).
+  //   snap/facts (week/month comparisons, targets, capacity and trend context the
+  //     insights are written from; the Home tab's tiles read it too).
+  // data/snap/insights.json {asOf, items: [{title, body, why?, action?, watch?, kind?, tone, tab}]}
+  // is written by Claude during the refresh and is not in the manifest (see resolve).
   // The small "snap" documents load up front; journal, bookings and web on demand.
   const LABOR_CODES = new Set(["6000", "6010"]);
   const EXCLUDED_CODES = new Set(["7000", "8000"]);
@@ -325,6 +326,8 @@
         case "/api/admin/accounting/journal-entries": return this.journal(q);
         // Website traffic has no app route; it only exists in the snapshot.
         case "/api/admin/web/meta": return this.docs.get("web-meta") || { connected: false, reason: "no web-meta document in this snapshot" };
+        // Facts (the comparisons the insights are written from) feed the Home tab's tiles.
+        case "/api/admin/facts": return this.docs.get("facts") || null;
         // Insights are written by the refresh (not the snapshot script), so they are
         // outside the manifest: fetch the file directly and treat "missing" as none.
         case "/api/admin/insights": { if (this.docs.has("insights")) return this.docs.get("insights"); try { return await this.fetchJson("data/snap/insights.json"); } catch { return null; } }
@@ -829,16 +832,18 @@
     },
   };
 
-  // ── page shell: top bar, section switch, tabs, filter row, one container per view ──
+  // ── page shell: top bar, group switch, tabs, filter row, one container per view ──
   const shell = {
     /**
      * tabs: [{ id, label, quiet?, section? }]; rangedTabs / locationTabs: ids that show those filters.
-     * sections: [{ id, label }] (optional) draws a switch in place of the title; each tab's `section`
-     * says which one it belongs to and only the current section's tabs show. Tab ids stay unique
-     * across sections, so the URL hash is still just the tab id.
+     * sections: [{ id, label }] (optional) draws a group switch (Home, Money, ...) in place of the
+     * title; each tab's `section` says which group it belongs to and only the current group's tabs
+     * show. A group with a single tab hides the tab row altogether. Tab ids stay unique across
+     * groups, so the URL hash is still just the tab id; `aliases` maps retired tab ids (old deep
+     * links) onto their replacements.
      * onTab(id), onRange(rangeState), onLocation("all"|"orem"|"slc"). Returns { views, setTab, range, location }.
      */
-    mount(root, { title, tabs, sections = null, rangedTabs = [], locationTabs = [], initialRange, onTab, onRange, onLocation }) {
+    mount(root, { title, tabs, sections = null, aliases = {}, rangedTabs = [], locationTabs = [], initialRange, onTab, onRange, onLocation }) {
       ui.clear(root);
       const tabList = h("div", { class: "tabs", role: "tablist" });
       const tabById = new Map(tabs.map((t) => [t.id, t]));
@@ -880,14 +885,17 @@
         const v = h("section", { class: "view", id: "view-" + t.id, role: "tabpanel", "aria-labelledby": "tab-" + t.id, hidden: true });
         views[t.id] = v;
       }
+      const resolve = (id) => (views[id] ? id : views[aliases[id]] ? aliases[id] : null);
       function setTab(id, fromClick) {
-        if (!views[id]) id = tabs[0].id;
+        id = resolve(id) || tabs[0].id;
         current = id;
         if (sections) {
           const sec = tabById.get(id).section;
           lastTabIn[sec] = id;
           for (const s of sections) sectionEls[s.id].setAttribute("aria-selected", String(s.id === sec));
-          for (const t of tabs) tabEls[t.id].hidden = t.section !== sec;
+          let visible = 0;
+          for (const t of tabs) { const show = t.section === sec; tabEls[t.id].hidden = !show; if (show) visible++; }
+          tabList.hidden = visible <= 1;
         }
         for (const t of tabs) { tabEls[t.id].setAttribute("aria-selected", String(t.id === id)); views[t.id].hidden = t.id !== id; }
         const showRange = rangedTabs.includes(id), showLoc = locationTabs.includes(id);
@@ -908,8 +916,8 @@
       page.append(filters, ...Object.values(views));
       root.append(top, page);
       const hash = (location.hash || "").replace(/^#/, "");
-      setTab(views[hash] ? hash : tabs[0].id, false);
-      window.addEventListener("hashchange", () => { const hsh = (location.hash || "").replace(/^#/, ""); if (views[hsh] && hsh !== current) setTab(hsh, false); });
+      setTab(resolve(hash) || tabs[0].id, false);
+      window.addEventListener("hashchange", () => { const target = resolve((location.hash || "").replace(/^#/, "")); if (target && target !== current) setTab(target, false); });
       return { views, setTab, state, rangeCtl, currentTab: () => current };
     },
   };
