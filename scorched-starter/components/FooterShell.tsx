@@ -6,6 +6,7 @@ import { Instagram } from 'lucide-react';
 import Container from './ui/Container';
 import { vulfMono } from '@/app/fonts';
 import type { LocationRecord } from '@/lib/locations';
+import { trackNewsletterSignup } from '@/lib/analytics';
 
 const infoLinks = [
   { href: '/faq', label: 'FAQ' },
@@ -57,6 +58,7 @@ function NewsletterForm() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || '');
+      trackNewsletterSignup();
       setStatus('done');
       setEmail('');
     } catch (err) {

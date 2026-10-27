@@ -5,6 +5,7 @@
 import { useRef, useState } from "react";
 import clsx from "clsx";
 import { vulfMono } from "@/app/fonts";
+import { trackJobApplication } from "@/lib/analytics";
 
 const MAX_RESUME_BYTES = 4 * 1024 * 1024;
 
@@ -44,6 +45,7 @@ export default function JobApplicationForm({
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Something went wrong.");
       }
+      trackJobApplication({ jobTitle });
       setStatus("ok");
       setMsg("Thanks! We'll be in touch.");
       form.reset();

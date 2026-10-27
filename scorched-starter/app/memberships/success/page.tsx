@@ -5,7 +5,7 @@ import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getPlanByKey } from "@/lib/memberships";
 import { formatDenverDate } from "@/lib/timezone";
-import PurchasePixel from "@/components/memberships/PurchasePixel";
+import ConversionEvent from "@/components/analytics/ConversionEvent";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -50,7 +50,7 @@ export default async function MembershipSuccessPage({
 
   return (
     <main className="pb-20">
-      <PurchasePixel valueCents={amountTotal} contentName={plan?.name ?? planKey ?? "membership"} />
+      <ConversionEvent kind="membership" sessionId={session_id} valueCents={amountTotal} planName={plan?.name ?? planKey ?? "membership"} />
       <section className="pt-12 md:pt-16">
         <Container className="max-w-lg">
           <div className="flex flex-col items-center text-center mb-8">

@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { vulfMono } from "@/app/fonts";
 import type { LocationOption } from "@/lib/locations";
+import { trackContactSubmitted } from "@/lib/analytics";
 
 const schema = z.object({
   location: z.enum(["orem", "slc"], { message: "Pick a studio" }),
@@ -55,6 +56,7 @@ export default function ContactPageForm({ locations }: { locations: LocationOpti
       return;
     }
 
+    trackContactSubmitted({ studio: values.location, source: "contact" });
     setSent(true);
     reset();
   }

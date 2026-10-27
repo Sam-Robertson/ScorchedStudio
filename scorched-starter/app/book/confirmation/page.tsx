@@ -6,7 +6,8 @@ import { vulfMono } from "@/app/fonts";
 import { getSupabase } from "@/lib/supabase";
 import { createBookingFromIntent } from "@/lib/create-booking-from-intent";
 import { manageBookingPath } from "@/lib/booking-link";
-import { isUnpaidReservation } from "@/lib/booking-rules";
+import { amountDueCents, isUnpaidReservation } from "@/lib/booking-rules";
+import ConversionEvent from "@/components/analytics/ConversionEvent";
 
 export const metadata = {
   title: "Booking Confirmed | Scorched Studio",
@@ -51,17 +52,28 @@ export default async function ConfirmationPage({
         : null;
 
     return (
-      <ConfirmationLayout
-        manageHref={manageBookingPath(booking.id)}
-        canPayOnline={isUnpaidReservation(booking)}
-        name={booking.name}
-        email={booking.email}
-        formattedDate={formattedDate}
-        timeSlot={booking.time_slot}
-        partySize={booking.party_size}
-        total={booking.amount_paid > 0 ? `$${(booking.amount_paid / 100).toFixed(2)}` : null}
-        paymentNote={paymentNote}
-      />
+      <>
+        <ConversionEvent
+          kind="booking"
+          bookingId={booking.id}
+          valueCents={booking.amount_paid}
+          expectedCents={booking.amount_paid + amountDueCents(booking)}
+          partySize={booking.party_size}
+          paymentMethod={booking.payment_method}
+          location={booking.location}
+        />
+        <ConfirmationLayout
+          manageHref={manageBookingPath(booking.id)}
+          canPayOnline={isUnpaidReservation(booking)}
+          name={booking.name}
+          email={booking.email}
+          formattedDate={formattedDate}
+          timeSlot={booking.time_slot}
+          partySize={booking.party_size}
+          total={booking.amount_paid > 0 ? `$${(booking.amount_paid / 100).toFixed(2)}` : null}
+          paymentNote={paymentNote}
+        />
+      </>
     );
   }
 

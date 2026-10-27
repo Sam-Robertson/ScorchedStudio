@@ -6,7 +6,7 @@ import { vulfMono } from "@/app/fonts";
 import Container from "@/components/ui/Container";
 import { Flame, Percent, Wallet } from "lucide-react";
 import type { BillingInterval, MembershipPlan } from "@/lib/memberships";
-import { trackInitiateCheckout } from "@/lib/fbq";
+import { trackMembershipCheckoutStart } from "@/lib/analytics";
 
 const inputCls =
   "w-full rounded-lg border border-black/20 bg-white px-4 py-3 outline-none focus:border-black/40";
@@ -59,7 +59,7 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
 
     const valueCents =
       interval === "monthly" ? pendingPlan.price_monthly_cents : pendingPlan.price_annual_cents;
-    trackInitiateCheckout({ planKey: pendingPlan.key, interval, valueCents });
+    trackMembershipCheckoutStart({ planKey: pendingPlan.key, interval, valueCents });
 
     try {
       const res = await fetch("/api/memberships/checkout", {

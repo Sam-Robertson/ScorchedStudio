@@ -4,6 +4,7 @@ import Link from "next/link";
 import Container from "@/components/ui/Container";
 import { vulfMono } from "@/app/fonts";
 import { getCohortWithCourse } from "@/lib/courses";
+import ConversionEvent from "@/components/analytics/ConversionEvent";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -39,6 +40,7 @@ export default async function CourseSuccessPage({
 
   return (
     <main className="pb-20">
+      <ConversionEvent kind="course" sessionId={session_id} valueCents={amountTotal} courseName={found?.course.name ?? "Course"} />
       <section className="pt-12 md:pt-16">
         <Container className="max-w-lg">
           <div className="flex flex-col items-center text-center mb-8">

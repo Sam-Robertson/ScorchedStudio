@@ -4,6 +4,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import type { LocationOption } from "@/lib/locations";
+import { trackContactSubmitted } from "@/lib/analytics";
 
 export default function GroupContactForm({ locations }: { locations: LocationOption[] }) {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
@@ -33,6 +34,7 @@ export default function GroupContactForm({ locations }: { locations: LocationOpt
       });
 
       if (!res.ok) throw new Error(await res.text());
+      trackContactSubmitted({ studio: String(data.location ?? ""), source: "group-events" });
       setStatus("ok");
       setMsg("Thanks! We’ll be in touch shortly.");
       form.reset();
