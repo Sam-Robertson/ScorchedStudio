@@ -36,7 +36,7 @@
     query: S.range.toQuery({ preset: "3m" }),
     pl: { selected: null },
     monthly: { sort: { col: "month", dir: "asc" }, drill: null, drillAccount: null },
-    costs: { selected: null, showCharges: false, sort: { col: "amount", dir: "desc" } },
+    costs: { selected: null, showCharges: false, drillMonth: null, sort: { col: "amount", dir: "desc" } },
     balance: { asOf: dates.todayDenverYmd() },
     plan: { showInfo: false, msg: null, msgTone: null },
     normalized: { msg: null, msgTone: null },
@@ -277,6 +277,7 @@
     const majors = ranked.slice(0, MAX_SERIES), minors = ranked.slice(MAX_SERIES), minorSet = new Set(minors);
     const colors = new Map(); majors.forEach((n, i) => colors.set(n, viz.series(i))); colors.set(OTHER, other);
     const colorFor = (n) => colors.get(n) || other;
+    const stackedKeys = (data.monthlyCategories || []).map((row) => String(row.period_month).slice(0, 7));
     const stacked = (data.monthlyCategories || []).map((row) => {
       const out = { label: fmt.monthShort(String(row.period_month)) }; let oth = 0;
       for (const [k, v] of Object.entries(row)) { if (k === "period_month" || typeof v !== "number") continue; if (minorSet.has(k)) oth += v; else out[k] = Math.round(v * 100) / 100; }
@@ -297,8 +298,14 @@
     const matches = (name, sel) => name === sel || (name === LABOR_SLICE && LABOR_SERIES_NAMES.has(sel)) || (sel === LABOR_SLICE && LABOR_SERIES_NAMES.has(name));
     const sel = st.selected;
     const active = (n) => sel == null || matches(n, sel);
-    const toggle = (n) => { st.showCharges = false; st.selected = sel === n ? null : n; render("costs"); };
-    const nameToCode = new Map((data.breakdown || []).map((b) => [b.name, b.code]));
+    const toggle = (n) => { st.showCharges = false; st.drillMonth = null; st.selected = sel === n ? null : n; render("costs"); };
+    // A click on a chart segment: that category, that month, charges open. Same segment again clears it.
+    const drillSegment = (monthKey, n) => {
+      if (st.drillMonth === monthKey && st.selected === n) { st.drillMonth = null; st.showCharges = false; st.selected = null; }
+      else { st.selected = n; st.drillMonth = monthKey; st.showCharges = true; }
+      render("costs");
+    };
+    const nameToCode = new Map([...Object.entries(data.codeByName || {}), ...(data.breakdown || []).map((b) => [b.name, b.code])]);
     let selectedCodes = [];
     if (sel === LABOR_SLICE) selectedCodes = LABOR_CODES;
     else if (sel && LABOR_NAME_TO_CODE[sel]) selectedCodes = [LABOR_NAME_TO_CODE[sel]];
@@ -331,26 +338,32 @@
     }
 
     // Stacked monthly chart
+    const drillLabel = st.drillMonth ? fmt.monthLong(st.drillMonth + "-01") : null;
     const action = sel != null ? h("div", { class: "filters-right" },
       selectedCodes.length ? h("button", { type: "button", class: "btn", "aria-pressed": String(st.showCharges), text: st.showCharges ? "Hide charges" : "View charges", onClick: () => { st.showCharges = !st.showCharges; render("costs"); } }) : null,
-      h("button", { type: "button", class: "btn", text: "Reset, showing " + sel + " only", onClick: () => { st.selected = null; st.showCharges = false; render("costs"); } }),
+      h("button", { type: "button", class: "btn", text: "Reset, showing " + sel + (drillLabel ? " for " + drillLabel : " only"), onClick: () => { st.selected = null; st.showCharges = false; st.drillMonth = null; render("costs"); } }),
     ) : null;
     if (!stacked.length) nodes.push(ui.card({ title: "Cost Categories by Month", action, body: ui.empty("No cost activity in this range.") }));
     else {
       const host = h("div", {});
       const legend = viz.legend(seriesNames.map((n) => ({ label: n, color: colorFor(n), kind: "rect", pressed: active(n) })), (label) => toggle(label));
-      const noteTxt = "Includes COGS and labor alongside operating expenses, matching the old Domo chart." + (minors.length ? ' "Other" groups: ' + minors.join(", ") + "." : "");
+      const noteTxt = "Includes COGS and labor alongside operating expenses, matching the old Domo chart. Click a segment to see the charges behind it for that month; click a legend item to isolate a category across every month." + (minors.length ? ' "Other" groups: ' + minors.join(", ") + "." : "");
       nodes.push(ui.card({ title: "Cost Categories by Month", action, bodyClass: "tight", body: [host, legend], note: noteTxt }));
       after.push(() => viz.bar(host, {
         labels: stacked.map((r) => r.label), format: "money", height: 320, stacked: true, tooltipTotal: true, xTick: fmt.monthTick,
         datasets: seriesNames.map((n) => ({ label: n, data: stacked.map((r) => (typeof r[n] === "number" ? r[n] : 0)), color: colorFor(n) })),
-        dim: (i, di) => !active(seriesNames[di]),
+        dim: (i, di) => !active(seriesNames[di]) || (st.drillMonth != null && stackedKeys[i] !== st.drillMonth),
+        onClick: (i, di) => drillSegment(stackedKeys[i], seriesNames[di]),
       }));
     }
     if (sel != null && st.showCharges && selectedCodes.length) {
       const host = h("div", {});
-      nodes.push(ui.card({ title: "Charges, " + sel, bodyClass: "flush", body: host }));
-      after.push(() => journal.mount(host, { from: bounds.start, to: bounds.end, accountCodes: selectedCodes }));
+      const from = st.drillMonth ? st.drillMonth + "-01" : bounds.start, to = st.drillMonth ? dates.monthEnd(st.drillMonth) : bounds.end;
+      nodes.push(ui.card({
+        title: "Charges, " + sel + (drillLabel ? ", " + drillLabel : ""), bodyClass: "flush", body: host,
+        note: drillLabel ? "Every ledger entry that posted to this category in " + drillLabel + ". Click the same segment again, or Reset, to close." : "Every ledger entry that posted to this category in the selected range.",
+      }));
+      after.push(() => journal.mount(host, { from, to, accountCodes: selectedCodes }));
     }
 
     // Labor trend

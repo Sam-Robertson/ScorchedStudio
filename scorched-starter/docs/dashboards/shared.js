@@ -257,6 +257,9 @@
         breakdown: [...breakdown.values()].sort((a, b) => b.amount - a.amount),
         monthlyCategories: [...monthly.keys()].sort().map((pm) => { const row = { period_month: pm }; for (const [code, amt] of monthly.get(pm)) row[names.get(code) || code] = amt; return row; }),
         laborByMonth: [...laborByMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period_month, amount]) => ({ period_month, amount })),
+        // Every series name in monthlyCategories back to its account code (COGS and labor
+        // included, which `breakdown` leaves out), so a chart segment can open its charges.
+        codeByName: Object.fromEntries([...names].map(([code, name]) => [name, code])),
         dataStartsAt: this.doc("pl").dataStartsAt,
       };
     },
@@ -692,7 +695,17 @@
           scales: viz._scales(o),
           plugins: { tooltip: viz._tooltip(o.format, { total: o.tooltipTotal }) },
           onHover: (ev, els) => { ev.native.target.style.cursor = o.onClick && els.length ? "pointer" : "default"; },
-          onClick: (ev, els) => { if (o.onClick && els.length) o.onClick(els[0].index, els[0].datasetIndex); },
+          // Hover uses index mode (one tooltip per column), so `els` starts with dataset 0
+          // whatever was clicked. Prefer the segment actually under the cursor, so a click
+          // on a stacked bar names the category it landed on.
+          // Deferred a tick: handlers usually re-render and destroy this chart, which must
+          // not happen while Chart.js is still walking its own event plugins.
+          onClick: (ev, els, chart) => {
+            if (!o.onClick) return;
+            const hit = chart.getElementsAtEventForMode(ev, "nearest", { intersect: true }, false);
+            const el = hit[0] || els[0];
+            if (el) setTimeout(() => o.onClick(el.index, el.datasetIndex), 0);
+          },
         },
       }, o.height);
     },
@@ -735,7 +748,7 @@
           scales: viz._scales(o),
           plugins: { tooltip: viz._tooltip(o.format) },
           onHover: (ev, els) => { ev.native.target.style.cursor = o.onClick && els.length ? "pointer" : "default"; },
-          onClick: (ev, els) => { if (o.onClick && els.length) o.onClick(els[0].index); },
+          onClick: (ev, els) => { if (o.onClick && els.length) { const i = els[0].index; setTimeout(() => o.onClick(i), 0); } },
         },
         plugins: [refPlugin],
       }, o.height);
@@ -772,7 +785,7 @@
           cutout: "62%",
           plugins: { tooltip: { callbacks: { label: (item) => " " + f(item.parsed) + "  " + item.label } } },
           onHover: (ev, els) => { ev.native.target.style.cursor = o.onClick && els.length ? "pointer" : "default"; },
-          onClick: (ev, els) => { if (o.onClick && els.length) o.onClick(els[0].index); },
+          onClick: (ev, els) => { if (o.onClick && els.length) { const i = els[0].index; setTimeout(() => o.onClick(i), 0); } },
         },
       }, o.height);
     },

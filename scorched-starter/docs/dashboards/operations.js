@@ -682,6 +682,9 @@
     contact_submitted: "Contact messages", job_application: "Job applications", newsletter_signup: "Newsletter signups", begin_checkout: "Checkouts started",
   };
   const CHANNEL_COLORS = { "Organic Search": "#3B82F6", "Direct": "#884A20", "Organic Social": "#EC4899", "Paid Social": "#EF4444", "Referral": "#519A70", "Email": "#F59E0B", "Paid Search": "#8B5CF6", "Unassigned": "#9CA3AF" };
+  const CARRIER_GATEWAYS = { Phoenix: "Arizona", Tempe: "Arizona", Denver: "Colorado", Englewood: "Colorado" };
+  const CARRIER_LABEL = "On cellular, location unknown";
+  const isCarrierGateway = (city, region) => CARRIER_GATEWAYS[city] === region;
   const channelColor = (name, i) => CHANNEL_COLORS[name] || viz.series(i);
   const sum = (rows, idx) => rows.reduce((s, r) => s + (r[idx] || 0), 0);
   const safeDiv = (a, b) => (b > 0 ? a / b : 0);
@@ -871,9 +874,12 @@
         note: `Bounce is the share of visits that left without engaging; high on a page people arrive at is normal, high on a page they chose to open is worth a look. ${monthNote}`,
       });
 
-      // Cities and devices (monthly).
+      // Cities and devices (monthly). Phones on cellular data leave the carrier's network
+      // through gateways that GA places in Phoenix, Denver, Englewood CO or Tempe, so a Utah
+      // visitor on a phone often shows up there (they engage exactly like Orem visitors and
+      // are ~90% mobile, checked 2026-10-27). Those rows fold into one labelled bucket.
       const cityTotals = new Map();
-      for (const r of cities.rows.filter(inMonths)) { const key = r[1] === "(not set)" ? "Unknown" : `${r[1]}, ${r[2]}`; const t = cityTotals.get(key) || { sessions: 0, keyEvents: 0 }; t.sessions += r[3]; t.keyEvents += r[5]; cityTotals.set(key, t); }
+      for (const r of cities.rows.filter(inMonths)) { const key = r[1] === "(not set)" ? "Unknown" : isCarrierGateway(r[1], r[2]) ? CARRIER_LABEL : `${r[1]}, ${r[2]}`; const t = cityTotals.get(key) || { sessions: 0, keyEvents: 0 }; t.sessions += r[3]; t.keyEvents += r[5]; cityTotals.set(key, t); }
       const cityList = [...cityTotals.entries()].map(([city, t]) => ({ city, ...t })).sort((a, b) => b.sessions - a.sessions).slice(0, 12);
       const citySessions = [...cityTotals.values()].reduce((s, t) => s + t.sessions, 0);
       const citiesCard = ui.card({
@@ -886,7 +892,7 @@
           ],
           rows: cityList,
         }),
-        note: `GA's best guess from the network, so a Provo visitor can show as Orem and a phone on cellular can land anywhere along the Wasatch Front. ${monthNote}`,
+        note: `GA's best guess from the network. "${CARRIER_LABEL}" groups Phoenix, Denver, Englewood CO and Tempe, where the big mobile carriers' gateways sit: a Utah phone on cellular data is placed there, and those visits engage exactly like Orem's. Most of them are local. A Provo visitor on wifi can also show as Orem. ${monthNote}`,
       });
       const devTotals = new Map();
       for (const r of devices.rows.filter(inMonths)) devTotals.set(r[1], (devTotals.get(r[1]) || 0) + r[2]);
