@@ -13,7 +13,7 @@ snapshot, then republish the data files with the Artifact tool.
 
 Artifact: https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r (public link; one page with a
 Financials and an Operations section. Until 2026-10-26 Operations was a separate artifact,
-https://claude.ai/artifact/VJu3gkKX5F32BxEcQCoSLd, which is no longer refreshed.)
+since deleted.)
 
 ## 1. Build the snapshot
 
