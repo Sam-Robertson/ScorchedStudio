@@ -176,8 +176,10 @@
   //   snap/estimated, snap/sales-<start> and snap/sales-all,
   //   journal/<YYYY-MM> {entries: [[id, date, memo, [[code, amount, lineMemo]]]]},
   //   bookings/<YYYY-MM> {rows: [[created_at, date, time_slot, party_size,
-  //     amount_paid, status, referral_source, referral_other, location, cust]]}.
-  // The small "snap" documents load up front; journal and bookings on demand.
+  //     amount_paid, status, referral_source, referral_other, location, cust]]},
+  //   snap/web-meta {connected, ...} and web/<daily|channels|sources|pages|
+  //     events|cities|devices> {id, from, to, rows} from Google Analytics.
+  // The small "snap" documents load up front; journal, bookings and web on demand.
   const LABOR_CODES = new Set(["6000", "6010"]);
   const EXCLUDED_CODES = new Set(["7000", "8000"]);
   const snap = {
@@ -318,7 +320,17 @@
         case "/api/admin/accounting/reports/sales": return this.sales(start, end);
         case "/api/admin/bookings": return this.bookings();
         case "/api/admin/accounting/journal-entries": return this.journal(q);
-        default: throw new ApiError(404, "No snapshot data for " + u.pathname);
+        // Website traffic has no app route; it only exists in the snapshot.
+        case "/api/admin/web/meta": return this.docs.get("web-meta") || { connected: false, reason: "no web-meta document in this snapshot" };
+        default: {
+          const web = u.pathname.match(/^\/api\/admin\/web\/([a-z]+)$/);
+          if (web) {
+            const d = (await this.collection("web")).find((x) => x.id === web[1]);
+            if (!d) throw new ApiError(404, "No website data for " + web[1] + " in this snapshot.");
+            return d;
+          }
+          throw new ApiError(404, "No snapshot data for " + u.pathname);
+        }
       }
     },
   };
@@ -811,15 +823,31 @@
     },
   };
 
-  // ── page shell: top bar, tabs, filter row, one container per view ───────
+  // ── page shell: top bar, section switch, tabs, filter row, one container per view ──
   const shell = {
     /**
-     * tabs: [{ id, label, quiet? }]; rangedTabs / locationTabs: ids that show those filters.
+     * tabs: [{ id, label, quiet?, section? }]; rangedTabs / locationTabs: ids that show those filters.
+     * sections: [{ id, label }] (optional) draws a switch in place of the title; each tab's `section`
+     * says which one it belongs to and only the current section's tabs show. Tab ids stay unique
+     * across sections, so the URL hash is still just the tab id.
      * onTab(id), onRange(rangeState), onLocation("all"|"orem"|"slc"). Returns { views, setTab, range, location }.
      */
-    mount(root, { title, tabs, rangedTabs = [], locationTabs = [], initialRange, onTab, onRange, onLocation }) {
+    mount(root, { title, tabs, sections = null, rangedTabs = [], locationTabs = [], initialRange, onTab, onRange, onLocation }) {
       ui.clear(root);
       const tabList = h("div", { class: "tabs", role: "tablist" });
+      const tabById = new Map(tabs.map((t) => [t.id, t]));
+      const firstTabOf = (sectionId) => (tabs.find((t) => t.section === sectionId) || tabs[0]).id;
+      const lastTabIn = {};
+      const sectionEls = {};
+      let switchEl = null;
+      if (sections) {
+        switchEl = h("div", { class: "sections", role: "tablist", "aria-label": "Section" });
+        for (const s of sections) {
+          const b = h("button", { class: "section", role: "tab", type: "button", "aria-selected": "false", text: s.label });
+          b.addEventListener("click", () => setTab(lastTabIn[s.id] || firstTabOf(s.id), true));
+          sectionEls[s.id] = b; switchEl.append(b);
+        }
+      }
       const views = {};
       const page = h("main", { class: "page" });
       const filters = h("div", { class: "filters" });
@@ -849,6 +877,12 @@
       function setTab(id, fromClick) {
         if (!views[id]) id = tabs[0].id;
         current = id;
+        if (sections) {
+          const sec = tabById.get(id).section;
+          lastTabIn[sec] = id;
+          for (const s of sections) sectionEls[s.id].setAttribute("aria-selected", String(s.id === sec));
+          for (const t of tabs) tabEls[t.id].hidden = t.section !== sec;
+        }
         for (const t of tabs) { tabEls[t.id].setAttribute("aria-selected", String(t.id === id)); views[t.id].hidden = t.id !== id; }
         const showRange = rangedTabs.includes(id), showLoc = locationTabs.includes(id);
         rangeHost.hidden = !showRange; fRight.hidden = !showLoc; filters.hidden = !(showRange || showLoc);
@@ -862,7 +896,7 @@
           h("button", { type: "button", text: "Sign out", onClick: () => auth.signOut() }),
         );
       const top = h("header", { class: "topbar" }, h("div", { class: "topbar-inner" },
-        h("div", { class: "brand-row" }, h("div", { class: "brand" }, h("span", { class: "brand-eyebrow", text: "Scorched Studio" }), h("h1", { class: "brand-title", text: title })), meta),
+        h("div", { class: "brand-row" }, h("div", { class: "brand" }, h("span", { class: "brand-eyebrow", text: "Scorched Studio" }), switchEl || h("h1", { class: "brand-title", text: title })), meta),
         tabList,
       ));
       page.append(filters, ...Object.values(views));

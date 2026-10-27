@@ -1,6 +1,6 @@
 "use client";
 
-// The two hand-entered inputs the Financials dashboard reports on: the
+// The two hand-entered inputs the dashboard's Financials section reports on: the
 // 24-month projection model (one month at a time) and normalized-EBITDA
 // add-backs. They used to live inside the deleted in-app reporting pages;
 // the dashboard itself cannot write back to this app, so the forms live here.
@@ -328,7 +328,7 @@ export default function AdminReportInputsPage() {
         <p className="eyebrow text-brand">Admin</p>
         <h1 className="h2 font-bold">Report inputs</h1>
         <p className="text-sm text-neutral-500 mt-2 max-w-xl">
-          These numbers feed the Financials dashboard. The dashboard shows them after its next data refresh.
+          These numbers feed the Financials section of the dashboard. It shows them after its next data refresh.
         </p>
       </div>
       <div className="space-y-6">

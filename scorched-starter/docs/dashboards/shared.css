@@ -132,6 +132,14 @@ a { color: var(--accent-ink); }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); font-weight: 600; }
 .brand-title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+/* Section switch (Financials | Operations) standing in for the title */
+.sections { display: flex; align-items: baseline; }
+.section { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink-3); padding: 0 12px; transition: color .15s; }
+.section:first-child { padding-left: 0; }
+.section:last-child { padding-right: 0; }
+.section + .section { border-left: 1px solid var(--line); }
+.section:hover { color: var(--ink); }
+.section[aria-selected="true"] { color: var(--ink); }
 .brand-meta { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .brand-meta button { color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; }
 .brand-meta button:hover { color: var(--ink); }

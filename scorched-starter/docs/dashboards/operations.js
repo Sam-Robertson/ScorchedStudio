@@ -1,27 +1,3 @@
-<title>Scorched Operations</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="shared.css">
-<style>
-  [hidden] { display: none !important; }
-  .view.refreshing { opacity: .55; transition: opacity .2s; }
-  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .row-end { display: flex; justify-content: flex-end; }
-  .stack { display: flex; flex-direction: column; gap: 6px; }
-  .chart-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); padding: 4px 8px 0; }
-  .src { display: inline-flex; align-items: center; gap: 8px; }
-  .src .dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
-  .other-list { margin: 10px 0 0; padding: 0 0 0 10px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
-  .other-list li { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); border-left: 2px solid var(--line); padding-left: 8px; }
-  details.other { padding: 12px 18px 14px; border-top: 1px solid var(--line-2); }
-  details.other summary { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); cursor: pointer; }
-  .heat-wrap { overflow-x: auto; padding: 4px 0 2px; }
-  .closing { font-size: 12.5px; color: var(--ink-3); }
-</style>
-<div id="login" hidden></div>
-<div id="app" hidden></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="shared.js"></script>
-<script>
 (function () {
   "use strict";
   const S = window.Scorched;
@@ -278,7 +254,7 @@
           ui.kpi({ label: "Booked Seats This Week", value: thisWeek.toLocaleString("en-US"), sub: deltaPct == null ? "no seats booked last week" : `${fmt.signedPct(deltaPct)} vs last week`, subTone: deltaPct == null ? undefined : deltaPct >= 0 ? "good" : "bad" }),
           ui.kpi({ label: "Repeat Customer Rate", value: fmt.pct(repeatRate), sub: `${returningCustomers} of ${uniqueCustomers} customers booked again` }),
         ]),
-        h("p", { class: "closing", text: "Each number has a detailed home elsewhere. Revenue and profit live in the Financials dashboard, spend and channels in Marketing, bookings and repeat behavior in Capacity." }),
+        h("p", { class: "closing", text: "Each number has a detailed home elsewhere. Revenue and profit live under Financials, spend and channels in Marketing, bookings and repeat behavior in Capacity." }),
       ];
     });
   }
@@ -717,31 +693,262 @@
     });
   }
 
-  // ── Boot ─────────────────────────────────────────────────────────────────
-  const renderers = { overview: renderOverview, marketing: renderMarketing, capacity: renderCapacity, sales: renderSales };
-  function renderCurrent() { if (!state.shell) return; const id = state.shell.currentTab(); renderers[id] && renderers[id](); }
+  // ── Website (Google Analytics) ───────────────────────────────────────────
+  // Rows come from the snapshot's web documents (see shared.js). Daily rows
+  // filter to the selected range exactly; sources, pages, cities and devices
+  // are monthly, so they cover every month the range touches.
+  const loadWeb = (name) => load(`/api/admin/web/${name}`);
+  const WEB_EVENT_LABELS = {
+    booking_confirmed: "Bookings", purchase: "Online payments", course_enrolled: "Course enrollments", membership_started: "Memberships started",
+    contact_submitted: "Contact messages", job_application: "Job applications", newsletter_signup: "Newsletter signups", begin_checkout: "Checkouts started",
+  };
+  const CHANNEL_COLORS = { "Organic Search": "#3B82F6", "Direct": "#884A20", "Organic Social": "#EC4899", "Paid Social": "#EF4444", "Referral": "#519A70", "Email": "#F59E0B", "Paid Search": "#8B5CF6", "Unassigned": "#9CA3AF" };
+  const channelColor = (name, i) => CHANNEL_COLORS[name] || viz.series(i);
+  const sum = (rows, idx) => rows.reduce((s, r) => s + (r[idx] || 0), 0);
+  const safeDiv = (a, b) => (b > 0 ? a / b : 0);
+  const pctChange = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
+  const vsPrev = (now, before, what) => (before > 0 ? `${fmt.signedPct(pctChange(now, before))} vs previous ${what}` : `no ${what} before this one to compare`);
+  const changeTone = (now, before) => (before > 0 ? (now >= before ? "good" : "bad") : undefined);
+  const dayCount = (start, end) => Math.round((new Date(end + "T12:00:00") - new Date(start + "T12:00:00")) / 86400000) + 1;
+  const monthsTouched = (start, end) => new Set(dates.monthsBetween(start, end));
 
-  function onReady() {
-    if (!state.shell) {
-      state.shell = S.shell.mount(document.getElementById("app"), {
-        title: "Operations",
-        tabs: [{ id: "overview", label: "Overview" }, { id: "marketing", label: "Marketing" }, { id: "capacity", label: "Capacity" }, { id: "sales", label: "Sales & Products" }],
-        rangedTabs: ["overview", "marketing", "capacity", "sales"],
-        locationTabs: ["marketing", "capacity"],
-        initialRange: { preset: "3m" },
-        onTab: () => renderCurrent(),
-        onRange: (r) => { state.query = range.toQuery(r); renderCurrent(); },
-        onLocation: (loc) => { state.location = loc; renderCurrent(); },
-      });
-      state.query = range.toQuery(state.shell.state.range);
-      viz.onThemeChange(() => renderCurrent());
-      loadBookings();
-    } else {
-      cache.clear();
-    }
-    renderCurrent();
+  // Daily rows bucketed by day, week (Sunday start) or month, depending on how long the range is.
+  function webBuckets(start, end) {
+    const days = dayCount(start, end);
+    const unit = days > 200 ? "month" : days > 45 ? "week" : "day";
+    const keyOf = (d) => (unit === "day" ? d : unit === "month" ? d.slice(0, 7) : (() => { const dt = new Date(d + "T12:00:00"); return toDateStr(addDays(dt, -dt.getDay())); })());
+    const keys = [];
+    for (let d = start; d <= end; d = dates.shiftDate(d, 1)) { const k = keyOf(d); if (keys[keys.length - 1] !== k) keys.push(k); }
+    const label = (k) => (unit === "month" ? fmt.monthShort(k + "-01") : fmt.dateShort(k));
+    return { unit, keys, keyOf, labels: keys.map(label), noun: unit === "day" ? "day" : unit === "week" ? "week" : "month" };
   }
 
-  S.auth.start({ title: "Operations", onReady });
+  function renderWebsite() {
+    const view = state.shell.views.website;
+    withData(view, [loadWeb("meta")], ([meta]) => {
+      if (!meta.connected) {
+        return [ui.card({
+          title: "Google Analytics is not connected",
+          body: h("div", { class: "stack", style: "padding: 4px 0 2px" },
+            h("p", { class: "closing", text: meta.error ? `The last snapshot could not read Google Analytics: ${meta.error}` : "The daily snapshot has no Google Analytics credentials yet, so this tab has nothing to show." }),
+            h("p", { class: "closing", text: "To connect it: enable the Google Analytics Data API in a Google Cloud project, create a service account with a JSON key, add that account as a Viewer on the GA4 property, then set GA_PROPERTY_ID and GA_SERVICE_ACCOUNT_JSON where the snapshot script runs (the .env for a manual refresh, and the Default cloud environment for the daily routine). The next refresh fills this tab." }),
+          ),
+        })];
+      }
+      const inner = h("div");
+      renderWebsiteData(inner, meta);
+      return [inner];
+    });
+  }
+
+  function renderWebsiteData(view, meta) {
+    const bounds = range.bounds(state.query);
+    const start = bounds.start && bounds.start > meta.from ? bounds.start : meta.from;
+    const end = bounds.end && bounds.end < meta.to ? bounds.end : meta.to;
+    withData(view, [loadWeb("daily"), loadWeb("channels"), loadWeb("sources"), loadWeb("pages"), loadWeb("events"), loadWeb("cities"), loadWeb("devices"), loadBookings()], ([daily, channels, sources, pages, events, cities, devices, bookings], after) => {
+      const c = viz.colors();
+      const days = dayCount(start, end);
+      const prevEnd = dates.shiftDate(start, -1), prevStart = dates.shiftDate(start, -days);
+      const inRange = (d) => d >= start && d <= end;
+      const inPrev = (d) => d >= prevStart && d <= prevEnd;
+      const months = monthsTouched(start, end);
+      const inMonths = (r) => months.has(r[0]);
+
+      // daily: [date, sessions, users, newUsers, views, engaged, keyEvents, eventCount, engagementSeconds]
+      const now = daily.rows.filter((r) => inRange(r[0])), before = daily.rows.filter((r) => inPrev(r[0]));
+      const sessions = sum(now, 1), prevSessions = sum(before, 1);
+      const users = sum(now, 2), prevUsers = sum(before, 2);
+      const newUsers = sum(now, 3);
+      const engaged = sum(now, 5), prevEngaged = sum(before, 5);
+      const keyEvents = sum(now, 6), prevKeyEvents = sum(before, 6);
+      const engagementRate = safeDiv(engaged, sessions), prevEngagementRate = safeDiv(prevEngaged, prevSessions);
+
+      // events: [date, eventName, count, value]
+      const eventTotals = (filter) => { const m = new Map(); for (const r of events.rows) if (filter(r[0])) { const e = m.get(r[1]) || { count: 0, value: 0 }; e.count += r[2]; e.value += r[3]; m.set(r[1], e); } return m; };
+      const evNow = eventTotals(inRange), evBefore = eventTotals(inPrev);
+      const gaBookings = (evNow.get("booking_confirmed") || { count: 0 }).count;
+      const prevGaBookings = (evBefore.get("booking_confirmed") || { count: 0 }).count;
+      const realBookings = bookings.filter((b) => b.status === "confirmed" && inRange(dates.denverDateKey(b.created_at))).length;
+      const convRate = safeDiv(gaBookings, sessions), prevConvRate = safeDiv(prevGaBookings, prevSessions);
+
+      const kpis = ui.kpis(3, [
+        ui.kpi({ label: "Sessions", value: fmt.count(sessions), sub: vsPrev(sessions, prevSessions, `${days} days`), subTone: changeTone(sessions, prevSessions) }),
+        ui.kpi({ label: "Visitors", value: fmt.count(users), sub: `${fmt.pct(safeDiv(newUsers, users))} new, ${vsPrev(users, prevUsers, "period")}`, subTone: changeTone(users, prevUsers) }),
+        ui.kpi({ label: "Engagement rate", value: fmt.pct(engagementRate), sub: prevSessions > 0 ? `${fmt.pct(prevEngagementRate)} the period before` : "sessions that stayed 10s, converted, or viewed 2+ pages", subTone: prevSessions > 0 ? (engagementRate >= prevEngagementRate ? "good" : "bad") : undefined }),
+        ui.kpi({ label: "Bookings seen by GA", value: fmt.count(gaBookings), sub: realBookings > 0 ? `${fmt.pct(safeDiv(gaBookings, realBookings))} of the ${fmt.count(realBookings)} bookings made in this range` : "booking_confirmed events", subTone: realBookings > 0 && gaBookings < realBookings * 0.8 ? "bad" : undefined }),
+        ui.kpi({ label: "Booking conversion", value: fmt.pct1(convRate), sub: prevSessions > 0 ? `${fmt.pct1(prevConvRate)} the period before` : "bookings per session", subTone: prevSessions > 0 ? (convRate >= prevConvRate ? "good" : "bad") : undefined }),
+        ui.kpi({ label: "Key events", value: fmt.count(keyEvents), sub: vsPrev(keyEvents, prevKeyEvents, "period"), subTone: changeTone(keyEvents, prevKeyEvents) }),
+      ]);
+
+      // Traffic over time, plus bookings GA saw, on the same buckets.
+      const bk = webBuckets(start, end);
+      const bucketSum = (rows, idx, dateIdx = 0) => { const m = new Map(); for (const r of rows) { const k = bk.keyOf(r[dateIdx]); m.set(k, (m.get(k) || 0) + r[idx]); } return bk.keys.map((k) => m.get(k) || 0); };
+      const sessHost = chartHost(190), bookHost = chartHost(150);
+      const bookingRows = events.rows.filter((r) => r[1] === "booking_confirmed" && inRange(r[0]));
+      const trafficCard = ui.card({
+        title: "Traffic over time", bodyClass: "tight",
+        body: [
+          h("p", { class: "chart-label", text: `Sessions and visitors per ${bk.noun}` }),
+          sessHost,
+          h("p", { class: "chart-label", text: `Bookings GA saw per ${bk.noun}` }),
+          bookHost,
+          viz.legend([{ label: "Sessions", color: c.blue, kind: "line" }, { label: "Visitors", color: c.blue, kind: "dash" }, { label: "Bookings (GA)", color: c.green, kind: "rect" }]),
+        ],
+        note: "A session is one visit; a visitor can have several. Bookings here are booking_confirmed events the site sends GA when the confirmation page loads, so a booking made by staff, or one whose confirmation page never loaded, is not counted. The tile above says how many of the real bookings GA caught.",
+      });
+      after.push(() => {
+        viz.line(sessHost, { labels: bk.labels, format: "count", height: 190, xTick: keepLabel, datasets: [
+          { label: "Sessions", data: bucketSum(now, 1), color: c.blue, points: bk.keys.length <= 60 },
+          { label: "Visitors", data: bucketSum(now, 2), color: c.blue, dash: true, points: false },
+        ] });
+        viz.bar(bookHost, { labels: bk.labels, format: "count", height: 150, xTick: keepLabel, datasets: [{ label: "Bookings (GA)", data: bucketSum(bookingRows, 2), color: c.green }] });
+      });
+
+      // Channels: stacked by bucket, plus a share table.
+      // channels: [date, channel, sessions, users, keyEvents]
+      const chNow = channels.rows.filter((r) => inRange(r[0]));
+      const chTotals = new Map();
+      for (const r of chNow) { const t = chTotals.get(r[1]) || { sessions: 0, users: 0, keyEvents: 0 }; t.sessions += r[2]; t.users += r[3]; t.keyEvents += r[4]; chTotals.set(r[1], t); }
+      const chList = [...chTotals.entries()].map(([channel, t]) => ({ channel, ...t })).sort((a, b) => b.sessions - a.sessions);
+      const chHost = chartHost(210);
+      const chBody = chList.length === 0 ? ui.empty("No traffic in this range.") : [
+        h("p", { class: "chart-label", text: `Sessions per ${bk.noun} by channel` }),
+        chHost,
+        viz.legend(chList.map((r, i) => ({ label: r.channel, color: channelColor(r.channel, i), kind: "rect" }))),
+        ui.table({
+          columns: [
+            { key: "channel", label: "Channel", sticky: true, strong: true, cell: (r) => h("span", { class: "src" }, h("span", { class: "dot", style: `background:${channelColor(r.channel, chList.indexOf(r))}` }), r.channel) },
+            { key: "sessions", label: "Sessions", align: "r", cell: (r) => fmt.count(r.sessions) },
+            { key: "share", label: "Share", align: "r", cell: (r) => ui.share(safeDiv(r.sessions, sessions) * 100, channelColor(r.channel, chList.indexOf(r))) },
+            { key: "keyEvents", label: "Key events", align: "r", cell: (r) => fmt.count(r.keyEvents) },
+            { key: "rate", label: "Key events / session", align: "r", cell: (r) => fmt.pct1(safeDiv(r.keyEvents, r.sessions)) },
+          ],
+          rows: chList,
+        }),
+      ];
+      const channelCard = ui.card({ title: "Where visitors come from", body: chBody, bodyClass: "tight", note: "GA's default channel grouping. Organic Search is Google and Bing results, Organic Social is unpaid Instagram, TikTok and Facebook links, Direct is a typed address or an untagged link (texts, DMs, some apps). Key events per session says which channel brings people who act, not just people." });
+      if (chList.length) after.push(() => {
+        viz.bar(chHost, { labels: bk.labels, stacked: true, format: "count", height: 210, xTick: keepLabel, tooltipTotal: true, datasets: chList.map((r, i) => ({ label: r.channel, data: bucketSum(chNow.filter((x) => x[1] === r.channel), 2), color: channelColor(r.channel, i) })) });
+      });
+
+      // Key events in range vs the period before.
+      const evRows = Object.keys(WEB_EVENT_LABELS).map((name) => ({ name, label: WEB_EVENT_LABELS[name], now: (evNow.get(name) || { count: 0, value: 0 }), before: (evBefore.get(name) || { count: 0 }) })).filter((r) => r.now.count > 0 || r.before.count > 0);
+      const eventsCard = ui.card({
+        title: "What visitors did", bodyClass: "flush",
+        body: evRows.length === 0 ? ui.empty("No key events in this range yet. They start counting once the site has sent them, which began on the day this was set up.") : ui.table({
+          columns: [
+            { key: "label", label: "Event", sticky: true, strong: true, cell: (r) => r.label },
+            { key: "now", label: "This range", align: "r", cell: (r) => fmt.count(r.now.count) },
+            { key: "before", label: "Period before", align: "r", cell: (r) => fmt.count(r.before.count) },
+            { key: "change", label: "Change", align: "r", cell: (r) => fmt.signedPct(pctChange(r.now.count, r.before.count)), cls: (r) => (r.before.count > 0 && r.now.count < r.before.count ? "neg" : "") },
+            { key: "rate", label: "Per 100 sessions", align: "r", cell: (r) => (safeDiv(r.now.count, sessions) * 100).toFixed(1) },
+            { key: "value", label: "Value", align: "r", cell: (r) => (r.now.value > 0 ? fmt.money0(r.now.value) : "--") },
+          ],
+          rows: evRows,
+        }),
+        note: "Events the site sends GA at the moment something happens. Value is what GA was told the action was worth: the amount paid online, or the studio fee a reservation will collect at the door.",
+      });
+
+      // Sources (monthly): source / medium.
+      // sources: [month, sourceMedium, sessions, users, keyEvents]
+      const srcTotals = new Map();
+      for (const r of sources.rows.filter(inMonths)) { const t = srcTotals.get(r[1]) || { sessions: 0, users: 0, keyEvents: 0 }; t.sessions += r[2]; t.users += r[3]; t.keyEvents += r[4]; srcTotals.set(r[1], t); }
+      const srcList = [...srcTotals.entries()].map(([source, t]) => ({ source, ...t })).sort((a, b) => b.sessions - a.sessions).slice(0, 15);
+      const srcSessions = sum([...srcTotals.values()].map((t) => [t.sessions]), 0);
+      const monthNote = `Monthly data covering ${[...months].map((m) => fmt.monthLong(m + "-01")).join(", ")}, so a range that starts or ends mid-month includes the whole month here.`;
+      const sourcesCard = ui.card({
+        title: "Top sources", bodyClass: "flush",
+        body: srcList.length === 0 ? ui.empty("No source data in these months.") : ui.table({
+          columns: [
+            { key: "source", label: "Source / medium", sticky: true, strong: true, cell: (r) => r.source },
+            { key: "sessions", label: "Sessions", align: "r", cell: (r) => fmt.count(r.sessions) },
+            { key: "share", label: "Share", align: "r", cell: (r) => ui.share(safeDiv(r.sessions, srcSessions) * 100) },
+            { key: "keyEvents", label: "Key events", align: "r", cell: (r) => fmt.count(r.keyEvents) },
+            { key: "rate", label: "Rate", align: "r", cell: (r) => fmt.pct1(safeDiv(r.keyEvents, r.sessions)) },
+          ],
+          rows: srcList,
+        }),
+        note: `The exact site or app each visit started from. Rate is key events per session. ${monthNote}`,
+      });
+
+      // Pages (monthly): [month, path, views, users, bounceRate, engagementSeconds]
+      const pageTotals = new Map();
+      for (const r of pages.rows.filter(inMonths)) { const t = pageTotals.get(r[1]) || { views: 0, users: 0, bounceWeighted: 0, seconds: 0 }; t.views += r[2]; t.users += r[3]; t.bounceWeighted += r[4] * r[2]; t.seconds += r[5]; pageTotals.set(r[1], t); }
+      const pageList = [...pageTotals.entries()].map(([path, t]) => ({ path, ...t, bounce: safeDiv(t.bounceWeighted, t.views), perUser: safeDiv(t.seconds, t.users) })).sort((a, b) => b.views - a.views).slice(0, 15);
+      const pagesCard = ui.card({
+        title: "Most viewed pages", bodyClass: "flush",
+        body: pageList.length === 0 ? ui.empty("No page data in these months.") : ui.table({
+          columns: [
+            { key: "path", label: "Page", sticky: true, strong: true, cell: (r) => r.path },
+            { key: "views", label: "Views", align: "r", cell: (r) => fmt.count(r.views) },
+            { key: "users", label: "Visitors", align: "r", cell: (r) => fmt.count(r.users) },
+            { key: "bounce", label: "Bounce", align: "r", cell: (r) => fmt.pct(r.bounce), cls: (r) => (r.views >= 50 && r.bounce >= 0.6 ? "neg" : "") },
+            { key: "time", label: "Time per visitor", align: "r", cell: (r) => `${Math.round(r.perUser)}s` },
+          ],
+          rows: pageList,
+        }),
+        note: `Bounce is the share of visits that left without engaging; high on a page people arrive at is normal, high on a page they chose to open is worth a look. ${monthNote}`,
+      });
+
+      // Cities and devices (monthly).
+      const cityTotals = new Map();
+      for (const r of cities.rows.filter(inMonths)) { const key = r[1] === "(not set)" ? "Unknown" : `${r[1]}, ${r[2]}`; const t = cityTotals.get(key) || { sessions: 0, keyEvents: 0 }; t.sessions += r[3]; t.keyEvents += r[5]; cityTotals.set(key, t); }
+      const cityList = [...cityTotals.entries()].map(([city, t]) => ({ city, ...t })).sort((a, b) => b.sessions - a.sessions).slice(0, 12);
+      const citySessions = [...cityTotals.values()].reduce((s, t) => s + t.sessions, 0);
+      const citiesCard = ui.card({
+        title: "Where visitors are", bodyClass: "flush",
+        body: cityList.length === 0 ? ui.empty("No location data in these months.") : ui.table({
+          columns: [
+            { key: "city", label: "City", sticky: true, strong: true, cell: (r) => r.city },
+            { key: "sessions", label: "Sessions", align: "r", cell: (r) => fmt.count(r.sessions) },
+            { key: "share", label: "Share", align: "r", cell: (r) => ui.share(safeDiv(r.sessions, citySessions) * 100) },
+            { key: "keyEvents", label: "Key events", align: "r", cell: (r) => fmt.count(r.keyEvents) },
+          ],
+          rows: cityList,
+        }),
+        note: `GA's best guess from the network, so a Provo visitor can show as Orem and a phone on cellular can land anywhere along the Wasatch Front. ${monthNote}`,
+      });
+      const devTotals = new Map();
+      for (const r of devices.rows.filter(inMonths)) devTotals.set(r[1], (devTotals.get(r[1]) || 0) + r[2]);
+      const devList = [...devTotals.entries()].sort((a, b) => b[1] - a[1]);
+      const devHost = chartHost(190);
+      const devicesCard = ui.card({ title: "Phones vs. desktops", bodyClass: "tight", body: devList.length === 0 ? ui.empty("No device data.") : [devHost, viz.legend(devList.map(([d], i) => ({ label: d, color: [c.brown, c.green, c.blue][i] || c.other, kind: "rect" })))], note: "Sessions by device. The booking flow should be checked on whatever this says most people use." });
+      if (devList.length) after.push(() => viz.donut(devHost, { labels: devList.map(([d]) => d), data: devList.map(([, n]) => n), colors: devList.map((_, i) => [c.brown, c.green, c.blue][i] || c.other), format: "count" }));
+
+      return [
+        kpis,
+        trafficCard,
+        channelCard,
+        eventsCard,
+        h("div", { class: "grid-2" }, sourcesCard, pagesCard),
+        h("div", { class: "grid-2" }, citiesCard, devicesCard),
+        h("p", { class: "closing", text: `Google Analytics property ${meta.propertyId}, data through ${fmt.dateLong(meta.to)}. GA reports the previous day in full the next morning, so today and yesterday can still fill in.` }),
+      ];
+    });
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  const renderers = { overview: renderOverview, marketing: renderMarketing, capacity: renderCapacity, sales: renderSales, website: renderWebsite };
+  function renderCurrent() { if (!state.shell) return; const id = state.shell.currentTab(); renderers[id] && renderers[id](); }
+
+  // reports.html mounts one shell for both sections and hands it over here.
+  // renderCurrent is a no-op when the shell's current tab belongs to Financials.
+  S.modules = S.modules || {};
+  S.modules.operations = {
+    id: "operations", label: "Operations",
+    tabs: [{ id: "overview", label: "Overview" }, { id: "marketing", label: "Marketing" }, { id: "website", label: "Website" }, { id: "capacity", label: "Capacity" }, { id: "sales", label: "Sales & Products" }],
+    rangedTabs: ["overview", "marketing", "website", "capacity", "sales"],
+    locationTabs: ["marketing", "capacity"],
+    start(sh) {
+      state.shell = sh;
+      state.query = range.toQuery(sh.state.range);
+      state.location = sh.state.location;
+      viz.onThemeChange(() => renderCurrent());
+      loadBookings();
+    },
+    refresh() { cache.clear(); },
+    onTab() { renderCurrent(); },
+    onRange(r) { state.query = range.toQuery(r); renderCurrent(); },
+    onLocation(loc) { state.location = loc; renderCurrent(); },
+  };
 })();
-</script>

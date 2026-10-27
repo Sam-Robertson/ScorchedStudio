@@ -1,44 +1,3 @@
-<meta charset="utf-8">
-<title>Scorched Financials</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="shared.css">
-<style>
-  /* Page-local tweaks on top of shared.css tokens. */
-  [hidden] { display: none !important; } /* the artifact skeleton ships this; kept here so local previews match */
-  .t-good { color: var(--good); font-weight: 600; }
-  .t-bad { color: var(--bad); font-weight: 600; }
-  .t-strong { color: var(--ink); font-weight: 600; }
-  .slice-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .slice-list .acct-row { align-items: center; }
-  .slice-list .acct-row.dim { opacity: .4; }
-  .slice-list .lab { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-  .slice-list .lab span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .slice-list .dot { width: 10px; height: 10px; border-radius: 999px; flex: none; }
-  .slice-total { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; font-weight: 700; border-top: 1px solid var(--line); margin-top: 8px; padding: 8px 8px 0; }
-  .breakdown { display: grid; gap: 18px; grid-template-columns: 1fr; align-items: center; }
-  @media (min-width: 760px) { .breakdown { grid-template-columns: minmax(220px, 320px) 1fr; } }
-  .bs-group { padding: 12px 18px; border-bottom: 1px solid var(--line); }
-  .bs-group:last-child { border-bottom: 0; }
-  .bs-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
-  .bs-row .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; }
-  .bs-row.total { font-family: var(--font-mono); font-weight: 600; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
-  .intro { color: var(--ink-2); font-size: 13.5px; }
-  .adj-list { display: flex; flex-direction: column; }
-  .adj-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line-2); font-size: 13px; }
-  .adj-item:last-child { border-bottom: 0; }
-  .adj-item .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; }
-  .adj-item .sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
-  .info-btn { width: 22px; height: 22px; border-radius: 999px; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--line); margin-left: 6px; vertical-align: middle; }
-  .info-btn[aria-pressed="true"] { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
-  .explainer { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; max-width: 60ch; padding: 0 18px 12px; }
-  .drill-cell { white-space: nowrap; }
-  td .drill { font: inherit; color: inherit; }
-</style>
-<div id="login" hidden></div>
-<div id="app" hidden></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="shared.js"></script>
-<script>
 (function () {
   "use strict";
   const S = window.Scorched;
@@ -591,23 +550,23 @@
     nodes.push(ui.card({ title: "Adjustment list (never hidden)", bodyClass: "flush", body: list }));
   };
 
-  // ── boot ───────────────────────────────────────────────────────────────
-  function onReady() {
-    if (!shell) {
-      shell = S.shell.mount(document.getElementById("app"), {
-        title: "Financials", tabs: TABS, rangedTabs: RANGED, locationTabs: [], initialRange: { preset: "3m" },
-        onTab: (id) => { if (mounted) show(id); },
-        onRange: (r) => { state.query = S.range.toQuery(r); if (RANGED.includes(shell.currentTab())) show(shell.currentTab()); },
-      });
+  // ── module registration ────────────────────────────────────────────────
+  // reports.html mounts one shell for both sections and hands it over here.
+  // Every callback checks that the tab is one of ours, since the shell's
+  // current tab can belong to the Operations section.
+  const mine = (id) => !!loaders[id];
+  S.modules = S.modules || {};
+  S.modules.financials = {
+    id: "financials", label: "Financials", tabs: TABS, rangedTabs: RANGED, locationTabs: [],
+    start(sh) {
+      shell = sh;
       state.query = S.range.toQuery(shell.state.range);
       mounted = true;
-      viz.onThemeChange(() => { if (shell) render(shell.currentTab()); });
-    } else {
-      cache.clear();
-      for (const k of Object.keys(tabData)) tabData[k] = null;
-    }
-    show(shell.currentTab());
-  }
-  S.auth.start({ title: "Financials", onReady });
+      viz.onThemeChange(() => { if (shell && mine(shell.currentTab())) render(shell.currentTab()); });
+    },
+    refresh() { cache.clear(); for (const k of Object.keys(tabData)) tabData[k] = null; },
+    onTab(id) { if (mounted && mine(id)) show(id); },
+    onRange(r) { state.query = S.range.toQuery(r); if (shell && RANGED.includes(shell.currentTab())) show(shell.currentTab()); },
+    onLocation() { /* no location-aware tabs */ },
+  };
 })();
-</script>

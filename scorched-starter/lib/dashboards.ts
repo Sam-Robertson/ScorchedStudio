@@ -1,20 +1,15 @@
-// The reporting dashboards are published Claude artifacts. They cannot call
-// this app directly (claude.ai blocks network requests from artifacts), so each
-// one reads a snapshot of the admin API data that Claude pushes into the
-// artifact's own database on a schedule. They replaced the in-app
-// /admin/reporting pages on 2026-10-12. Update these when a dashboard is
-// republished to a new link.
+// The reporting dashboard is a published Claude artifact. It cannot call this
+// app directly (claude.ai blocks network requests from artifacts), so it reads
+// a snapshot of the admin API data that Claude publishes next to the page on a
+// schedule. It replaced the in-app /admin/reporting pages on 2026-10-12 as two
+// artifacts (Financials and Operations), merged into one page with two
+// sections on 2026-10-26. Update this when the dashboard is republished to a
+// new link.
 export const DASHBOARDS = [
   {
-    key: "financials",
-    label: "Financials",
-    blurb: "P&L, monthly P&L, costs, balance sheet, cash flow, projections, normalized EBITDA.",
+    key: "reports",
+    label: "Dashboard",
+    blurb: "Financials: P&L, costs, balance sheet, cash flow, projections. Operations: marketing, website, capacity, Square sales.",
     url: "https://claude.ai/artifact/Fm3coEiirc481Tiu3gxW8r",
-  },
-  {
-    key: "operations",
-    label: "Operations",
-    blurb: "Overview, marketing spend and channels, capacity and repeat customers, Square sales.",
-    url: "https://claude.ai/artifact/VJu3gkKX5F32BxEcQCoSLd",
   },
 ] as const;
