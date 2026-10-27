@@ -33,6 +33,11 @@ API (`web/*` plus `snap/web-meta`). That needs `GA_PROPERTY_ID` and
 script runs; without them the tab explains it is not connected and the rest refreshes as
 usual. The events it counts are the ones `lib/analytics.ts` sends from the site.
 
+The Overview tab's "Insights" card is a short note Claude writes during each refresh from
+`data/snap/facts.json` (comparisons the script computes) into `data/snap/insights.json`,
+which sits outside the manifest; the page fetches it directly and shows a placeholder when
+it is missing. The refresh-dashboards skill and the routine prompt carry the writing rules.
+
 With no data files present (a local preview served from this folder) the same page falls
 back to real API calls with a sign-in card; set the API address under "Sign-in settings"
 to `http://localhost:3000` to test against a dev server. To preview the published layout

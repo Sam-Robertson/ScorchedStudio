@@ -178,7 +178,10 @@
   //   bookings/<YYYY-MM> {rows: [[created_at, date, time_slot, party_size,
   //     amount_paid, status, referral_source, referral_other, location, cust]]},
   //   snap/web-meta {connected, ...} and web/<daily|channels|sources|pages|
-  //     events|cities|devices> {id, from, to, rows} from Google Analytics.
+  //     events|cities|devices> {id, from, to, rows} from Google Analytics,
+  //   snap/facts (week/month comparisons the insights are written from).
+  // data/snap/insights.json {asOf, items: [{title, body, tone, tab}]} is written by
+  // Claude during the refresh and is not in the manifest (see resolve).
   // The small "snap" documents load up front; journal, bookings and web on demand.
   const LABOR_CODES = new Set(["6000", "6010"]);
   const EXCLUDED_CODES = new Set(["7000", "8000"]);
@@ -322,6 +325,9 @@
         case "/api/admin/accounting/journal-entries": return this.journal(q);
         // Website traffic has no app route; it only exists in the snapshot.
         case "/api/admin/web/meta": return this.docs.get("web-meta") || { connected: false, reason: "no web-meta document in this snapshot" };
+        // Insights are written by the refresh (not the snapshot script), so they are
+        // outside the manifest: fetch the file directly and treat "missing" as none.
+        case "/api/admin/insights": { if (this.docs.has("insights")) return this.docs.get("insights"); try { return await this.fetchJson("data/snap/insights.json"); } catch { return null; } }
         default: {
           const web = u.pathname.match(/^\/api\/admin\/web\/([a-z]+)$/);
           if (web) {

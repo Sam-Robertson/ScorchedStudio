@@ -218,6 +218,102 @@ function websiteDocs(today) {
   return docs;
 }
 
+// ── Facts for the daily insights ────────────────────────────────────────────
+// Deterministic week-over-week and month-over-month comparisons. During the
+// refresh Claude reads this document and writes data/snap/insights.json (a few
+// sentences shown on the Overview tab); the numbers come from here, never from
+// eyeballing the raw documents. Windows end today (the in-progress day).
+function factsDoc({ pl, bookings, salesAll, webDocs, today }) {
+  const shift = (ymd, n) => { const d = new Date(ymd + "T12:00:00"); d.setDate(d.getDate() + n); return toDateStr(d); };
+  const between = (d, w) => d >= w.start && d <= w.end;
+  const win = (n, endOffset = 0) => { const end = shift(today, endOffset); return { start: shift(end, -(n - 1)), end }; };
+  const w7 = { now: win(7), prev: win(7, -7) }, w28 = { now: win(28), prev: win(28, -28) };
+  const round2 = (x) => Math.round(x * 100) / 100;
+  const pct1 = (x) => Math.round(x * 1000) / 10;
+  const cmp = (now, prev) => ({ now, prev, changePct: prev > 0 ? pct1((now - prev) / prev) : null });
+
+  // Square net sales per day is the only daily revenue series.
+  const daily = (salesAll.daily || []).map((d) => [d.date, d.netSales]);
+  const sumDays = (w) => round2(daily.filter(([d]) => between(d, w)).reduce((s, [, v]) => s + v, 0));
+  const month = today.slice(0, 7), dom = Number(today.slice(8, 10));
+  const pm = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1);
+  const prevMonth = `${pm.getFullYear()}-${pad(pm.getMonth() + 1)}`;
+  const prevMonthDays = new Date(pm.getFullYear(), pm.getMonth() + 1, 0).getDate();
+  const mtd = { start: month + "-01", end: today };
+  const prevMtd = { start: prevMonth + "-01", end: `${prevMonth}-${pad(Math.min(dom, prevMonthDays))}` };
+
+  // Ledger: last full month vs the one before (the in-progress month is excluded).
+  const months = [...pl.months].sort((a, b) => a.period_month.localeCompare(b.period_month)).filter((m) => m.period_month.slice(0, 7) < month);
+  const lineSum = (code, ym) => round2(pl.lines.filter((l) => l.code === code && l.period_month.slice(0, 7) === ym).reduce((s, l) => s + Number(l.amount), 0));
+  const ledgerMonth = (m) => (m ? { month: m.period_month.slice(0, 7), revenue: round2(m.revenue), grossProfit: round2(m.gross_profit), operatingExpenses: round2(m.operating_expenses), ebitda: round2(m.ebitda), netIncome: round2(m.net_income), marketing: lineSum("6200", m.period_month.slice(0, 7)), labor: round2(lineSum("6000", m.period_month.slice(0, 7)) + lineSum("6010", m.period_month.slice(0, 7))) } : null);
+
+  // Bookings by the Denver day they were made; seats by session date.
+  const created = (b) => denverDateKey(b.created_at);
+  const madeIn = (w) => bookings.filter((b) => between(created(b), w));
+  const confirmedIn = (w) => madeIn(w).filter((b) => b.status === "confirmed");
+  const seatsFor = (w) => bookings.filter((b) => b.status === "confirmed" && between(b.date, w)).reduce((s, b) => s + b.party_size, 0);
+  const sourceShares = (w) => {
+    const list = confirmedIn(w), m = new Map();
+    for (const b of list) { const k = b.referral_source || "(not recorded)"; m.set(k, (m.get(k) || 0) + 1); }
+    return [...m].map(([source, count]) => ({ source, count, sharePct: list.length ? pct1(count / list.length) : 0 })).sort((a, b) => b.count - a.count).slice(0, 6);
+  };
+  const cancelRate = (w) => { const l = madeIn(w); return l.length ? pct1(l.filter((b) => b.status === "cancelled").length / l.length) : null; };
+  const avgParty = (w) => { const l = confirmedIn(w); return l.length ? Math.round((l.reduce((s, b) => s + b.party_size, 0) / l.length) * 10) / 10 : null; };
+  const confirmedAll = bookings.filter((b) => b.status === "confirmed").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const groups = customerGroups(confirmedAll);
+  const firstSeen = new Map();
+  for (const b of confirmedAll) { const g = groups.get(b.id); if (!firstSeen.has(g)) firstSeen.set(g, created(b)); }
+  const returningIn = (w) => confirmedIn(w).filter((b) => firstSeen.get(groups.get(b.id)) < created(b)).length;
+  const byLocation = (w) => { const m = {}; for (const b of confirmedIn(w)) { const k = b.location || "orem"; m[k] = (m[k] || 0) + 1; } return m; };
+
+  const facts = {
+    asOf: today,
+    windows: { last7: w7.now, prev7: w7.prev, last28: w28.now, prev28: w28.prev, monthToDate: mtd, prevMonthToSamePoint: prevMtd },
+    squareSales: {
+      note: "Square net sales per day (in-studio). Online bookings, courses and memberships go through Stripe and are not in these figures; the ledger below has everything.",
+      last7: cmp(sumDays(w7.now), sumDays(w7.prev)), last28: cmp(sumDays(w28.now), sumDays(w28.prev)), monthToDate: cmp(sumDays(mtd), sumDays(prevMtd)),
+    },
+    ledger: { note: "Cash-basis ledger, whole months only.", lastFullMonth: ledgerMonth(months[months.length - 1]), monthBefore: ledgerMonth(months[months.length - 2]) },
+    bookings: {
+      note: "Online bookings only (launched " + ONLINE_BOOKING_LAUNCH_NOTE + "). 'madeConfirmed' counts by the day the booking was created; 'seats' by session date. seats.next7.now is what is booked so far for the coming 7 days (more will be added, bookings are usually made close to the date) against the past 7 days' seats.",
+      madeConfirmed: { last7: cmp(confirmedIn(w7.now).length, confirmedIn(w7.prev).length), last28: cmp(confirmedIn(w28.now).length, confirmedIn(w28.prev).length) },
+      seats: { last7: cmp(seatsFor(w7.now), seatsFor(w7.prev)), next7: cmp(seatsFor({ start: shift(today, 1), end: shift(today, 7) }), seatsFor({ start: shift(today, -6), end: today })) },
+      cancellationRatePct: { last28: cancelRate(w28.now), prev28: cancelRate(w28.prev) },
+      avgPartySize: { last28: avgParty(w28.now), prev28: avgParty(w28.prev) },
+      sources: { last28: sourceShares(w28.now), prev28: sourceShares(w28.prev) },
+      returning: { last28: { returning: returningIn(w28.now), confirmed: confirmedIn(w28.now).length }, prev28: { returning: returningIn(w28.prev), confirmed: confirmedIn(w28.prev).length } },
+      byLocation: { last28: byLocation(w28.now) },
+    },
+    web: null,
+  };
+
+  const webDoc = (id) => (webDocs.find((d) => d.collection === "web" && d.doc_id === id) || {}).data;
+  const wd = webDoc("daily");
+  if (wd) {
+    const rowsIn = (rows, w) => rows.filter((r) => between(r[0], w));
+    const sum = (rows, i) => rows.reduce((s, r) => s + r[i], 0);
+    const sessions = (w) => sum(rowsIn(wd.rows, w), 1), users = (w) => sum(rowsIn(wd.rows, w), 2), newUsers = (w) => sum(rowsIn(wd.rows, w), 3), engaged = (w) => sum(rowsIn(wd.rows, w), 5);
+    const channelShares = (w) => {
+      const list = rowsIn(webDoc("channels").rows, w), total = sum(list, 2), m = new Map();
+      for (const r of list) m.set(r[1], (m.get(r[1]) || 0) + r[2]);
+      return [...m].map(([channel, s]) => ({ channel, sessions: s, sharePct: total ? pct1(s / total) : 0 })).sort((a, b) => b.sessions - a.sessions).slice(0, 6);
+    };
+    const eventCounts = (w) => { const m = {}; for (const r of rowsIn(webDoc("events").rows, w)) m[r[1]] = (m[r[1]] || 0) + r[2]; return m; };
+    const topPages = (ym) => { const m = new Map(); for (const r of webDoc("pages").rows.filter((r) => r[0] === ym && !String(r[1]).startsWith("/admin"))) m.set(r[1], (m.get(r[1]) || 0) + r[2]); return [...m].map(([path, views]) => ({ path, views })).sort((a, b) => b.views - a.views).slice(0, 8); };
+    facts.web = {
+      note: "Google Analytics. Yesterday fills in during the morning, so the last day is usually light.",
+      sessions: { last7: cmp(sessions(w7.now), sessions(w7.prev)), last28: cmp(sessions(w28.now), sessions(w28.prev)) },
+      visitors: { last28: cmp(users(w28.now), users(w28.prev)), newSharePct: { last28: users(w28.now) ? pct1(newUsers(w28.now) / users(w28.now)) : null } },
+      engagementRatePct: { last28: sessions(w28.now) ? pct1(engaged(w28.now) / sessions(w28.now)) : null, prev28: sessions(w28.prev) ? pct1(engaged(w28.prev) / sessions(w28.prev)) : null },
+      channels: { last28: channelShares(w28.now), prev28: channelShares(w28.prev) },
+      events: { last7: eventCounts(w7.now), last28: eventCounts(w28.now) },
+      topPages: { thisMonth: topPages(month), lastMonth: topPages(prevMonth) },
+    };
+  }
+  return facts;
+}
+const ONLINE_BOOKING_LAUNCH_NOTE = "2026-03-24";
+
 function main() {
   signIn();
   const generatedAt = new Date().toISOString();
@@ -270,12 +366,16 @@ function main() {
   for (const [preset, start] of Object.entries(presets)) {
     push("snap", `sales-${start}`, { preset, start, ...get(`/api/admin/accounting/reports/sales?start=${start}&end=${today}`) });
   }
-  push("snap", "sales-all", { preset: "all", ...get("/api/admin/accounting/reports/sales") });
+  const salesAll = { preset: "all", ...get("/api/admin/accounting/reports/sales") };
+  push("snap", "sales-all", salesAll);
 
   // Operations: website traffic from Google Analytics (or a not-connected note).
   const webDocs = websiteDocs(today);
   for (const d of webDocs) push(d.collection, d.doc_id, d.data);
   const webMeta = webDocs.find((d) => d.doc_id === "web-meta").data;
+
+  // Comparisons for the written insights (see factsDoc).
+  push("snap", "facts", factsDoc({ pl, bookings, salesAll, webDocs, today }));
 
   push("snap", "meta", { generatedAt, apiBase: API, dataStartsAt: DATA_STARTS_AT, balanceAsOf: today, salesPresets: { ...presets, all: "" }, bookingMonths: [...byMonth.keys()].sort(), journalMonths: months, bookings: bookings.length, journalEntries });
 

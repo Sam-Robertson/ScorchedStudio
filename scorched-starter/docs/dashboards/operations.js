@@ -224,10 +224,42 @@
   function chartHost(height) { const el = h("div", { class: "chart" }); el.style.height = height + "px"; return el; }
 
   // ── Overview ─────────────────────────────────────────────────────────────
+  // Insights are a short note Claude writes during the daily refresh from the
+  // snapshot's facts document (data/snap/insights.json). Missing is normal
+  // before the first refresh, so the loader resolves to null instead of failing.
+  let insightsPromise = null;
+  function loadInsights() {
+    if (!insightsPromise) {
+      insightsPromise = api.get("/api/admin/insights").catch(() => null);
+      insightsPromise.settled = false;
+      insightsPromise.then(() => { insightsPromise.settled = true; });
+    }
+    return insightsPromise;
+  }
+  const TAB_LABEL = { pl: "Financials, P&L", monthly: "Financials, Monthly P&L", costs: "Financials, Costs", balance: "Financials, Balance Sheet", cashflow: "Financials, Cash Flow", projections: "Financials, Projections", overview: "Overview", marketing: "Marketing", website: "Website", capacity: "Capacity", sales: "Sales & Products" };
+  function insightsCard(ins) {
+    const items = ins && Array.isArray(ins.items) ? ins.items.filter((it) => it && it.title) : [];
+    if (!items.length) {
+      return ui.card({ title: "Insights", body: h("p", { class: "closing", text: "Nothing written yet. During each overnight refresh Claude reads the day's numbers and leaves a few notes here about what moved and what to look at." }) });
+    }
+    const list = h("div", { class: "insights" }, items.map((it) => {
+      const where = it.tab && TAB_LABEL[it.tab] ? h("button", { type: "button", class: "iwhere", text: TAB_LABEL[it.tab], onClick: () => state.shell.setTab(it.tab, true) }) : null;
+      return h("div", { class: "insight" },
+        h("span", { class: "idot " + (["good", "bad", "warn"].includes(it.tone) ? it.tone : "neutral") }),
+        h("div", { class: "stack", style: "gap: 3px" }, h("p", { class: "ititle", text: it.title }), h("p", { class: "ibody", text: it.body || "" }), where));
+    }));
+    const when = ins.asOf ? fmt.dateLong(ins.asOf) : "";
+    return ui.card({
+      title: "Insights", action: h("span", { class: "lbl", text: when ? "Written by Claude from the " + when + " numbers" : "Written by Claude" }),
+      body: list,
+      note: "Claude writes these during the daily refresh from the same data the charts use, comparing the last week and the last four weeks with the periods before. Every number here can be checked in the tab it names.",
+    });
+  }
+
   function renderOverview() {
     const view = state.shell.views.overview;
     const q = state.query;
-    withData(view, [loadPl(q), loadCosts(q), loadBookings()], ([pl, costs, bookings]) => {
+    withData(view, [loadPl(q), loadCosts(q), loadBookings(), loadInsights()], ([pl, costs, bookings, insights]) => {
       const months = dropEmptyTrailingMonths(pl.months || []);
       const revenue = months.reduce((s, m) => s + m.revenue, 0);
       const netIncome = months.reduce((s, m) => s + m.net_income, 0);
@@ -246,6 +278,7 @@
       const { uniqueCustomers, returningCustomers } = buildRepeatData(bookings);
       const repeatRate = uniqueCustomers > 0 ? returningCustomers / uniqueCustomers : 0;
       return [
+        insightsCard(insights),
         ui.kpis(3, [
           ui.kpi({ label: "Net Revenue", value: fmt.money0(revenue), sub: "full ledger, selected range" }),
           ui.kpi({ label: "Net Profit", value: fmt.money0(netIncome), tone: netIncome < 0 ? "bad" : "good", sub: "after all costs" }),
@@ -856,34 +889,36 @@
       const srcList = [...srcTotals.entries()].map(([source, t]) => ({ source, ...t })).sort((a, b) => b.sessions - a.sessions).slice(0, 15);
       const srcSessions = sum([...srcTotals.values()].map((t) => [t.sessions]), 0);
       const monthNote = `Monthly data covering ${[...months].map((m) => fmt.monthLong(m + "-01")).join(", ")}, so a range that starts or ends mid-month includes the whole month here.`;
+      // These three tables sit in half-width cards, so each numeric column
+      // stacks its detail (share, rate, visitors) under the main figure
+      // instead of taking a column of its own; nothing should scroll sideways.
+      const two = (main, sub) => h("span", { class: "two" }, h("span", { text: main }), h("span", { class: "sub", text: sub }));
       const sourcesCard = ui.card({
         title: "Top sources", bodyClass: "flush",
         body: srcList.length === 0 ? ui.empty("No source data in these months.") : ui.table({
           columns: [
-            { key: "source", label: "Source / medium", sticky: true, strong: true, cell: (r) => r.source },
-            { key: "sessions", label: "Sessions", align: "r", cell: (r) => fmt.count(r.sessions) },
-            { key: "share", label: "Share", align: "r", cell: (r) => ui.share(safeDiv(r.sessions, srcSessions) * 100) },
-            { key: "keyEvents", label: "Key events", align: "r", cell: (r) => fmt.count(r.keyEvents) },
-            { key: "rate", label: "Rate", align: "r", cell: (r) => fmt.pct1(safeDiv(r.keyEvents, r.sessions)) },
+            { key: "source", label: "Source / medium", strong: true, cls: () => "wrap", cell: (r) => r.source },
+            { key: "sessions", label: "Sessions", align: "r", cell: (r) => two(fmt.count(r.sessions), fmt.pct(safeDiv(r.sessions, srcSessions)) + " share") },
+            { key: "keyEvents", label: "Key events", align: "r", cell: (r) => two(fmt.count(r.keyEvents), fmt.pct1(safeDiv(r.keyEvents, r.sessions)) + " of sessions") },
           ],
           rows: srcList,
         }),
-        note: `The exact site or app each visit started from. Rate is key events per session. ${monthNote}`,
+        note: `The exact site or app each visit started from. ${monthNote}`,
       });
 
       // Pages (monthly): [month, path, views, users, bounceRate, engagementSeconds]
       const pageTotals = new Map();
-      for (const r of pages.rows.filter(inMonths)) { const t = pageTotals.get(r[1]) || { views: 0, users: 0, bounceWeighted: 0, seconds: 0 }; t.views += r[2]; t.users += r[3]; t.bounceWeighted += r[4] * r[2]; t.seconds += r[5]; pageTotals.set(r[1], t); }
+      // Staff pages (/admin/...) are Sam and the team, not visitors; keep them out of the ranking.
+      for (const r of pages.rows.filter((r) => inMonths(r) && !String(r[1]).startsWith("/admin"))) { const t = pageTotals.get(r[1]) || { views: 0, users: 0, bounceWeighted: 0, seconds: 0 }; t.views += r[2]; t.users += r[3]; t.bounceWeighted += r[4] * r[2]; t.seconds += r[5]; pageTotals.set(r[1], t); }
       const pageList = [...pageTotals.entries()].map(([path, t]) => ({ path, ...t, bounce: safeDiv(t.bounceWeighted, t.views), perUser: safeDiv(t.seconds, t.users) })).sort((a, b) => b.views - a.views).slice(0, 15);
       const pagesCard = ui.card({
         title: "Most viewed pages", bodyClass: "flush",
         body: pageList.length === 0 ? ui.empty("No page data in these months.") : ui.table({
           columns: [
-            { key: "path", label: "Page", sticky: true, strong: true, cell: (r) => r.path },
-            { key: "views", label: "Views", align: "r", cell: (r) => fmt.count(r.views) },
-            { key: "users", label: "Visitors", align: "r", cell: (r) => fmt.count(r.users) },
+            { key: "path", label: "Page", strong: true, cls: () => "wrap", cell: (r) => r.path },
+            { key: "views", label: "Views", align: "r", cell: (r) => two(fmt.count(r.views), fmt.count(r.users) + " visitors") },
             { key: "bounce", label: "Bounce", align: "r", cell: (r) => fmt.pct(r.bounce), cls: (r) => (r.views >= 50 && r.bounce >= 0.6 ? "neg" : "") },
-            { key: "time", label: "Time per visitor", align: "r", cell: (r) => `${Math.round(r.perUser)}s` },
+            { key: "time", label: "Time", align: "r", cell: (r) => two(`${Math.round(r.perUser)}s`, "per visitor") },
           ],
           rows: pageList,
         }),
@@ -899,9 +934,8 @@
         title: "Where visitors are", bodyClass: "flush",
         body: cityList.length === 0 ? ui.empty("No location data in these months.") : ui.table({
           columns: [
-            { key: "city", label: "City", sticky: true, strong: true, cell: (r) => r.city },
-            { key: "sessions", label: "Sessions", align: "r", cell: (r) => fmt.count(r.sessions) },
-            { key: "share", label: "Share", align: "r", cell: (r) => ui.share(safeDiv(r.sessions, citySessions) * 100) },
+            { key: "city", label: "City", strong: true, cls: () => "wrap", cell: (r) => r.city },
+            { key: "sessions", label: "Sessions", align: "r", cell: (r) => two(fmt.count(r.sessions), fmt.pct(safeDiv(r.sessions, citySessions)) + " share") },
             { key: "keyEvents", label: "Key events", align: "r", cell: (r) => fmt.count(r.keyEvents) },
           ],
           rows: cityList,

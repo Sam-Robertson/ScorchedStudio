@@ -33,12 +33,35 @@ The snapshot also carries Google Analytics traffic (`web/*` documents and
 The script's last output line says whether GA was read or why not; a GA problem never
 fails the rest of the snapshot, the Website tab just shows the reason.
 
+## 1b. Write the insights
+
+The Overview tab opens with an "Insights" card that Claude writes at refresh time. Read
+`.dashboard-snapshot/data/snap/facts.json` (week-over-week and month-over-month comparisons
+the script computed: Square sales, ledger months, bookings, sources, returning customers,
+and website traffic when GA is connected) and write
+`.dashboard-snapshot/data/snap/insights.json`:
+
+```
+{"asOf": "<facts.asOf>", "generatedAt": "<ISO now>", "items": [{"title", "body", "tone", "tab"}, ...]}
+```
+
+4 to 7 items, biggest move first. `title` under 9 words stating the finding; `body` one to
+three sentences under 50 words quoting the facts' numbers (rounded, with $ or %) and
+saying which windows; `tone` is good, bad, warn (something to check, such as a ledger line
+that looks miscoded or a comparison that is not apples to apples) or neutral; `tab` is one
+of pl, monthly, costs, balance, cashflow, projections, overview, marketing, website,
+capacity, sales. Always cover bookings and, when `facts.web` exists, the website. Treat
+`seats.next7` as what is booked so far, not a drop. Never invent causes: connect two facts
+only when both are in the file. Plain language, no em dashes. The file is outside the
+manifest; add it to the publish map by hand.
+
 ## 2. Republish the data files
 
 One `Artifact` publish with `url` set to the artifact, `file_path` the page
 (`docs/dashboards/reports.html`), `root` the snapshot folder
 (`scorched-starter/.dashboard-snapshot`), and `files` mapping every path in
-`data/manifest.json` to itself, plus `data/manifest.json`. Leave out `capabilities`
+`data/manifest.json` to itself, plus `data/manifest.json` and
+`data/snap/insights.json`. Leave out `capabilities`
 and `icon`; files not mentioned (`shared.css`, `shared.js`, `financials.js`,
 `operations.js`) are kept. If the session has not read or published the artifact yet,
 `Artifact` action `read` with the url first (and `list` with scope `files` so the
