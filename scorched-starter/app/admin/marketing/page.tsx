@@ -405,6 +405,8 @@ function CampaignsTab() {
   const [notice, setNotice] = useState("");
   const [composing, setComposing] = useState(false);
   const [confirming, setConfirming] = useState<CampaignRecord | null>(null);
+  // A text campaign being edited in place. Emails edit in the builder page.
+  const [editing, setEditing] = useState<CampaignRecord | null>(null);
   const [confirmCount, setConfirmCount] = useState<number | null>(null);
   // A sent email campaign whose send stopped partway. Holds the preview from
   // the server so the confirm can say exactly how many people are affected.
@@ -663,6 +665,18 @@ function CampaignsTab() {
                   CANCEL
                 </button>
               )}
+              {/* A text has no builder page, so it is edited in the same
+                  modal that created it. Content locks once sending starts,
+                  which is the same rule the update route enforces. */}
+              {c.channel === "sms" && ["draft", "scheduled"].includes(c.status) && (
+                <button
+                  onClick={() => setEditing(c)}
+                  className={`${btnCls} border border-black/20 text-neutral-600 flex items-center gap-1.5`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  EDIT
+                </button>
+              )}
               {c.channel === "email" && (
                 <button
                   onClick={() => router.push(`/admin/marketing/campaigns/${c.id}`)}
@@ -759,6 +773,7 @@ function CampaignsTab() {
       </div>
 
       {composing && <Composer onClose={() => setComposing(false)} onSaved={() => { setComposing(false); load(); }} />}
+      {editing && <Composer campaign={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
 
       {resendFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -813,16 +828,27 @@ function CampaignsTab() {
 
 // ── Composer ─────────────────────────────────────────────────────────────────
 
-function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+// With `campaign` set the modal edits that text campaign in place instead of
+// creating one. Only texts come through here: an email draft is created here
+// but written in the builder page, which is also where it is edited.
+function Composer({
+  onClose,
+  onSaved,
+  campaign,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  campaign?: CampaignRecord;
+}) {
   const router = useRouter();
-  const [channel, setChannel] = useState<"email" | "sms">("email");
-  const [name, setName] = useState("");
-  const [body, setBody] = useState("");
-  const [tags, setTags] = useState("");
-  const [match, setMatch] = useState<"any" | "all">("any");
+  const [channel, setChannel] = useState<"email" | "sms">(campaign?.channel ?? "email");
+  const [name, setName] = useState(campaign?.name ?? "");
+  const [body, setBody] = useState(campaign?.body ?? "");
+  const [tags, setTags] = useState((campaign?.segment?.tags ?? []).join(", "));
+  const [match, setMatch] = useState<"any" | "all">(campaign?.segment?.match ?? "any");
   const [count, setCount] = useState<number | null>(null);
   const [costPerSegment, setCostPerSegment] = useState(0.004);
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaUrl, setMediaUrl] = useState(campaign?.media_url ?? "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -851,6 +877,20 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
     setSaving(true);
     setError("");
     try {
+      if (campaign) {
+        await api(`/api/admin/marketing/campaigns/${campaign.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name,
+            body,
+            mediaUrl: mediaUrl.trim(),
+            segment: { tags: tags.split(",").map((t) => t.trim()).filter(Boolean), match },
+          }),
+        });
+        onSaved();
+        return;
+      }
+
       const created = await api("/api/admin/marketing/campaigns", {
         method: "POST",
         body: JSON.stringify({
@@ -882,18 +922,22 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
       <div className="w-full max-w-lg rounded-2xl bg-white p-6 my-8">
         <div className="flex justify-between items-start mb-4">
-          <h2 className={`${vulfMono.className} text-sm tracking-[0.15em] uppercase`}>New campaign</h2>
+          <h2 className={`${vulfMono.className} text-sm tracking-[0.15em] uppercase`}>
+            {campaign ? "Edit text" : "New campaign"}
+          </h2>
           <button onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Channel</label>
-            <select className={inputCls} value={channel} onChange={(e) => setChannel(e.target.value as "email" | "sms")}>
-              <option value="email">Email</option>
-              <option value="sms">Text message</option>
-            </select>
-          </div>
+          {!campaign && (
+            <div>
+              <label className={labelCls}>Channel</label>
+              <select className={inputCls} value={channel} onChange={(e) => setChannel(e.target.value as "email" | "sms")}>
+                <option value="email">Email</option>
+                <option value="sms">Text message</option>
+              </select>
+            </div>
+          )}
 
           <div>
             <label className={labelCls}>Internal name</label>
@@ -990,7 +1034,7 @@ function Composer({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
             disabled={saving || issues.some((i) => i.level === "error")}
             className={`${btnCls} bg-[#884A20] text-white disabled:opacity-60`}
           >
-            {saving ? "SAVING…" : channel === "email" ? "OPEN THE BUILDER" : "SAVE DRAFT"}
+            {saving ? "SAVING…" : campaign ? "SAVE CHANGES" : channel === "email" ? "OPEN THE BUILDER" : "SAVE DRAFT"}
           </button>
         </div>
       </div>

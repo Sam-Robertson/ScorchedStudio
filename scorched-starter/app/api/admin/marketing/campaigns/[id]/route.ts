@@ -54,6 +54,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       patch.name !== undefined ||
       patch.subject !== undefined ||
       patch.body !== undefined ||
+      patch.mediaUrl !== undefined ||
       patch.blocks !== undefined ||
       patch.design !== undefined ||
       patch.previewText !== undefined;
@@ -99,6 +100,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
       if (patch.previewText !== undefined) {
         update.preview_text = String(patch.previewText).trim() || null;
+      }
+
+      // An image turns a text into an MMS. The column is SMS-only by
+      // constraint, so an email sending this key is refused rather than
+      // tripping the database check.
+      if (patch.mediaUrl !== undefined) {
+        if (campaign.channel !== "sms") {
+          return Response.json({ error: "Only text campaigns can carry an image." }, { status: 400 });
+        }
+        update.media_url = String(patch.mediaUrl).trim() || null;
       }
 
       // The email subject constraint is NOT NULL, so an email draft clearing
