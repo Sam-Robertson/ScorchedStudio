@@ -116,3 +116,9 @@ export function siteUrl(): string {
 export function marketingFrom(): string {
   return process.env.RESEND_MARKETING_FROM || "Scorched Studio <hello@news.scorchedstudio.com>";
 }
+
+// Where a reply to a campaign lands. Unset means replies go back to the From
+// address, which on the news subdomain is a mailbox nobody reads.
+export function marketingReplyTo(): string | undefined {
+  return process.env.RESEND_MARKETING_REPLY_TO?.trim() || undefined;
+}

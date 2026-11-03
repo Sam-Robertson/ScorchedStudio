@@ -9,7 +9,7 @@
 import { Resend } from "resend";
 import type { CampaignRecord, SubscriberRecord } from "@/lib/supabase";
 import { renderCampaign, personalizeFor, personalize } from "./email-render";
-import { marketingFrom, marketingIsLive, logSuppressedSend, isTestRecipient } from "./config";
+import { marketingFrom, marketingReplyTo, marketingIsLive, logSuppressedSend, isTestRecipient } from "./config";
 import { chunk, unsubscribeHeaders, unsubscribeUrlFor } from "./email-headers";
 
 export { chunk, unsubscribeHeaders, unsubscribeUrlFor };
@@ -85,6 +85,7 @@ export async function sendCampaignEmails(
   if (!key) throw new Error("Missing RESEND_API_KEY");
   const resend = new Resend(key);
   const from = marketingFrom();
+  const replyTo = marketingReplyTo();
 
   let sent = 0;
   let failed = 0;
@@ -94,6 +95,7 @@ export async function sendCampaignEmails(
       const res = await resend.batch.send(
         batch.map((m) => ({
           from,
+          ...(replyTo ? { replyTo } : {}),
           to: [m.to],
           subject: m.subject,
           html: m.html,
@@ -148,6 +150,7 @@ export async function sendTestEmail(
 
   await new Resend(key).emails.send({
     from: marketingFrom(),
+    ...(marketingReplyTo() ? { replyTo: marketingReplyTo() } : {}),
     to: toEmail,
     subject: `[TEST] ${copy.subject || campaign.name}`,
     html: copy.html,
