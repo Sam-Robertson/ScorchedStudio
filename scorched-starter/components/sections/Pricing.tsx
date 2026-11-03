@@ -17,7 +17,7 @@ const items = [
 
 export default function Pricing() {
   return (
-    <section className="py-12">
+    <section id="pricing" className="py-12">
       <Container>
         <div className="mx-auto max-w-xl md:max-w-2xl">
           <div className="rounded-3xl border border-green bg-white p-6 shadow-sm md:p-10">
