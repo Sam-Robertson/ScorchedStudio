@@ -6,6 +6,7 @@ import { vulfMono } from "@/app/fonts";
 import Container from "@/components/ui/Container";
 import { Flame, Percent, Wallet } from "lucide-react";
 import type { BillingInterval, MembershipPlan } from "@/lib/memberships";
+import type { MembershipOfferSummary } from "@/lib/membership-offer";
 import { trackMembershipCheckoutStart } from "@/lib/analytics";
 
 const inputCls =
@@ -15,7 +16,15 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) {
+export default function MembershipTiers({
+  plans,
+  offer = null,
+}: {
+  plans: MembershipPlan[];
+  // The running first-month promo, if any. Only monthly plans get it; the
+  // checkout route applies the matching Stripe coupon on its own.
+  offer?: MembershipOfferSummary | null;
+}) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [pendingPlan, setPendingPlan] = useState<MembershipPlan | null>(null);
   const [firstName, setFirstName] = useState("");
@@ -112,6 +121,7 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
               key={plan.key}
               plan={plan}
               interval={interval}
+              offer={interval === "monthly" ? offer : null}
               active={pendingPlan?.key === plan.key}
               onCheckout={() => selectPlan(plan)}
             />
@@ -214,11 +224,13 @@ export default function MembershipTiers({ plans }: { plans: MembershipPlan[] }) 
 function TierCard({
   plan,
   interval,
+  offer,
   active,
   onCheckout,
 }: {
   plan: MembershipPlan;
   interval: BillingInterval;
+  offer: MembershipOfferSummary | null;
   active: boolean;
   onCheckout: () => void;
 }) {
@@ -242,8 +254,20 @@ function TierCard({
       </p>
 
       <div className="mt-5">
-        <span className="text-3xl font-bold">{formatCents(monthlyEquivalentCents)}</span>
-        <span className={`${vulfMono.className} text-sm text-neutral-500`}>/mo</span>
+        {offer ? (
+          <>
+            <span className="text-3xl font-bold">{formatCents(offer.firstMonthCents)}</span>
+            <span className={`${vulfMono.className} text-sm text-neutral-500`}> first month</span>
+            <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
+              then {formatCents(monthlyEquivalentCents)}/mo
+            </p>
+          </>
+        ) : (
+          <>
+            <span className="text-3xl font-bold">{formatCents(monthlyEquivalentCents)}</span>
+            <span className={`${vulfMono.className} text-sm text-neutral-500`}>/mo</span>
+          </>
+        )}
         {interval === "annual" && (
           <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
             {formatCents(plan.price_annual_cents)} billed annually

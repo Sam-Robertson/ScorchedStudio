@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { getPlanByKey } from "@/lib/memberships";
+import { getActiveMembershipOffer } from "@/lib/membership-offer";
 import { attachCustomerSession, resolveCustomerForCourseAction } from "@/lib/course-guest-account";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -53,6 +54,10 @@ export async function POST(req: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
 
+  // A running promo (lib/membership-offer.ts) discounts the first invoice of a
+  // monthly plan. Annual is already the cheaper rate, so it is left alone.
+  const offer = interval === "monthly" ? getActiveMembershipOffer() : null;
+
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     { price: priceId, quantity: 1 },
   ];
@@ -91,8 +96,9 @@ export async function POST(req: NextRequest) {
     // Lets staff look members up by phone at the counter (app/admin/memberships).
     phone_number_collection: { enabled: true },
     line_items,
+    ...(offer ? { discounts: [{ coupon: offer.couponByPlan[planKey] }] } : {}),
     subscription_data: {
-      metadata: { plan_key: planKey, billing_interval: interval },
+      metadata: { plan_key: planKey, billing_interval: interval, offer: offer?.key ?? "" },
     },
     // Members are identified by name first, email as a fallback — collected
     // on our own site (components/memberships/MembershipTiers.tsx) rather
@@ -107,6 +113,7 @@ export async function POST(req: NextRequest) {
       add_on: String(!!addOn),
       first_name: firstName,
       last_name: lastName,
+      offer: offer?.key ?? "",
     },
     success_url: `${baseUrl}/memberships/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/memberships`,

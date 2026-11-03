@@ -1,6 +1,7 @@
 // app/memberships/page.tsx
 import Container from "@/components/ui/Container";
 import { getActivePlans } from "@/lib/memberships";
+import { getActiveMembershipOffer, summarizeOffer } from "@/lib/membership-offer";
 import MembershipTiers from "@/components/memberships/MembershipTiers";
 import { vulfMono } from "@/app/fonts";
 
@@ -18,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MembershipsPage() {
   const plans = await getActivePlans();
+  const offer = summarizeOffer(getActiveMembershipOffer());
 
   return (
     <main className="pb-8">
@@ -28,10 +30,17 @@ export default async function MembershipsPage() {
           <p className={`${vulfMono.className} text-center mt-3 max-w-xl mx-auto text-[15px] leading-[1.5] text-neutral-600`}>
             Two tiers built around how often you want to be here. Cancel anytime.
           </p>
+          {offer && (
+            <p
+              className={`${vulfMono.className} mx-auto mt-4 w-fit rounded-full bg-brand px-4 py-1.5 text-[13px] font-semibold text-white`}
+            >
+              {offer.headline}. Applied automatically at checkout.
+            </p>
+          )}
         </Container>
       </section>
 
-      <MembershipTiers plans={plans} />
+      <MembershipTiers plans={plans} offer={offer} />
     </main>
   );
 }
