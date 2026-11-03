@@ -3,6 +3,8 @@
 // Idempotent — safe to call from both the client-facing confirm route and the webhook.
 
 import Stripe from "stripe";
+import { fromMetadataString } from "@/lib/attribution";
+import { saveBookingAttribution } from "@/lib/booking-attribution";
 import { Resend } from "resend";
 import { getSupabase } from "@/lib/supabase";
 import { getLocationByKey } from "@/lib/locations";
@@ -53,6 +55,7 @@ export async function createBookingFromIntent(
 
   // 3. Insert booking
   const { name, email, phone, date, time_slot, party_size, referral_source, referral_other } = intent.metadata ?? {};
+  const attribution = fromMetadataString(intent.metadata?.attribution);
   const location = intent.metadata?.location === "slc" ? "slc" : "orem";
 
   if (!name || !email || !date || !time_slot || !party_size) {
@@ -97,6 +100,8 @@ export async function createBookingFromIntent(
     console.error("CREATE_BOOKING_DB_ERROR", dbError);
     return { ok: false, error: "Failed to save booking.", status: 500 };
   }
+
+  await saveBookingAttribution(booking.id, attribution);
 
   // 4. Send confirmation email
   const locationRecord = await getLocationByKey(location);

@@ -176,7 +176,8 @@
   //   snap/estimated, snap/sales-<start> and snap/sales-all,
   //   journal/<YYYY-MM> {entries: [[id, date, memo, [[code, amount, lineMemo]]]]},
   //   bookings/<YYYY-MM> {rows: [[created_at, date, time_slot, party_size,
-  //     amount_paid, status, referral_source, referral_other, location, cust]]},
+  //     amount_paid, status, referral_source, referral_other, location, cust,
+  //     utm_source, utm_medium, utm_campaign, click_id_kind]]},
   //   snap/web-meta {connected, ...} and web/<daily|channels|sources|pages|
   //     events|cities|devices> {id, from, to, rows} from Google Analytics,
   //   snap/facts (week/month comparisons, targets, capacity and trend context the
@@ -289,6 +290,7 @@
         id: m.month + "-" + i, name: "", email: "customer-" + r[9], phone: null,
         created_at: r[0], date: r[1], time_slot: r[2], party_size: r[3], amount_paid: r[4], status: r[5],
         referral_source: r[6], referral_other: r[7], location: r[8],
+        utm_source: r[10] || null, utm_medium: r[11] || null, utm_campaign: r[12] || null, click_id_kind: r[13] || null,
         stripe_payment_intent_id: null, stripe_session_id: null, payment_method: null,
       }));
       return out;

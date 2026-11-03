@@ -7,6 +7,7 @@ import { vulfSans, vulfMono } from './fonts';
 import MobileStickyCTA from '@/components/MobileStickyCTA';
 import Script from 'next/script';
 import MetaPixel from '@/components/MetaPixel';
+import AttributionCapture from '@/components/AttributionCapture';
 
 // Both analytics tags are gated on their id being present, so a deployment
 // without them set loads neither. That keeps preview and local traffic out of
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             alt=""
           /></noscript>
         )}
+        <AttributionCapture />
         <Header />
         <main className="pb-24 md:pb-0">{children}</main>
         <MobileStickyCTA />

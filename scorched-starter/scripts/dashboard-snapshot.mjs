@@ -429,7 +429,7 @@ function main() {
   for (const b of bookings) {
     const m = denverDateKey(b.created_at).slice(0, 7);
     if (!byMonth.has(m)) byMonth.set(m, []);
-    byMonth.get(m).push([b.created_at, b.date, b.time_slot, b.party_size, b.amount_paid, b.status, b.referral_source, b.referral_other, b.location, groups.get(b.id)]);
+    byMonth.get(m).push([b.created_at, b.date, b.time_slot, b.party_size, b.amount_paid, b.status, b.referral_source, b.referral_other, b.location, groups.get(b.id), b.utm_source || null, b.utm_medium || null, b.utm_campaign || null, b.click_id_kind || null]);
   }
   for (const [m, rows] of byMonth) push("bookings", m, { month: m, rows });
   push("snap", "estimated", get("/api/admin/accounting/reports/estimated-bookings"));

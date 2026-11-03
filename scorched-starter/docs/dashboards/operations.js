@@ -180,6 +180,35 @@
   const loadBookings = () => load("/api/admin/bookings");
   const loadCosts = (q) => load("/api/admin/accounting/reports/costs", q);
   const loadEstimated = (q) => load("/api/admin/accounting/reports/estimated-bookings", q);
+  // Every account 6200 charge in the range, so spend can be split by vendor.
+  const loadMarketingCharges = (q) => {
+    const { start, end } = range.bounds(q);
+    const parts = ["accountCode=" + MARKETING_CODE, "limit=500"];
+    if (start) parts.push("from=" + start);
+    if (end) parts.push("to=" + end);
+    return load("/api/admin/accounting/journal-entries", parts.join("&"));
+  };
+
+  // ── Paid advertising ──────────────────────────────────────────────────────
+  // Ad platforms by ledger memo. Meta bills as "FACEBK *..."; TikTok as "TIKTOK ...".
+  const adPlatformOf = (memo) => (/FACEBK|FACEBOOK|META PLATFORMS/i.test(memo || "") ? "Meta" : /TIKTOK/i.test(memo || "") ? "TikTok" : null);
+  // Until bookings carry a month of measured ad clicks, the paid denominator is
+  // the self-reported proxy: customers who said Instagram (where the Meta ads
+  // run) or TikTok. Over-counts organic followers, so the true paid cost is higher.
+  const PAID_PROXY_SOURCES = new Set(["Instagram", "TikTok"]);
+  // Measured version (lib/attribution.ts): a paid medium on the link or a platform click id.
+  const PAID_MEDIUM = /^(paid|paid[_-]?social|cpc|ppc|cpm|display|paidsearch|paid[_-]?search)$/i;
+  const hasPaidClick = (b) => !!b.click_id_kind || (!!b.utm_medium && PAID_MEDIUM.test(b.utm_medium));
+  function adSpendByPlatform(entries) {
+    const out = new Map();
+    for (const e of entries || []) {
+      const platform = adPlatformOf(e.memo);
+      if (!platform) continue;
+      const amt = (e.journal_lines || []).filter((l) => l.accounts && l.accounts.code === MARKETING_CODE).reduce((s, l) => s + Number(l.amount), 0);
+      out.set(platform, (out.get(platform) || 0) + amt);
+    }
+    return out;
+  }
   const loadSales = (q) => load("/api/admin/accounting/reports/sales", q);
 
   // ── Page state ───────────────────────────────────────────────────────────
@@ -225,7 +254,7 @@
     const view = state.shell.views.marketing;
     const q = state.query;
     const m = state.marketing;
-    withData(view, [loadCosts(q), loadEstimated(q), loadBookings()], ([costs, estimated, allBookings], after) => {
+    withData(view, [loadCosts(q), loadEstimated(q), loadBookings(), loadMarketingCharges(q)], ([costs, estimated, allBookings, charges], after) => {
       const c = viz.colors();
       const bookings = locFilter(allBookings);
       const confirmed = bookings.filter((b) => b.status === "confirmed");
@@ -246,13 +275,27 @@
         estimatedInRange += row.orders;
       }
       const bookingsForCost = rangedConfirmed.length + estimatedInRange;
-      const costPerBooking = bookingsForCost > 0 ? marketingSpend / bookingsForCost : null;
+      const blendedCost = bookingsForCost > 0 ? marketingSpend / bookingsForCost : null;
+
+      // Paid advertising: Meta + TikTok charges over the bookings those ads plausibly brought.
+      const adSpend = adSpendByPlatform(charges.entries);
+      const paidSpend = [...adSpend.values()].reduce((s, v) => s + v, 0);
+      const adPlatformsLabel = [...adSpend.keys()].sort().join(" + ") || "Meta + TikTok";
+      const proxyBookings = rangedConfirmed.filter((b) => PAID_PROXY_SOURCES.has(b.referral_source));
+      const clickBookings = rangedConfirmed.filter(hasPaidClick);
+      const paidCost = paidSpend > 0 && proxyBookings.length > 0 ? paidSpend / proxyBookings.length : null;
+      const n = (x) => x.toLocaleString("en-US");
       const kpis = ui.kpis(4, [
-        ui.kpi({ label: "Marketing spend", value: fmt.money0(marketingSpend), sub: "account 6200, selected range" }),
-        ui.kpi({ label: "Confirmed bookings", value: rangedConfirmed.length.toLocaleString("en-US"), sub: estimatedInRange > 0 ? `selected range, plus ~${estimatedInRange.toLocaleString("en-US")} estimated pre-launch` : "selected range" }),
-        ui.kpi({ label: "Cost per booking", value: costPerBooking == null ? "--" : fmt.money0(costPerBooking), sub: estimatedInRange > 0 ? "spend / bookings (incl. pre-launch estimate)" : "spend / confirmed bookings" }),
+        ui.kpi({ label: "Marketing spend", value: fmt.money0(marketingSpend), sub: paidSpend > 0 ? `account 6200, selected range. ${fmt.money0(paidSpend)} of it is ${adPlatformsLabel} ads` : "account 6200, selected range" }),
+        ui.kpi({ label: "Confirmed bookings", value: n(rangedConfirmed.length), sub: estimatedInRange > 0 ? `selected range, plus ~${n(estimatedInRange)} estimated pre-launch` : `selected range. ${n(proxyBookings.length)} said Instagram or TikTok` }),
+        ui.kpi({ label: "Paid cost per booking", value: paidCost == null ? "--" : fmt.money0(paidCost), sub: paidCost == null ? "no ad spend or no Instagram / TikTok bookings in range" : `${adPlatformsLabel} ads / Instagram + TikTok bookings. Blended ${blendedCost == null ? "--" : fmt.money0(blendedCost)} across all bookings` }),
         ui.kpi({ label: "Top channel", value: top ? top.source : "--", sub: top ? `${top.count} confirmed bookings` : "no bookings in range" }),
       ]);
+      const paidNote = ui.note(
+        "Paid cost per booking is a proxy for now: charges from Meta and TikTok in account 6200, divided by confirmed bookings whose customer said Instagram or TikTok. That counts organic followers too, so the real figure is somewhat higher. " +
+        (clickBookings.length > 0
+          ? `${n(clickBookings.length)} booking${clickBookings.length === 1 ? "" : "s"} in this range arrived through a tagged ad link; once a full month has that data the tile switches to it.`
+          : "Bookings now record the ad link they arrived through (utm tags or a Meta / TikTok click id); once a full month has that data the tile switches to it."));
 
       // Spend vs bookings by month (two single-axis charts, same months)
       const spendByMonth = new Map();
@@ -387,7 +430,7 @@
         if (others.length) body.push(h("details", { class: "other" }, h("summary", { text: `"Other" responses (${others.length})` }), h("ul", { class: "other-list" }, others.map((d) => h("li", { text: d })))));
         tableCard = ui.card({ title: `Breakdown by source, ${TIMEFRAME_WINDOW[m.sourceTf]}`, body, bodyClass: "flush" });
       }
-      return [kpis, spendCard, sourceCard, tableCard];
+      return [kpis, paidNote, spendCard, sourceCard, tableCard];
     });
   }
 

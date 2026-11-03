@@ -1,5 +1,6 @@
 // app/api/bookings/create-payment-intent/route.ts
 import { NextRequest } from "next/server";
+import { attributionSchema, toMetadataString } from "@/lib/attribution";
 import Stripe from "stripe";
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase";
@@ -22,6 +23,7 @@ const schema = z.object({
   phone: z.string().optional(),
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
+  attribution: attributionSchema.optional(),
   location: z.enum(["orem", "slc"]).optional(),
   emailOptIn: z.boolean().optional().default(false),
   smsOptIn: z.boolean().optional().default(false),
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { date, time_slot, party_size, name, email, phone, referral_source, referral_other } = parsed.data;
+  const { date, time_slot, party_size, name, email, phone, referral_source, referral_other, attribution } = parsed.data;
   const { emailOptIn, smsOptIn } = parsed.data;
   const location = parsed.data.location ?? "orem";
   const locationRecord = await getLocationByKey(location);
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest) {
     // there account-wide) instead of hardcoding a method list that would
     // also silently exclude every other enabled method.
     automatic_payment_methods: { enabled: true },
-    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "", location },
+    metadata: { date, time_slot, party_size: String(party_size), name, email, phone: phone ?? "", referral_source: referral_source ?? "", referral_other: referral_other ?? "", location, attribution: toMetadataString(attribution) },
     receipt_email: email,
     description: `Scorched Studio – ${party_size} ${party_size === 1 ? "person" : "people"} on ${date} at ${time_slot}`,
   });

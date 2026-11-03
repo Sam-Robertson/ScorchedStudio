@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { readAttribution } from "@/lib/attribution";
 import MarketingOptIns, { EMPTY_OPT_INS, type OptInState } from "@/components/marketing/MarketingOptIns";
 import { Elements } from "@stripe/react-stripe-js";
 import Container from "@/components/ui/Container";
@@ -220,7 +221,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms, attribution: readAttribution() ?? undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setPayError(data.error || "Something went wrong."); setPayLoading(false); return; }
@@ -242,7 +243,7 @@ export default function BookPage() {
       const res = await fetch("/api/bookings/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms }),
+        body: JSON.stringify({ date: selectedDate, time_slot: selectedSlot, party_size: partySize, name, email, phone, payment_method: paymentMethod, referral_source: referralSource, referral_other: referralOther || undefined, location, emailOptIn: optIns.email, smsOptIn: optIns.sms, attribution: readAttribution() ?? undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setReserveError(data.error || "Something went wrong."); setReserveLoading(false); return; }

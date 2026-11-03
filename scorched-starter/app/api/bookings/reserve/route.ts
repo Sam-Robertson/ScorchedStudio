@@ -1,5 +1,7 @@
 // app/api/bookings/reserve/route.ts
 import { NextRequest } from "next/server";
+import { attributionSchema } from "@/lib/attribution";
+import { saveBookingAttribution } from "@/lib/booking-attribution";
 import { Resend } from "resend";
 import { z } from "zod";
 import { getSlotsForDate, MAX_CAPACITY, MAX_PARTY_SIZE } from "@/lib/booking-utils";
@@ -25,6 +27,7 @@ const schema = z.object({
   payment_method: z.enum(["gift_card"]).nullable().optional(),
   referral_source: z.string().optional(),
   referral_other: z.string().optional(),
+  attribution: attributionSchema.optional(),
   location: z.enum(["orem", "slc"]).optional(),
   emailOptIn: z.boolean().optional().default(false),
   smsOptIn: z.boolean().optional().default(false),
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { date, time_slot, party_size, name, email, phone, payment_method, referral_source, referral_other } = parsed.data;
+  const { date, time_slot, party_size, name, email, phone, payment_method, referral_source, referral_other, attribution } = parsed.data;
   const { emailOptIn, smsOptIn } = parsed.data;
   const location = parsed.data.location ?? "orem";
   const locationRecord = await getLocationByKey(location);
@@ -135,6 +138,8 @@ export async function POST(req: NextRequest) {
     console.error("RESERVE_DB_ERROR", dbError);
     return Response.json({ error: "Failed to save reservation" }, { status: 500 });
   }
+
+  await saveBookingAttribution(booking.id, attribution);
 
   const message = reservationEmail({
     name,

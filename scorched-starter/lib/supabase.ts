@@ -32,6 +32,14 @@ export type BookingRecord = {
   referral_other: string | null;
   location: "orem" | "slc";
   created_at: string;
+  // Paid-ad attribution (supabase-booking-attribution-setup.sql); absent until that SQL has run.
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  click_id_kind?: string | null;
+  landing_path?: string | null;
+  attributed_at?: string | null;
 };
 
 export type WaiverMinor = {

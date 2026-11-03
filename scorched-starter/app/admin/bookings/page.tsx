@@ -2,6 +2,7 @@
 
 // app/admin/bookings/page.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isPaidAttribution } from "@/lib/attribution";
 import { useRouter } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
@@ -555,6 +556,12 @@ function BookingModal({
             <DetailRow
               label="Heard"
               value={b.referral_source === "Other" && b.referral_other ? `Other: ${b.referral_other}` : (b.referral_source ?? "")}
+            />
+          )}
+          {(b.utm_source || b.click_id_kind) && (
+            <DetailRow
+              label="Ad link"
+              value={[b.utm_source, b.utm_medium].filter(Boolean).join(" / ") + (b.utm_campaign ? ` · ${b.utm_campaign}` : "") + (isPaidAttribution(b) ? "" : " (not paid)")}
             />
           )}
 
