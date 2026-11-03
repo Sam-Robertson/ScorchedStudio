@@ -32,9 +32,9 @@ export default async function MembershipsPage() {
           </p>
           {offer && (
             <p
-              className={`${vulfMono.className} mx-auto mt-4 w-fit rounded-full bg-brand px-4 py-1.5 text-[13px] font-semibold text-white`}
+              className={`${vulfMono.className} mx-auto mt-4 w-fit rounded-full bg-green px-4 py-1.5 text-[13px] font-semibold text-white`}
             >
-              {offer.headline}. Applied automatically at checkout.
+              {offer.headline}
             </p>
           )}
         </Container>

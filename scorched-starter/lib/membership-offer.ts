@@ -35,7 +35,7 @@ export type MembershipOfferSummary = {
 // $20 and Blaze at $60, so the coupons take $10 and $30 off the first invoice.
 const FIRST_MONTH_NOVEMBER_2026: MembershipOffer = {
   key: "first-month-half-nov-2026",
-  headline: "First month half price through November 30: Ember $10, Blaze $30",
+  headline: "Half price first month through November 30",
   plans: {
     ember: { coupon: "FIRST_MONTH_10_EMBER", firstMonthCents: 1000 },
     blaze: { coupon: "FIRST_MONTH_30_BLAZE", firstMonthCents: 3000 },
