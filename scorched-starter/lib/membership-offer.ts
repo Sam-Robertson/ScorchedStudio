@@ -1,6 +1,6 @@
 // lib/membership-offer.ts
-// A time-boxed promo on monthly memberships. While the window is open, the
-// checkout route attaches the plan's Stripe coupon automatically, so nobody
+// A time-boxed promo on memberships. While the window is open, the checkout
+// route attaches the plan's Stripe coupon automatically, so nobody
 // has to type a code and the memberships page can show the deal to everyone
 // who lands on it, not just people who clicked an email link.
 //
@@ -9,9 +9,11 @@
 // refuses them after the window even if this file is stale.
 import type { PlanKey } from "@/lib/memberships";
 
+// discountCents comes off the first invoice whatever the billing interval:
+// the first month of a monthly plan, or the first year of an annual plan.
 export type MembershipOfferPlan = {
   coupon: string;
-  firstMonthCents: number;
+  discountCents: number;
 };
 
 export type MembershipOffer = {
@@ -28,17 +30,18 @@ export type MembershipOffer = {
 export type MembershipOfferSummary = {
   key: string;
   headline: string;
-  firstMonthCentsByPlan: Partial<Record<PlanKey, number>>;
+  discountCentsByPlan: Partial<Record<PlanKey, number>>;
 };
 
-// November 2026: first month half price on both monthly plans. Ember lists at
-// $20 and Blaze at $60, so the coupons take $10 and $30 off the first invoice.
+// November 2026: first month half price on both plans. Ember lists at $20 and
+// Blaze at $60, so the coupons take $10 and $30 off the first invoice. On an
+// annual plan the same amount comes off the first year instead.
 const FIRST_MONTH_NOVEMBER_2026: MembershipOffer = {
   key: "first-month-half-nov-2026",
   headline: "Half price first month through November 30",
   plans: {
-    ember: { coupon: "FIRST_MONTH_10_EMBER", firstMonthCents: 1000 },
-    blaze: { coupon: "FIRST_MONTH_30_BLAZE", firstMonthCents: 3000 },
+    ember: { coupon: "FIRST_MONTH_10_EMBER", discountCents: 1000 },
+    blaze: { coupon: "FIRST_MONTH_30_BLAZE", discountCents: 3000 },
   },
   startsAt: new Date("2026-11-02T07:00:00Z"), // Nov 2, midnight Mountain
   endsAt: new Date("2026-12-01T06:59:59Z"), // Nov 30, 11:59 PM Mountain
@@ -52,9 +55,9 @@ export function getActiveMembershipOffer(now: Date = new Date()): MembershipOffe
 
 export function summarizeOffer(offer: MembershipOffer | null): MembershipOfferSummary | null {
   if (!offer) return null;
-  const firstMonthCentsByPlan: Partial<Record<PlanKey, number>> = {};
+  const discountCentsByPlan: Partial<Record<PlanKey, number>> = {};
   for (const [key, plan] of Object.entries(offer.plans)) {
-    firstMonthCentsByPlan[key as PlanKey] = plan.firstMonthCents;
+    discountCentsByPlan[key as PlanKey] = plan.discountCents;
   }
-  return { key: offer.key, headline: offer.headline, firstMonthCentsByPlan };
+  return { key: offer.key, headline: offer.headline, discountCentsByPlan };
 }

@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
 
-  // A running promo (lib/membership-offer.ts) discounts the first invoice of
-  // the monthly plans it names. Annual is already the cheaper rate, so it is
-  // left alone.
-  const offer = interval === "monthly" ? getActiveMembershipOffer() : null;
+  // A running promo (lib/membership-offer.ts) takes a fixed amount off the
+  // first invoice of the plans it names: the first month, or the whole first
+  // year for an annual subscription.
+  const offer = getActiveMembershipOffer();
   const coupon = offer?.plans[planKey]?.coupon;
 
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [

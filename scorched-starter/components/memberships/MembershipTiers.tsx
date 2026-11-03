@@ -21,8 +21,8 @@ export default function MembershipTiers({
   offer = null,
 }: {
   plans: MembershipPlan[];
-  // The running first-month promo, if any. Only the monthly plans it names
-  // get it; the checkout route applies the matching Stripe coupon on its own.
+  // The running first-invoice promo, if any. Only the plans it names get it;
+  // the checkout route applies the matching Stripe coupon on its own.
   offer?: MembershipOfferSummary | null;
 }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
@@ -121,7 +121,7 @@ export default function MembershipTiers({
               key={plan.key}
               plan={plan}
               interval={interval}
-              firstMonthCents={interval === "monthly" ? offer?.firstMonthCentsByPlan[plan.key] ?? null : null}
+              discountCents={offer?.discountCentsByPlan[plan.key] ?? null}
               active={pendingPlan?.key === plan.key}
               onCheckout={() => selectPlan(plan)}
             />
@@ -224,14 +224,14 @@ export default function MembershipTiers({
 function TierCard({
   plan,
   interval,
-  firstMonthCents,
+  discountCents,
   active,
   onCheckout,
 }: {
   plan: MembershipPlan;
   interval: BillingInterval;
-  // Promo price for this plan's first invoice, when the running offer covers it.
-  firstMonthCents: number | null;
+  // Amount the running offer takes off this plan's first invoice, if any.
+  discountCents: number | null;
   active: boolean;
   onCheckout: () => void;
 }) {
@@ -255,9 +255,9 @@ function TierCard({
       </p>
 
       <div className="mt-5">
-        {firstMonthCents !== null ? (
+        {discountCents !== null && interval === "monthly" ? (
           <>
-            <span className="text-3xl font-bold">{formatCents(firstMonthCents)}</span>
+            <span className="text-3xl font-bold">{formatCents(plan.price_monthly_cents - discountCents)}</span>
             <span className={`${vulfMono.className} text-sm text-neutral-500`}> first month</span>
             <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
               then {formatCents(monthlyEquivalentCents)}/mo
@@ -269,7 +269,13 @@ function TierCard({
             <span className={`${vulfMono.className} text-sm text-neutral-500`}>/mo</span>
           </>
         )}
-        {interval === "annual" && (
+        {interval === "annual" && discountCents !== null && (
+          <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
+            {formatCents(plan.price_annual_cents - discountCents)} for your first year ({formatCents(discountCents)} off),
+            then {formatCents(plan.price_annual_cents)} billed annually
+          </p>
+        )}
+        {interval === "annual" && discountCents === null && (
           <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
             {formatCents(plan.price_annual_cents)} billed annually
           </p>
