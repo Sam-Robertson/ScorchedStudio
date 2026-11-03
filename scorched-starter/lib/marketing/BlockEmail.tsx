@@ -239,7 +239,10 @@ function BlockView({
               fontFamily: font,
               backgroundColor: design.buttonColor,
               color: design.buttonTextColor,
-              padding: "13px 26px",
+              padding: "11px 24px",
+              // Same color as the fill, so the button keeps its outline when a
+              // client drops background colors (Gmail's print view does).
+              border: `2px solid ${design.buttonColor}`,
               borderRadius: "8px",
               fontSize: "14px",
               fontWeight: 700,
