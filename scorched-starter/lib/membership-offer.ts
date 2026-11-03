@@ -25,8 +25,8 @@ export type MembershipOfferSummary = Pick<MembershipOffer, "key" | "headline" | 
   planKeys: PlanKey[];
 };
 
-// November 2026: first month $10 on Ember only ($25 at list, so the coupon
-// takes $15 off). Blaze stays at full price.
+// November 2026: first month $10 on Ember only ($20 at list, so the coupon
+// takes $10 off). Blaze stays at full price.
 const FIRST_MONTH_NOVEMBER_2026: MembershipOffer = {
   key: "first-month-10-nov-2026",
   headline: "Ember is $10 for your first month through November 30",

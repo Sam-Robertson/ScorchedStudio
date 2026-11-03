@@ -65,8 +65,8 @@ INSERT INTO membership_plans
 VALUES
   ('ember', 'Ember',
    'Perfect for date nights and casual visits. Two entrances a month, you just cover the wood.',
-   2, 0, 15, 2500, 23988, 7500, true),
+   2, 0, 15, 2000, 23988, 7500, true),
   ('blaze', 'Blaze',
-   'For makers who want to get good. Four visits a month, a wood credit, and a member discount on everything you burn.',
-   4, 3000, 25, 6000, 59988, 5000, true)
+   'For makers who want to get good. Six visits a month, a wood credit, and a member discount on everything you burn.',
+   6, 3000, 25, 6000, 59988, 5000, true)
 ON CONFLICT (key) DO NOTHING;
