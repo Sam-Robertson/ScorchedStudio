@@ -21,8 +21,8 @@ export default function MembershipTiers({
   offer = null,
 }: {
   plans: MembershipPlan[];
-  // The running first-month promo, if any. Only monthly plans get it; the
-  // checkout route applies the matching Stripe coupon on its own.
+  // The running first-month promo, if any. Only the monthly plans it names
+  // get it; the checkout route applies the matching Stripe coupon on its own.
   offer?: MembershipOfferSummary | null;
 }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
@@ -121,7 +121,7 @@ export default function MembershipTiers({
               key={plan.key}
               plan={plan}
               interval={interval}
-              offer={interval === "monthly" ? offer : null}
+              offer={interval === "monthly" && offer?.planKeys.includes(plan.key) ? offer : null}
               active={pendingPlan?.key === plan.key}
               onCheckout={() => selectPlan(plan)}
             />

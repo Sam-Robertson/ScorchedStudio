@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://scorchedstudio.com";
 
-  // A running promo (lib/membership-offer.ts) discounts the first invoice of a
-  // monthly plan. Annual is already the cheaper rate, so it is left alone.
+  // A running promo (lib/membership-offer.ts) discounts the first invoice of
+  // the monthly plans it names. Annual is already the cheaper rate, so it is
+  // left alone.
   const offer = interval === "monthly" ? getActiveMembershipOffer() : null;
+  const coupon = offer?.couponByPlan[planKey];
 
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     { price: priceId, quantity: 1 },
@@ -96,9 +98,9 @@ export async function POST(req: NextRequest) {
     // Lets staff look members up by phone at the counter (app/admin/memberships).
     phone_number_collection: { enabled: true },
     line_items,
-    ...(offer ? { discounts: [{ coupon: offer.couponByPlan[planKey] }] } : {}),
+    ...(coupon ? { discounts: [{ coupon }] } : {}),
     subscription_data: {
-      metadata: { plan_key: planKey, billing_interval: interval, offer: offer?.key ?? "" },
+      metadata: { plan_key: planKey, billing_interval: interval, offer: coupon ? offer!.key : "" },
     },
     // Members are identified by name first, email as a fallback — collected
     // on our own site (components/memberships/MembershipTiers.tsx) rather
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
       add_on: String(!!addOn),
       first_name: firstName,
       last_name: lastName,
-      offer: offer?.key ?? "",
+      offer: coupon ? offer!.key : "",
     },
     success_url: `${baseUrl}/memberships/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/memberships`,
