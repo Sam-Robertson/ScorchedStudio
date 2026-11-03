@@ -13,6 +13,7 @@ import { ArrowLeft, CalendarClock, Check, Loader2, Send, TriangleAlert } from "l
 import { checkSchedule, formatScheduled, isoToLocalInput, localInputToIso } from "@/lib/marketing/schedule";
 import type { CampaignRecord } from "@/lib/supabase";
 import { describeSegment } from "@/lib/marketing/segment";
+import { DEFAULT_PROMOTION, promotionIssues, type EmailPromotion } from "@/lib/marketing/email-promotion";
 import {
   DEFAULT_DESIGN,
   blocksFromLegacyHtml,
@@ -43,6 +44,10 @@ type Template = {
   design: unknown;
 };
 
+function promotionFromRecord(raw: unknown): EmailPromotion {
+  return raw && typeof raw === "object" ? { ...DEFAULT_PROMOTION, ...(raw as Partial<EmailPromotion>) } : DEFAULT_PROMOTION;
+}
+
 const labelCls = `${vulfMono.className} block text-xs text-neutral-500 mb-1.5`;
 
 // Long enough that typing a sentence is one save rather than thirty, short
@@ -59,6 +64,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [previewText, setPreviewText] = useState("");
+  const [promotion, setPromotion] = useState<EmailPromotion>(DEFAULT_PROMOTION);
   const [blocks, setBlocks] = useState<EmailBlock[]>([]);
   const [design, setDesign] = useState<EmailDesign>(DEFAULT_DESIGN);
   const [tags, setTags] = useState("");
@@ -110,6 +116,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
         setName(record.name);
         setSubject(record.subject ?? "");
         setPreviewText(record.preview_text ?? "");
+        setPromotion(promotionFromRecord(record.promotion));
         setBlocks(startingBlocks);
         setDesign(doc.design);
         setTags((record.segment?.tags ?? []).join(", "));
@@ -120,6 +127,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
           name: record.name,
           subject: record.subject ?? "",
           previewText: record.preview_text ?? "",
+          promotion: promotionFromRecord(record.promotion),
           blocks: startingBlocks,
           design: doc.design,
           tags: (record.segment?.tags ?? []).join(", "),
@@ -141,8 +149,8 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
   }, []);
 
   const snapshot = useMemo(
-    () => JSON.stringify({ name, subject, previewText, blocks, design, tags, match }),
-    [name, subject, previewText, blocks, design, tags, match]
+    () => JSON.stringify({ name, subject, previewText, promotion, blocks, design, tags, match }),
+    [name, subject, previewText, promotion, blocks, design, tags, match]
   );
 
   const save = useCallback(async () => {
@@ -156,6 +164,8 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
           name,
           subject,
           previewText,
+          // Stored as null when off, so a campaign that never used it stays clean.
+          promotion: promotion.enabled ? promotion : null,
           blocks,
           design,
           segment: { tags: tags.split(",").map((t) => t.trim()).filter(Boolean), match },
@@ -168,7 +178,7 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
       setSaveState("error");
       setSaveError(err instanceof Error ? err.message : "Could not save");
     }
-  }, [campaignId, name, subject, previewText, blocks, design, tags, match, snapshot]);
+  }, [campaignId, name, subject, previewText, promotion, blocks, design, tags, match, snapshot]);
 
   // Autosave. Held back until the first load has populated state, so opening a
   // campaign does not immediately write it back.
@@ -194,8 +204,8 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
   }, [tags, match]);
 
   const issues = useMemo(
-    () => checkDocument(blocks, { subject, previewText }),
-    [blocks, subject, previewText]
+    () => [...checkDocument(blocks, { subject, previewText }), ...promotionIssues(promotion)],
+    [blocks, subject, previewText, promotion]
   );
   const errors = issues.filter((i) => i.level === "error");
   const warnings = issues.filter((i) => i.level === "warning");
@@ -439,6 +449,8 @@ export default function EmailBuilder({ campaignId }: { campaignId: string }) {
                     placeholder="The line shown after the subject"
                   />
                 </div>
+
+                <PromotionPanel promotion={promotion} onChange={setPromotion} locked={locked} />
 
                 <hr className="border-black/10" />
 
@@ -719,4 +731,115 @@ function SaveBadge({
   if (state === "error") return <span className="text-xs text-red-500 shrink-0">{error || "Not saved"}</span>;
   if (state === "saved") return <span className="text-xs text-neutral-400 shrink-0">Saved</span>;
   return null;
+}
+
+
+// Gmail Promotions tab annotation. Gmail shows a deal badge beside the subject
+// and, with an image, a highlighted card at the top of the Promotions tab.
+// Nothing here changes how the email itself looks.
+function PromotionPanel({
+  promotion,
+  onChange,
+  locked,
+}: {
+  promotion: EmailPromotion;
+  onChange: (next: EmailPromotion) => void;
+  locked: boolean;
+}) {
+  const set = (patch: Partial<EmailPromotion>) => onChange({ ...promotion, ...patch });
+
+  return (
+    <div className="rounded-lg border border-black/10 p-3 space-y-3">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={promotion.enabled}
+          disabled={locked}
+          onChange={(e) => set({ enabled: e.target.checked })}
+        />
+        <span className="font-medium">Gmail promotion card</span>
+      </label>
+      <p className={`${vulfMono.className} text-[11px] leading-snug text-neutral-500`}>
+        Gmail only. Adds a deal badge next to the subject and, with an image, a card at the top of the
+        Promotions tab. Gmail decides whether to show it.
+      </p>
+
+      {promotion.enabled && (
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Deal text (four words or fewer)</label>
+            <input
+              className={inputCls}
+              value={promotion.dealText}
+              disabled={locked}
+              onChange={(e) => set({ dealText: e.target.value })}
+              placeholder="Half price first month"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelCls}>Starts</label>
+              <input
+                type="date"
+                className={inputCls}
+                value={promotion.startsOn}
+                disabled={locked}
+                onChange={(e) => set({ startsOn: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Ends</label>
+              <input
+                type="date"
+                className={inputCls}
+                value={promotion.endsOn}
+                disabled={locked}
+                onChange={(e) => set({ endsOn: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Promo code (only if people type one)</label>
+            <input
+              className={inputCls}
+              value={promotion.discountCode}
+              disabled={locked}
+              onChange={(e) => set({ discountCode: e.target.value })}
+              placeholder="Leave blank when the discount is automatic"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Link (where the card and Shop now go)</label>
+            <input
+              className={inputCls}
+              value={promotion.offerUrl}
+              disabled={locked}
+              onChange={(e) => set({ offerUrl: e.target.value })}
+              placeholder="https://www.scorchedstudio.com/memberships"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Card image URL (PNG or JPEG, 1200 by 628)</label>
+            <input
+              className={inputCls}
+              value={promotion.imageUrl}
+              disabled={locked}
+              onChange={(e) => set({ imageUrl: e.target.value })}
+              placeholder="https://www.scorchedstudio.com/email/..."
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Card headline</label>
+            <input
+              className={inputCls}
+              value={promotion.headline}
+              disabled={locked}
+              onChange={(e) => set({ headline: e.target.value })}
+              placeholder="One line shown under the image"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

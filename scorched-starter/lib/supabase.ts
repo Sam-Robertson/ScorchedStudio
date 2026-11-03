@@ -338,6 +338,9 @@ export type CampaignRecord = {
   blocks: unknown | null;
   design: unknown | null;
   preview_text: string | null;
+  // Gmail Promotions tab annotation (lib/marketing/email-promotion.ts), or
+  // NULL when the campaign has none.
+  promotion: unknown | null;
   media_url: string | null;
   segment: CampaignSegment;
   status: CampaignStatus;

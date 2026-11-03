@@ -28,6 +28,7 @@ import {
   Text,
 } from "@react-email/components";
 import { BUSINESS_NAME, BUSINESS_POSTAL_ADDRESS } from "./consent-copy";
+import { promotionJsonLd, type EmailPromotion } from "./email-promotion";
 import {
   fontByKey,
   fontFaceCss,
@@ -49,6 +50,9 @@ export type BlockEmailProps = {
   logoUrl?: string | null;
   // Where the web fonts are served from. Absolute, for the same reason.
   baseUrl?: string;
+  // Gmail Promotions tab annotation, emitted as JSON-LD in the head. See
+  // lib/marketing/email-promotion.ts.
+  promotion?: EmailPromotion | null;
 };
 
 const SPACER_HEIGHT = { sm: 12, md: 28, lg: 48 };
@@ -59,9 +63,11 @@ export default function BlockEmail({
   previewText,
   logoUrl,
   baseUrl = "",
+  promotion = null,
 }: BlockEmailProps) {
   const font = fontByKey(design.fontFamily).stack;
   const headingFont = fontByKey(design.headingFontFamily).stack;
+  const jsonLd = promotionJsonLd(promotion, { merchantUrl: baseUrl });
 
   return (
     <Html lang="en">
@@ -75,6 +81,9 @@ export default function BlockEmail({
             .sc-pad { padding-left: 20px !important; padding-right: 20px !important; }
           }
         `}</style>
+        {jsonLd ? (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+        ) : null}
       </Head>
       {previewText ? <Preview>{previewText}</Preview> : null}
       <Body

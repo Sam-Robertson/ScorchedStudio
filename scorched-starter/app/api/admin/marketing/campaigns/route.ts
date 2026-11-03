@@ -7,6 +7,7 @@ import { audienceCount } from "@/lib/marketing/audience";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
 import { smsCostPerSegment } from "@/lib/marketing/config";
 import { normalizeDocument, DocumentError } from "@/lib/marketing/email-document";
+import { promotionSchema } from "@/lib/marketing/email-promotion";
 
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { channel, name, subject, body, blocks, design, previewText, mediaUrl, segment } =
+    const { channel, name, subject, body, blocks, design, previewText, promotion, mediaUrl, segment } =
       await req.json();
 
     if (channel !== "email" && channel !== "sms") {
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
         blocks: doc.blocks,
         design: doc.design,
         preview_text: previewText?.trim() || null,
+        promotion: promotion ? promotionSchema.parse(promotion) : null,
         // campaigns.body is NOT NULL, and the plain-text version is what the
         // multipart send needs anyway.
         body: doc.plainText,

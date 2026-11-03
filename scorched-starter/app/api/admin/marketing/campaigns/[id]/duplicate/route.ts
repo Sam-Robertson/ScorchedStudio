@@ -36,6 +36,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       blocks: original.blocks,
       design: original.design,
       preview_text: original.preview_text,
+      promotion: original.promotion,
       media_url: original.media_url,
       // Content and audience carry over. Status, schedule, and stats do not:
       // the copy is a new draft that has never been sent to anyone.

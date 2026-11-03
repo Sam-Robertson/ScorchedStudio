@@ -24,6 +24,7 @@ import {
   type EmailDesign,
 } from "./email-blocks";
 import { siteUrl } from "./config";
+import { parsePromotion, type EmailPromotion } from "./email-promotion";
 import { unsubscribeUrlFor } from "./email-headers";
 
 export { UNSUBSCRIBE_PLACEHOLDER };
@@ -66,7 +67,7 @@ function footerText(): string {
 export async function renderDocument(
   blocks: EmailBlock[],
   design: EmailDesign,
-  opts: { subject?: string | null; previewText?: string | null } = {}
+  opts: { subject?: string | null; previewText?: string | null; promotion?: EmailPromotion | null } = {}
 ): Promise<RenderedTemplate> {
   const element = BlockEmail({
     blocks,
@@ -74,6 +75,7 @@ export async function renderDocument(
     previewText: opts.previewText ?? null,
     logoUrl: logoUrl(),
     baseUrl: siteUrl(),
+    promotion: opts.promotion ?? null,
   });
 
   return {
@@ -99,6 +101,7 @@ export async function renderCampaign(campaign: CampaignRecord): Promise<Rendered
     return renderDocument(doc.blocks, doc.design, {
       subject: campaign.subject,
       previewText: campaign.preview_text,
+      promotion: parsePromotion(campaign.promotion),
     });
   }
 

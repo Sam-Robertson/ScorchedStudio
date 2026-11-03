@@ -6,6 +6,7 @@ import type { CampaignRecord, CampaignStatus } from "@/lib/supabase";
 import { validateSmsBody } from "@/lib/marketing/message-rules";
 import { checkSchedule } from "@/lib/marketing/schedule";
 import { normalizeDocument, DocumentError } from "@/lib/marketing/email-document";
+import { promotionSchema } from "@/lib/marketing/email-promotion";
 import { markdownToHtml } from "@/lib/markdown";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -57,7 +58,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       patch.mediaUrl !== undefined ||
       patch.blocks !== undefined ||
       patch.design !== undefined ||
-      patch.previewText !== undefined;
+      patch.previewText !== undefined ||
+      patch.promotion !== undefined;
 
     if (touchesContent) {
       if (campaign.status !== "draft" && campaign.status !== "scheduled") {
@@ -100,6 +102,26 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
       if (patch.previewText !== undefined) {
         update.preview_text = String(patch.previewText).trim() || null;
+      }
+
+      // The Gmail promotion. Null clears it; anything else must fit the schema.
+      if (patch.promotion !== undefined) {
+        if (campaign.channel !== "email") {
+          return Response.json({ error: "Only email campaigns can carry a Gmail promotion." }, { status: 400 });
+        }
+        if (patch.promotion === null) {
+          update.promotion = null;
+        } else {
+          const parsed = promotionSchema.safeParse(patch.promotion);
+          if (!parsed.success) {
+            const first = parsed.error.issues[0];
+            return Response.json(
+              { error: `Gmail promotion: ${first ? `${first.path.join(".")}: ${first.message}` : "invalid"}` },
+              { status: 400 }
+            );
+          }
+          update.promotion = parsed.data;
+        }
       }
 
       // An image turns a text into an MMS. The column is SMS-only by
