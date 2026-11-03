@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   // the monthly plans it names. Annual is already the cheaper rate, so it is
   // left alone.
   const offer = interval === "monthly" ? getActiveMembershipOffer() : null;
-  const coupon = offer?.couponByPlan[planKey];
+  const coupon = offer?.plans[planKey]?.coupon;
 
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     { price: priceId, quantity: 1 },

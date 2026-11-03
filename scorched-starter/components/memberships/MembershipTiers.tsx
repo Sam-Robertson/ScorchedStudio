@@ -121,7 +121,7 @@ export default function MembershipTiers({
               key={plan.key}
               plan={plan}
               interval={interval}
-              offer={interval === "monthly" && offer?.planKeys.includes(plan.key) ? offer : null}
+              firstMonthCents={interval === "monthly" ? offer?.firstMonthCentsByPlan[plan.key] ?? null : null}
               active={pendingPlan?.key === plan.key}
               onCheckout={() => selectPlan(plan)}
             />
@@ -224,13 +224,14 @@ export default function MembershipTiers({
 function TierCard({
   plan,
   interval,
-  offer,
+  firstMonthCents,
   active,
   onCheckout,
 }: {
   plan: MembershipPlan;
   interval: BillingInterval;
-  offer: MembershipOfferSummary | null;
+  // Promo price for this plan's first invoice, when the running offer covers it.
+  firstMonthCents: number | null;
   active: boolean;
   onCheckout: () => void;
 }) {
@@ -254,9 +255,9 @@ function TierCard({
       </p>
 
       <div className="mt-5">
-        {offer ? (
+        {firstMonthCents !== null ? (
           <>
-            <span className="text-3xl font-bold">{formatCents(offer.firstMonthCents)}</span>
+            <span className="text-3xl font-bold">{formatCents(firstMonthCents)}</span>
             <span className={`${vulfMono.className} text-sm text-neutral-500`}> first month</span>
             <p className={`${vulfMono.className} text-xs text-neutral-400 mt-1`}>
               then {formatCents(monthlyEquivalentCents)}/mo

@@ -9,29 +9,37 @@
 // refuses them after the window even if this file is stale.
 import type { PlanKey } from "@/lib/memberships";
 
+export type MembershipOfferPlan = {
+  coupon: string;
+  firstMonthCents: number;
+};
+
 export type MembershipOffer = {
   key: string;
   headline: string;
-  firstMonthCents: number;
   // Plans without an entry here are sold at list price during the offer.
-  couponByPlan: Partial<Record<PlanKey, string>>;
+  plans: Partial<Record<PlanKey, MembershipOfferPlan>>;
   startsAt: Date;
   endsAt: Date;
 };
 
 // What the client component needs to render the deal. Kept plain so it can
 // cross the server/client boundary as a prop.
-export type MembershipOfferSummary = Pick<MembershipOffer, "key" | "headline" | "firstMonthCents"> & {
-  planKeys: PlanKey[];
+export type MembershipOfferSummary = {
+  key: string;
+  headline: string;
+  firstMonthCentsByPlan: Partial<Record<PlanKey, number>>;
 };
 
-// November 2026: first month $10 on Ember only ($20 at list, so the coupon
-// takes $10 off). Blaze stays at full price.
+// November 2026: first month half price on both monthly plans. Ember lists at
+// $20 and Blaze at $60, so the coupons take $10 and $30 off the first invoice.
 const FIRST_MONTH_NOVEMBER_2026: MembershipOffer = {
-  key: "first-month-10-nov-2026",
-  headline: "Ember is $10 for your first month through November 30",
-  firstMonthCents: 1000,
-  couponByPlan: { ember: "FIRST_MONTH_10_EMBER" },
+  key: "first-month-half-nov-2026",
+  headline: "First month half price through November 30: Ember $10, Blaze $30",
+  plans: {
+    ember: { coupon: "FIRST_MONTH_10_EMBER", firstMonthCents: 1000 },
+    blaze: { coupon: "FIRST_MONTH_30_BLAZE", firstMonthCents: 3000 },
+  },
   startsAt: new Date("2026-11-02T07:00:00Z"), // Nov 2, midnight Mountain
   endsAt: new Date("2026-12-01T06:59:59Z"), // Nov 30, 11:59 PM Mountain
 };
@@ -44,6 +52,9 @@ export function getActiveMembershipOffer(now: Date = new Date()): MembershipOffe
 
 export function summarizeOffer(offer: MembershipOffer | null): MembershipOfferSummary | null {
   if (!offer) return null;
-  const { key, headline, firstMonthCents } = offer;
-  return { key, headline, firstMonthCents, planKeys: Object.keys(offer.couponByPlan) as PlanKey[] };
+  const firstMonthCentsByPlan: Partial<Record<PlanKey, number>> = {};
+  for (const [key, plan] of Object.entries(offer.plans)) {
+    firstMonthCentsByPlan[key as PlanKey] = plan.firstMonthCents;
+  }
+  return { key: offer.key, headline: offer.headline, firstMonthCentsByPlan };
 }
