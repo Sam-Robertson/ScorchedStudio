@@ -66,8 +66,28 @@ export default async function LocationsPage() {
   );
 }
 
+// Collapse consecutive days with identical hours into one row, so a studio
+// open 5 to 10 on weekdays reads "Monday – Friday" instead of five lines.
+// Days run Monday through Sunday so the weekend groups together.
+function groupHours(hours: PublicDayHours[]): { days: string; hours: string }[] {
+  const ordered = [...hours].sort((a, b) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7));
+  const label = (d: PublicDayHours) =>
+    d.is_open ? `${formatClockTime(d.open_time)} – ${formatClockTime(d.close_time)}` : "Closed";
+  const groups: { first: number; last: number; hours: string }[] = [];
+  for (const d of ordered) {
+    const text = label(d);
+    const prev = groups[groups.length - 1];
+    if (prev && prev.hours === text) prev.last = d.weekday;
+    else groups.push({ first: d.weekday, last: d.weekday, hours: text });
+  }
+  return groups.map((g) => ({
+    days: g.first === g.last ? DAY_LABELS[g.first] : `${DAY_LABELS[g.first]} – ${DAY_LABELS[g.last]}`,
+    hours: g.hours,
+  }));
+}
+
 function LocationSection({ location, hours }: { location: LocationRecord; hours: PublicDayHours[] }) {
-  const sorted = [...hours].sort((a, b) => a.weekday - b.weekday);
+  const rows = groupHours(hours);
   const blurb = BLURBS[location.key];
   const photo = PHOTOS[location.key];
 
@@ -141,18 +161,16 @@ function LocationSection({ location, hours }: { location: LocationRecord; hours:
         </div>
 
         <div>
-          {sorted.length > 0 ? (
+          {rows.length > 0 ? (
             <>
               <p className={`${vulfMono.className} text-[10px] tracking-[0.15em] uppercase text-neutral-400 mb-3`}>
                 Hours
               </p>
               <div className={`${vulfMono.className} grid grid-cols-2 gap-y-2 text-sm text-neutral-700`}>
-                {sorted.map((d) => (
-                  <Fragment key={d.weekday}>
-                    <div>{DAY_LABELS[d.weekday]}</div>
-                    <div className="text-right">
-                      {d.is_open ? `${formatClockTime(d.open_time)} – ${formatClockTime(d.close_time)}` : "Closed"}
-                    </div>
+                {rows.map((r) => (
+                  <Fragment key={r.days}>
+                    <div>{r.days}</div>
+                    <div className="text-right">{r.hours}</div>
                   </Fragment>
                 ))}
               </div>
