@@ -24,14 +24,7 @@ export const metadata = {
 // app/courses/page.tsx for not serving a stale build-time snapshot.
 export const dynamic = "force-dynamic";
 
-// The locations table has no description column, so the blurbs live here.
-// Keyed by location key; a location with no entry simply shows no blurb.
-const BLURBS: Record<string, string> = {
-  orem: "Our original studio. Walk in, pick a project, and burn it start to finish with help on hand the whole time.",
-  slc: "A second studio on the way, with the same walk-in burning, group events, and courses.",
-};
-
-// Same idea for photos. Drop a path in here and the section renders it.
+// Photos keyed by location key. Drop a path in here and the section renders it.
 const PHOTOS: Record<string, string> = {};
 
 export default async function LocationsPage() {
@@ -88,7 +81,6 @@ function groupHours(hours: PublicDayHours[]): { days: string; hours: string }[] 
 
 function LocationSection({ location, hours }: { location: LocationRecord; hours: PublicDayHours[] }) {
   const rows = groupHours(hours);
-  const blurb = BLURBS[location.key];
   const photo = PHOTOS[location.key];
 
   return (
@@ -115,8 +107,6 @@ function LocationSection({ location, hours }: { location: LocationRecord; hours:
                 ? `Coming ${location.opening_estimate}`
                 : "Coming Soon"}
           </p>
-
-          {blurb && <p className="mt-4 text-sm leading-relaxed text-neutral-700">{blurb}</p>}
 
           {location.address && (
             <p className={`${vulfMono.className} mt-4 text-sm text-neutral-700`}>{location.address}</p>
