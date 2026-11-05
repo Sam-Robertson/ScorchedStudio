@@ -34,10 +34,7 @@ If you want to burn something of your own, a logo, a kid's doodle or a line draw
 
 ## Go before the rush
 
-The second half of December is our busiest two weeks of the year, and the good seats go first. November is the month to make gifts, for two reasons.
-
-1. **You have time to do it right.** Nobody burns their best work on December 22 with a list in their pocket.
-2. **Mondays and Tuesdays are two for one this month.** Bring someone, say **WEEKNIGHT** at the counter, and the second $15 entry is free. Two people, two gifts each, and you are out for less than a dinner. The details are in the [Weeknight Burn post](https://www.scorchedstudio.com/blog/weeknight-burn).
+The second half of December is our busiest two weeks of the year, and the good seats go first. November is the month to make gifts. You have time to do it right, you can pick any seat in the room, and nobody burns their best work on December 22 with a list in their pocket. Come on a weeknight if you can and you will have our team mostly to yourself.
 
 ## Give the night instead
 
