@@ -1,18 +1,18 @@
 ---
 title: "Make the gift this year: wood burned ornaments, boards and keepsakes"
 date: "2026-11-02"
-excerpt: "The best gift on the pile this December is the one with your handwriting burned into it. Here is how to make it at Scorched, and what to do if you would rather give the experience."
+excerpt: "Most gifts are forgotten by February. A handmade one is not. Here is how to make yours at Scorched this year, with prices, and what to do if you would rather give the experience."
 coverImage: "/blog/covers/holiday-gifts.jpg"
 tags: ["gifts", "holiday", "group events"]
 ---
 
 *By Sam, Owner of Scorched Studio*
 
-Every December we watch the same thing happen at the counter. Someone comes in to burn a cutting board for their mom, finishes it, holds it up to the light, and says some version of "okay, I can't give this away." Then they book a second seat for next week to make another one.
+Most gifts are forgotten by February. A handmade one is not.
 
-That is the whole pitch for a handmade gift. The person opening it can tell you spent an evening on it, your shaky first line and all. Nothing you can order online does that.
+When you burn a cutting board for your mom, she is not just getting a cutting board. She is getting an evening you spent thinking about her, the design you picked because it reminded you of her kitchen, and your handwriting in the wood. It costs less than most things you would buy her, and it is the one she keeps.
 
-So here is a short guide to making your gifts at Scorched this year, with prices, so you can plan the evening.
+Here is how to make your gifts at Scorched this year, with prices, so you can plan the evening.
 
 ## What people actually make
 
