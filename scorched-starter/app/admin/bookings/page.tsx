@@ -3,7 +3,7 @@
 // app/admin/bookings/page.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isPaidAttribution } from "@/lib/attribution";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
@@ -82,6 +82,27 @@ function BookingsDashboard({ token }: { token: string }) {
   const [calDate, setCalDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<BookingRecord | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // Arriving from the admin search palette: ?q= filters the list (calendar view
+  // would hide the hit) and ?booking= opens that booking once it has loaded.
+  const params = useSearchParams();
+  const openedBookingRef = useRef<string | null>(null);
+  useEffect(() => {
+    const q = params.get("q");
+    if (q !== null) {
+      setSearch(q);
+      setView("list");
+    }
+  }, [params]);
+  useEffect(() => {
+    const id = params.get("booking");
+    if (!id || openedBookingRef.current === id || bookings.length === 0) return;
+    const match = bookings.find((b) => b.id === id);
+    if (match) {
+      openedBookingRef.current = id;
+      setSelected(match);
+    }
+  }, [params, bookings]);
 
   const load = useCallback(() => {
     setLoading(true);

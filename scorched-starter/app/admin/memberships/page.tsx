@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { formatDenverDate } from "@/lib/timezone";
@@ -59,6 +59,13 @@ const PAGE_SIZE = 30;
 
 function MembershipsDashboard({ token }: { token: string }) {
   const [query, setQuery] = useState("");
+
+  // Arriving from the admin search palette with ?q= pre-fills the filter.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const initial = searchParams.get("q");
+    if (initial !== null) setQuery(initial);
+  }, [searchParams]);
   const [memberships, setMemberships] = useState<MembershipRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

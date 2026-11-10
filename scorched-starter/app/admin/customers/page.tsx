@@ -7,6 +7,7 @@
 // required an account, so most people who have been to the studio have no row
 // here. The page says so rather than leaving a short list looking like a bug.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { getAdminToken } from "@/lib/adminAuth";
 import { Download, Loader2, Search } from "lucide-react";
@@ -46,6 +47,13 @@ export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+
+  // Arriving from the admin search palette with ?q= pre-fills the filter.
+  const params = useSearchParams();
+  useEffect(() => {
+    const initial = params.get("q");
+    if (initial !== null) setQ(initial);
+  }, [params]);
 
   const load = useCallback(async () => {
     setLoading(true);

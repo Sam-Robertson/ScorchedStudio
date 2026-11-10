@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { requireInStudio } from "@/lib/admin-session";
 import { getSupabase } from "@/lib/supabase";
 import { denverDayRangeUTC } from "@/lib/timezone";
+import { anyColumnLike, searchTokens } from "@/lib/postgrest-search";
 
 const COLUMNS =
   "id, first_name, last_name, email, phone, date_of_birth, signed_at, ip_address, minors, location";
@@ -12,14 +13,6 @@ type SortField = (typeof SORT_FIELDS)[number];
 
 const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 200;
-
-// A PostgREST `or=` value is a comma-separated list with its own grammar, so a
-// search for "smith, john" or "o'brien (jr)" would unbalance the filter. Dots
-// survive on purpose: only the first two are parsed as column.operator, so an
-// email search still works.
-function sanitizeToken(token: string): string {
-  return token.replace(/[,()*%\\"]/g, "").trim();
-}
 
 export async function GET(req: NextRequest) {
   const session = requireInStudio(req);
@@ -33,10 +26,7 @@ export async function GET(req: NextRequest) {
   const roleLocation = session.role === "location" ? session.location : null;
   const location = roleLocation ?? sp.get("location") ?? null;
 
-  const tokens = (sp.get("search") ?? "")
-    .split(/\s+/)
-    .map(sanitizeToken)
-    .filter(Boolean);
+  const tokens = searchTokens(sp.get("search") ?? "");
 
   const dateFrom = sp.get("dateFrom") ?? "";
   const dateTo = sp.get("dateTo") ?? "";
@@ -66,7 +56,7 @@ export async function GET(req: NextRequest) {
   // That keeps "john sm" matching "John Smith" across the name boundary, the
   // way the old client-side `${first} ${last}`.includes(q) did.
   for (const token of tokens) {
-    query = query.or(`first_name.ilike.*${token}*,last_name.ilike.*${token}*,email.ilike.*${token}*`);
+    query = query.or(anyColumnLike(["first_name", "last_name", "email"], token));
   }
 
   const { data, error, count } = await query

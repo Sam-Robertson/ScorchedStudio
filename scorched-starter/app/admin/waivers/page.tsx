@@ -2,7 +2,7 @@
 
 // app/admin/waivers/page.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 import { useAdminSession } from "@/lib/adminSession";
@@ -98,6 +98,16 @@ function WaiversDashboard({ token }: { token: string }) {
   // Bumped after a delete: the rows live on the server now, so the page has to
   // be refetched rather than spliced locally.
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Arriving from the admin search palette with ?q= searches straight away,
+  // skipping the typing debounce.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const initial = searchParams.get("q");
+    if (initial === null) return;
+    setSearchInput(initial);
+    setQuery((q) => (q.search === initial ? q : { ...q, search: initial, page: 1 }));
+  }, [searchParams]);
 
   // Any change other than the page itself returns to page 1, folded into the
   // same update so a filter change renders (and fetches) once, not twice.

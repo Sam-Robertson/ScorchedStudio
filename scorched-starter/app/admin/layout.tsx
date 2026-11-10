@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { vulfMono } from "@/app/fonts";
 import { clearAdminToken, getAdminToken, setAdminToken } from "@/lib/adminAuth";
 import { AdminSessionProvider, type LocationKey, type Role } from "@/lib/adminSession";
 import { DASHBOARDS } from "@/lib/dashboards";
+import AdminSearch, { AdminSearchButton, useAdminSearchHotkey, type SearchablePage } from "@/components/admin/AdminSearch";
 import clsx from "clsx";
 import {
   AlertTriangle,
@@ -33,6 +34,7 @@ import {
   Palette,
   PenLine,
   Printer,
+  Search,
   Share2,
   Users,
   X,
@@ -88,6 +90,21 @@ const ADMIN_NAV = [
 ];
 
 const IN_STUDIO_PATHS = IN_STUDIO_NAV.map((item) => item.href);
+
+// Every page the search palette can jump to, for this role. Group parents are
+// listed too (they are real pages) unless a child already has the same href.
+function searchablePages(role: Role): SearchablePage[] {
+  const pages: SearchablePage[] = IN_STUDIO_NAV.map((item) => ({ ...item, section: "In Studio" }));
+  if (role !== "admin") return pages;
+  for (const item of ADMIN_NAV) {
+    const children = item.children ?? [];
+    if (!children.some((c) => c.href === item.href)) {
+      pages.push({ href: item.href, label: item.label, icon: item.icon });
+    }
+    for (const child of children) pages.push({ ...child, section: item.label });
+  }
+  return pages;
+}
 const LOCATION_NAME: Record<LocationKey, string> = { orem: "Orem", slc: "Salt Lake City" };
 
 // ── Nav item ──────────────────────────────────────────────────────────────────
@@ -307,6 +324,7 @@ function SidebarContent({
   location,
   onLogout,
   onNavClick,
+  onSearch,
   flyout,
 }: {
   pathname: string | null;
@@ -314,6 +332,7 @@ function SidebarContent({
   location: LocationKey | null;
   onLogout: () => void;
   onNavClick?: () => void;
+  onSearch: () => void;
   // True for the fixed desktop sidebar, false for the mobile drawer.
   flyout?: boolean;
 }) {
@@ -338,6 +357,7 @@ function SidebarContent({
           <ArrowLeft className="w-3 h-3" />
           Back to site
         </Link>
+        <AdminSearchButton onClick={onSearch} className="mt-4" />
       </div>
 
       {/* Nav links */}
@@ -404,6 +424,14 @@ function AdminShell({
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => {
+    setDrawerOpen(false);
+    setSearchOpen(true);
+  }, []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  useAdminSearchHotkey(openSearch);
+  const pages = useMemo(() => searchablePages(role), [role]);
 
   // Close drawer on route change
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
@@ -423,7 +451,7 @@ function AdminShell({
       {/* ── Desktop sidebar — full height: the public header hides on /admin,
           so there's no offset to leave room for. */}
       <aside className="hidden md:flex flex-col fixed top-0 left-0 h-screen w-56 bg-white border-r border-black/10 z-30 overflow-hidden">
-        <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} flyout />
+        <SidebarContent pathname={pathname} role={role} location={location} onLogout={onLogout} onSearch={openSearch} flyout />
       </aside>
 
       {/* ── Mobile top bar */}
@@ -435,9 +463,16 @@ function AdminShell({
         >
           <Menu className="w-5 h-5 text-neutral-600" />
         </button>
-        <p className={clsx(vulfMono.className, "text-[11px] uppercase tracking-widest text-neutral-400 font-semibold")}>
+        <p className={clsx(vulfMono.className, "flex-1 text-[11px] uppercase tracking-widest text-neutral-400 font-semibold")}>
           Admin
         </p>
+        <button
+          onClick={openSearch}
+          className="p-1.5 rounded-lg hover:bg-black/5 -mr-1.5"
+          aria-label="Search"
+        >
+          <Search className="w-5 h-5 text-neutral-600" />
+        </button>
       </div>
 
       {/* ── Mobile drawer */}
@@ -466,6 +501,7 @@ function AdminShell({
                 location={location}
                 onLogout={onLogout}
                 onNavClick={() => setDrawerOpen(false)}
+                onSearch={openSearch}
               />
             </div>
           </aside>
@@ -474,8 +510,12 @@ function AdminShell({
 
       {/* ── Page content — offset right of sidebar on desktop */}
       <div className="md:ml-56">
-        {children}
+        {/* Pages read ?q= (set by search results) through useSearchParams,
+            which needs a Suspense boundary above it to build. */}
+        <Suspense fallback={null}>{children}</Suspense>
       </div>
+
+      <AdminSearch open={searchOpen} onClose={closeSearch} pages={pages} />
     </>
   );
 }
